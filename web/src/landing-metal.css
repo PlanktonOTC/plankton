@@ -1,0 +1,169 @@
+/* The terminal's brushed steel, applied only to existing card surfaces.
+   No section backdrop, geometry, typography, layout or container transform is
+   changed here. GSAP continues to own all scroll-positioned containers. */
+.marketing {
+  --landing-steel-border: #d2d2d230;
+  --landing-steel-border-lit: #e2e2e256;
+  --landing-steel-grain: repeating-linear-gradient(105deg, #efefef03 0, #efefef03 1px, transparent 1px, transparent 3px);
+  --landing-steel-face: linear-gradient(130deg, #3e3e3ed9 0%, #2c2c2ce6 38%, #202020ed 100%);
+  --landing-steel-bevel: inset 0 1px 0 #f6f6f617, inset 0 -1px 0 #0007, 0 12px 30px #0002;
+}
+
+/* The overview keeps its title and caption outside the art, exactly as before.
+   Film, logo and token layers remain in their approved frames. */
+.marketing .overview-card .overview-art {
+  border-color: var(--landing-steel-border);
+  box-shadow: var(--landing-steel-bevel);
+  transition: border-color .25s ease, box-shadow .25s ease;
+}
+.marketing .overview-card .overview-art::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: inherit;
+  background: var(--landing-steel-grain), linear-gradient(115deg, transparent 30%, #f3f3f310 48%, transparent 66%);
+  background-size: auto, 230% 100%;
+  background-position: 0 0, 100% 0;
+  opacity: .3;
+  transition: opacity .25s ease, background-position .8s cubic-bezier(.2,.7,.2,1);
+}
+
+/* Shared material across the cards that already have a filled face. */
+.marketing :is(.feature-info-panel, .studio-bento > div, .studio-bento > .report-card, .example-card, .roadmap-console, .future-plan) {
+  position: relative;
+  border-color: var(--landing-steel-border);
+  background: var(--landing-steel-grain), var(--landing-steel-face);
+  box-shadow: var(--landing-steel-bevel);
+  transition: border-color .25s ease, box-shadow .25s ease;
+}
+.marketing :is(.feature-info-panel, .studio-bento > div, .studio-bento > .report-card, .example-card, .roadmap-console, .future-plan)::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(112deg, transparent 30%, #f6f6f609 45%, #f6f6f60c 50%, transparent 67%);
+  background-size: 235% 100%;
+  background-position: 100% 0;
+  opacity: 0;
+  transition: opacity .25s ease, background-position .85s cubic-bezier(.2,.7,.2,1);
+}
+
+/* Insets remain lower than the outer frame; selected controls remain distinct. */
+.marketing .segmented {
+  background: linear-gradient(180deg, #15151566, #2f2f2f55);
+  box-shadow: inset 0 0 0 1px #c8c8c817, inset 0 1px 3px #0003;
+}
+.marketing .segmented > button.active {
+  color: #f4f4f4;
+  background: linear-gradient(140deg, #d8d8d82b, #94949418);
+  box-shadow: inset 0 1px 0 #fafafa14, 0 2px 4px #0002;
+}
+.marketing .roadmap-rail {
+  background: linear-gradient(90deg, #14141424, transparent);
+  border-color: #d4d4d41a;
+  scrollbar-color: #919191 transparent;
+}
+.marketing .roadmap-rail > button {
+  color: #adadad;
+  transition: background-color .2s ease, color .2s ease, box-shadow .2s ease;
+}
+.marketing .roadmap-rail > button.active {
+  color: #f4f4f4;
+  background: linear-gradient(110deg, #e4e4e41b, #d2d2d209);
+  box-shadow: inset 0 1px 0 #f0f0f015, inset 2px 0 0 #cacaca7a;
+}
+.marketing .roadmap-detail .gate {
+  border-left-color: #d5d5d58c;
+  background: linear-gradient(115deg, #bebebe0d, #a6a6a604);
+  box-shadow: inset 0 1px 0 #eeeeee07;
+}
+.marketing .roadmap-controls > button {
+  border-color: #d5d5d531;
+  background: linear-gradient(145deg, #c0c0c018, #c0c0c007);
+  box-shadow: inset 0 1px 0 #fafafa0b;
+}
+.marketing .future-plan > article + article {
+  border-color: #d5d5d522;
+}
+
+/* Accordion rows retain their divider layout. The open row catches light. */
+.marketing .faq article {
+  border-color: #d3d3d32b;
+  background: linear-gradient(105deg, #cbcbcb00, #cbcbcb00);
+  transition: background-color .2s ease, border-color .2s ease;
+}
+.marketing .faq article.open {
+  background: repeating-linear-gradient(105deg, #efefef02 0, #efefef02 1px, transparent 1px, transparent 3px), linear-gradient(105deg, #cbcbcb0b, #cbcbcb02);
+  border-color: #d3d3d34a;
+}
+.marketing .faq h3 > button > span { color: #c0c0c0; }
+
+/* The existing footer is a translucent framed surface. Its grid continues to
+   show through; its columns remain plain links with their original layout. */
+.marketing .footer {
+  position: relative;
+  border-color: #d6d6d634;
+  background: var(--landing-steel-grain), linear-gradient(130deg, #d3d3d319 0%, #9b9b9b0b 45%, #68686809 100%);
+  box-shadow: inset 0 1px 0 #f6f6f615, 0 -15px 50px #00000008;
+}
+.marketing .footer-main > div > span { color: #a1a1a1; }
+.marketing .footer-main > div:first-child p { color: #aeaeae; }
+.marketing .footer-main a { transition: color .2s ease, text-shadow .2s ease; }
+.marketing .footer-bottom { border-color: #d5d5d51c; color: #a3a3a3; }
+.marketing .closing .button {
+  color: #212121;
+  border-color: #f5f5f5b3;
+  background: repeating-linear-gradient(105deg, #ffffff0a 0, #ffffff0a 1px, transparent 1px, transparent 3px), linear-gradient(120deg, #ededed, #c9c9c9 47%, #e4e4e4);
+  box-shadow: inset 0 1px 0 #fff9, inset 0 -1px 0 #7575756b, 0 6px 20px #0003;
+  transition: box-shadow .2s ease, border-color .2s ease;
+}
+
+/* One interruptible reflection on deliberate interaction, no idle animation. */
+@media (hover: hover) and (pointer: fine) {
+  .marketing .overview-card:hover .overview-art {
+    border-color: var(--landing-steel-border-lit);
+    box-shadow: inset 0 1px 0 #f7f7f724, inset 0 -1px 0 #0007, 0 16px 36px #0003;
+  }
+  .marketing .overview-card:hover .overview-art::before { opacity: .8; background-position: 0 0, 0 0; }
+  .marketing :is(.feature-info-panel, .studio-bento > div, .studio-bento > .report-card, .example-card, .roadmap-console, .future-plan):hover {
+    border-color: var(--landing-steel-border-lit);
+  }
+  .marketing :is(.feature-info-panel, .studio-bento > div, .studio-bento > .report-card, .example-card, .roadmap-console, .future-plan):hover::before {
+    opacity: 1; background-position: 0 0;
+  }
+  .marketing .roadmap-rail > button:not(.active):hover { background-color: #d9d9d90b; color: #e6e6e6; }
+  .marketing .footer-main a:hover { color: #f8f8f8; text-shadow: 0 0 15px #e8e8e830; }
+  .marketing .closing .button:hover { box-shadow: inset 0 1px 0 #fffc, inset 0 -1px 0 #7575756b, 0 8px 25px #ececec14; }
+}
+.marketing .overview-card:focus-visible .overview-art { border-color: #f5f5f59c; }
+.marketing .overview-card:focus-visible .overview-art::before { opacity: .8; background-position: 0 0, 0 0; }
+.marketing :is(.feature-info-panel, .studio-bento > div, .studio-bento > .report-card, .example-card, .roadmap-console, .future-plan):focus-within { border-color: #e1e1e16b; }
+.marketing :is(.feature-info-panel, .studio-bento > div, .studio-bento > .report-card, .example-card, .roadmap-console, .future-plan):focus-within::before { opacity: .75; background-position: 0 0; }
+.marketing .footer a:focus-visible,
+.marketing .faq h3 > button:focus-visible,
+.marketing .roadmap-rail > button:focus-visible { outline: 2px solid #e9e9e9; outline-offset: -2px; }
+
+/* Pause/reduced motion keep the material and readable selected state. */
+.marketing.motion-paused .overview-art::before,
+.marketing.motion-paused :is(.feature-info-panel, .studio-bento > div, .studio-bento > .report-card, .example-card, .roadmap-console, .future-plan)::before,
+.page-hidden .marketing .overview-art::before,
+.page-hidden .marketing :is(.feature-info-panel, .studio-bento > div, .studio-bento > .report-card, .example-card, .roadmap-console, .future-plan)::before { transition: none; opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .marketing .overview-art,
+  .marketing :is(.feature-info-panel, .studio-bento > div, .studio-bento > .report-card, .example-card, .roadmap-console, .future-plan),
+  .marketing .roadmap-rail > button,
+  .marketing .faq article,
+  .marketing .footer-main a,
+  .marketing .closing .button { transition: none; }
+  .marketing .overview-art::before,
+  .marketing :is(.feature-info-panel, .studio-bento > div, .studio-bento > .report-card, .example-card, .roadmap-console, .future-plan)::before { display: none; }
+}
+@media (forced-colors: active) {
+  .marketing .overview-art::before,
+  .marketing :is(.feature-info-panel, .studio-bento > div, .studio-bento > .report-card, .example-card, .roadmap-console, .future-plan)::before { display: none; }
+  .marketing :is(.feature-info-panel, .studio-bento > div, .studio-bento > .report-card, .example-card, .roadmap-console, .future-plan, .footer) { background: Canvas; border-color: CanvasText; box-shadow: none; }
+}

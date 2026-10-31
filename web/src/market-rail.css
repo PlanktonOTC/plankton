@@ -1,0 +1,44 @@
+/* Scope the steel material to market selection; data and account state remain
+   owned by Dashboard. No time-based loops or simulated price activity. */
+.term-market-list:has(>.market-tile){display:flex;flex-direction:column;gap:7px;padding:2px 1px 5px;margin:0 -3px}
+.market-tile{position:relative;isolation:isolate;width:100%;min-width:0;flex-shrink:0;border:1px solid #bcbcbc28;border-radius:10px;overflow:hidden;background:repeating-linear-gradient(0deg,#dfdfdf05 0px,#dfdfdf05 1px,transparent 1px,transparent 3px),linear-gradient(118deg,#4a4a4a38 0%,#30303055 23%,#1b1b1b 56%,#37373777 100%);box-shadow:inset 0 1px 0 #eeeeee19,inset 0 -1px 0 #0009,0 3px 7px #0002;transition:border-color .2s ease,box-shadow .2s ease,background-color .2s ease}
+.market-tile::before{content:'';position:absolute;inset:0;pointer-events:none;border-radius:inherit;background:linear-gradient(105deg,#f5f5f50c,transparent 24%,transparent 68%,#f5f5f504);opacity:.65;transition:opacity .2s ease}
+.market-tile.is-selected{border-color:#dedede5e;background-color:#5c5c5c;box-shadow:inset 0 1px 0 #f7f7f727,inset 0 -1px 0 #0007,0 3px 12px #0003}
+.market-tile.is-selected::before{opacity:1}
+.market-steel-sheen{position:absolute;z-index:0;inset:-25% -40%;background:linear-gradient(105deg,transparent 32%,#f5f5f514 44%,#f5f5f520 49%,transparent 60%);transform:translateX(-90%);transition:transform .75s cubic-bezier(.2,.7,.2,1);pointer-events:none}
+.market-tile .market-tile-select{position:relative;z-index:1;display:flex;flex-direction:column;gap:10px;width:100%;padding:11px 11px 12px;border:0;border-radius:9px;text-align:left;color:#e2e2e2;background:none;cursor:pointer;transition:background-color .16s ease;touch-action:manipulation}
+.market-tile .market-tile-select:active{background:#dfdfdf0b}
+.market-tile .market-tile-select:focus-visible{outline:2px solid #e7e7e7;outline-offset:-3px}
+.market-tile-identity{display:flex;align-items:center;gap:9px;min-width:0;padding-right:17px}
+.market-company-mark{position:relative;display:grid;place-items:center;width:32px;height:32px;flex:0 0 32px;overflow:hidden;border:1px solid #e6e6e626;border-radius:8px;background:linear-gradient(145deg,#424242,#191919 67%);box-shadow:0 1px 0 #f4f4f415,inset 0 1px 5px #0005}
+.market-company-mark img{display:block;width:100%;height:100%;object-fit:contain;filter:grayscale(1);opacity:.93;transition:opacity .2s ease,transform .3s cubic-bezier(.2,.7,.2,1)}
+.market-company-mark.lift img{filter:grayscale(1) brightness(1.8)}
+.market-company-mark.lift-strong img{filter:grayscale(1) brightness(2.7)}
+.market-company-mark.invert img{filter:grayscale(1) invert(1) brightness(1.05)}
+.market-logo-unavailable{font-size:15px;color:#b3b3b3}
+.market-tile-name{min-width:0;flex:1}
+.market-tile .market-tile-symbol{display:flex;align-items:baseline;gap:5px;font-size:12px;line-height:1.15;font-weight:500;letter-spacing:.015em;color:#f0f0f0}
+.market-tile .market-perp-label{font-size:6px;line-height:1;font-weight:400;letter-spacing:.1em;color:#a7a7a7}
+.market-tile .market-company-name{display:block;margin-top:5px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:8px;line-height:1.1;color:#adadad;letter-spacing:0}
+.market-tile-quote{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.market-tile .market-price{font-variant-numeric:tabular-nums;white-space:nowrap;font-size:16px;font-weight:500;line-height:1;letter-spacing:-.025em;color:#f3f3f3}
+.market-tile .market-price>span{font-size:6px;letter-spacing:.04em;font-weight:400;color:#969696;margin-left:4px}
+.market-tile .market-change{display:flex;align-items:center;gap:3px;font-variant-numeric:tabular-nums;font-size:10px;line-height:1;font-weight:400;white-space:nowrap}
+.market-tile .market-change.up{color:#b8d2c0}
+.market-tile .market-change.down{color:#d6a8a8}
+.market-change svg{width:10px;height:10px;fill:none;stroke:currentColor;stroke-width:1.15;stroke-linecap:round;stroke-linejoin:round}
+.market-selected-line{height:1px;position:absolute;bottom:0;left:11px;right:11px;background:linear-gradient(90deg,transparent,#e2e2e2 50%,transparent);transform:scaleX(.3);opacity:0;transition:transform .3s ease,opacity .2s ease}
+.market-tile.is-selected .market-selected-line{transform:scaleX(1);opacity:.85}
+.market-tile .market-tile-favorite{position:absolute;z-index:2;right:3px;top:4px;width:25px;height:27px;display:grid;place-items:center;border:0;border-radius:5px;padding:5px;color:#7f7f7f;background:transparent;cursor:pointer;transition:background-color .18s ease,color .18s ease,transform .16s ease;touch-action:manipulation}
+.market-tile-favorite svg{width:15px;height:15px}
+.market-tile .market-tile-favorite.is-favorite{color:#c7c7c7}
+.market-tile .market-tile-favorite:hover{color:#f4f4f4;background:#ebebeb0c}
+.market-tile .market-tile-favorite:active{transform:scale(.9)}
+.market-tile .market-tile-favorite:focus-visible{outline:2px solid #e6e6e6;outline-offset:-1px;color:#fff}
+@media(hover:hover) and (pointer:fine){.market-tile:hover{border-color:#dedede52;box-shadow:inset 0 1px 0 #f4f4f425,inset 0 -1px 0 #0008,0 4px 12px #0003}.market-tile:hover .market-steel-sheen{transform:translateX(80%)}.market-tile:hover .market-company-mark img{opacity:1;transform:scale(1.045)}}
+.market-tile:focus-within{border-color:#dedede7a}
+.market-tile:focus-within .market-steel-sheen{transform:translateX(80%)}
+@media(max-width:1023px){.term-market-list:has(>.market-tile){flex-direction:row;gap:8px;margin:12px 0 0;padding:2px 1px 6px;overflow-x:auto;scroll-snap-type:x proximity}.term-market-list>.market-tile{width:174px;min-width:174px;max-width:174px;scroll-snap-align:start}.market-tile .market-tile-select{padding:10px 11px 11px;gap:9px}.market-tile .market-tile-favorite{width:29px;height:30px;right:1px;top:2px}.market-tile-identity{padding-right:16px}.market-company-mark{width:28px;height:28px;flex-basis:28px}.market-tile .market-tile-symbol{font-size:11px}.market-tile .market-price{font-size:15px}.market-tile .market-company-name{font-size:7px}}
+@media(prefers-reduced-motion:reduce){.market-tile,.market-tile::before,.market-tile .market-tile-select,.market-company-mark img,.market-tile .market-tile-favorite,.market-selected-line{transition:none}.market-steel-sheen{display:none}.market-tile:hover .market-company-mark img,.market-tile .market-tile-favorite:active{transform:none}}
+.motion-paused .market-steel-sheen,.page-hidden .market-steel-sheen{display:none}
+@media(forced-colors:active){.market-tile{border:1px solid ButtonText;background:Canvas;box-shadow:none}.market-tile.is-selected{border:2px solid Highlight}.market-tile::before,.market-steel-sheen{display:none}.market-tile .market-tile-symbol,.market-tile .market-price,.market-tile .market-company-name,.market-tile .market-change{color:CanvasText}.market-tile .market-tile-select:focus-visible,.market-tile .market-tile-favorite:focus-visible{outline-color:Highlight}}

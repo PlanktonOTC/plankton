@@ -1,0 +1,3 @@
+{
+  "_readme": "Hand-maintained market data for the listing rule. One entry per ticker in markets.json. A market with no entry, or an entry older than 14 days, takes no new positions (exits still work). Figures are USD; asOf is YYYY-MM-DD. Optional counters you keep: sessionsAbove2B and sessionsAbove10B (consecutive sessions the market cap has been above $2B / $10B). Add a row only with figures you have checked on a live quote page or the company's latest filing."
+}

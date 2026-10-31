@@ -1,0 +1,12 @@
+{
+  "name": "@plankton/indexer",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@plankton/chain": "workspace:*",
+    "@plankton/config": "workspace:*",
+    "@plankton/db": "workspace:*",
+    "pino": "^10.4.0",
+    "viem": "^2.57.13"
+  }
+}

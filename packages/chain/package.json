@@ -1,0 +1,13 @@
+{
+  "name": "@plankton/chain",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@plankton/core": "workspace:*",
+    "viem": "^2.57.13",
+    "zod": "^4.6.7"
+  }
+}

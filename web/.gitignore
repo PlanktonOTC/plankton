@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.delivery-check/
+*.log
+.env
+.env.*
+!.env.example

@@ -1,0 +1,23 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc = "0.8.30"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 1
+via_ir = true
+remappings = [
+  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+  "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
+  "forge-std/=lib/forge-std/src/",
+]
+# The scripts read ../config/markets.json and write ../deployments/4663.json.
+fs_permissions = [
+  { access = "read", path = "../config" },
+  { access = "read-write", path = "../deployments" },
+  { access = "read", path = "./test" },
+]
+
+[lint]
+exclude_lints = ["block-timestamp", "unsafe-typecast", "reentrancy-events", "require-revert-in-loop", "uninitialized-local"]

@@ -1,0 +1,132 @@
+/* Approved steel material extended to existing support surfaces only.
+   Structure, copy, interaction targets and the Trade workspace remain owned by
+   their original components. No decorative motion on informational panels. */
+.plankton-docs,
+.term-secondary-view {
+  --support-steel-surface:
+    repeating-linear-gradient(109deg, #ededed03 0, #ededed03 1px, transparent 1px, transparent 4px),
+    linear-gradient(125deg, #4e4e4e35 0, #3535353d 24%, #1d1d1d 58%, #3232326b 100%), #191919;
+  --support-steel-border: #c6c6c62c;
+  --support-steel-shadow: inset 0 1px 0 #f6f6f614, inset 0 -1px 0 #0a0a0aa6, 0 12px 30px #00000016;
+}
+
+.plankton-docs .doc-note,
+.plankton-docs .doc-example,
+.plankton-docs .doc-symbol-grid,
+.plankton-docs .doc-waterfall,
+.plankton-docs .doc-pager > a,
+.term-secondary-view .term-large-panel,
+.term-secondary-view .term-stat-grid,
+.term-secondary-view .term-info-banner {
+  background: var(--support-steel-surface);
+  border-color: var(--support-steel-border);
+  box-shadow: var(--support-steel-shadow);
+}
+
+.plankton-docs .doc-note {
+  border-left-color: #d3d3d375;
+  background:
+    linear-gradient(90deg, #dddddd11, transparent 22%),
+    var(--support-steel-surface);
+}
+.plankton-docs .doc-note > span { color: #d6d6d6; }
+.plankton-docs .doc-note p { color: #b2b2b2; }
+.plankton-docs .doc-example {
+  border-color: #d1d1d13b;
+  box-shadow: inset 0 1px 0 #f3f3f321, inset 0 -1px 0 #0b0b0bb3, 0 18px 40px #00000024;
+}
+.plankton-docs .doc-example-value strong { color: #e8e8e8; }
+.plankton-docs .doc-example-top .doc-small-pill {
+  border-color: #c7c7c72d;
+  background: linear-gradient(130deg, #e2e2e20c, #e2e2e203);
+}
+.plankton-docs .doc-example-leverage button {
+  background: linear-gradient(135deg, #d6d6d60b, #93939308);
+  border-color: #c2c2c22b;
+  box-shadow: inset 0 1px 0 #fafafa09;
+}
+.plankton-docs .doc-example-leverage button[aria-pressed=true] {
+  background: linear-gradient(135deg, #eaeaea, #bcbcbc);
+  border-color: #eeeeee;
+  color: #1e1e1e;
+  box-shadow: inset 0 1px 0 #ffffffad, 0 2px 6px #00000040;
+}
+.plankton-docs .doc-symbol-grid > div,
+.plankton-docs .doc-waterfall > div,
+.plankton-docs .doc-waterfall > div:last-child,
+.term-secondary-view .term-stat-grid > div {
+  background: transparent;
+  border-color: #c8c8c81a;
+}
+.plankton-docs .doc-symbol-grid strong { color: #e2e2e2; }
+.plankton-docs .doc-symbol-grid span,
+.plankton-docs .doc-waterfall span { color: #a3a3a3; }
+.plankton-docs .doc-waterfall b { color: #d4d4d4; }
+.plankton-docs .doc-pager > a {
+  transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+}
+.plankton-docs .doc-pager > a span { color: #d5d5d5; }
+.plankton-docs .doc-pager > a small { color: #9a9a9a; }
+
+.term-secondary-view .term-large-panel,
+.term-secondary-view .term-stat-grid { border-radius: 11px; }
+.term-secondary-view .term-large-panel h2 { color: #dedede; }
+.term-secondary-view .term-large-panel > p { color: #a7a7a7; }
+.term-secondary-view .term-stat-grid strong { color: #e8e8e8; }
+.term-secondary-view .term-stat-grid span { color: #a9a9a9; }
+.term-secondary-view .term-stat-grid small { color: #898989; }
+.term-secondary-view .term-waterfall > div,
+.term-secondary-view .term-detail,
+.term-secondary-view .term-tape-event { border-color: #c8c8c819; }
+.term-secondary-view .term-waterfall i {
+  background: linear-gradient(90deg, #dbdbdb80, #9898984d, transparent);
+}
+.term-secondary-view .term-counter-form:focus-within {
+  border-color: #d3d3d34b;
+  box-shadow: inset 0 1px 0 #f6f6f61c, inset 0 -1px 0 #0a0a0aa6, 0 12px 30px #00000020;
+}
+.term-secondary-view .term-inline-tabs button.active,
+.term-secondary-view .term-switch button.active {
+  background: linear-gradient(135deg, #c7c7c721, #c7c7c708);
+  box-shadow: inset 0 1px 0 #eaeaea0d;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .plankton-docs .doc-pager > a:hover,
+  .plankton-docs .doc-pager > a:focus-visible {
+    border-color: #d8d8d868;
+    box-shadow: inset 0 1px 0 #f8f8f824, inset 0 -1px 0 #0a0a0aa6, 0 12px 30px #00000020;
+    background-color: #222222;
+  }
+  .plankton-docs .doc-example-leverage button:not([aria-pressed=true]):hover {
+    background: linear-gradient(135deg, #d6d6d624, #93939311);
+    border-color: #d8d8d848;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .plankton-docs .doc-pager > a { transition: none; }
+}
+@media (forced-colors: active) {
+  .plankton-docs .doc-note,
+  .plankton-docs .doc-example,
+  .plankton-docs .doc-symbol-grid,
+  .plankton-docs .doc-waterfall,
+  .plankton-docs .doc-pager > a,
+  .term-secondary-view .term-large-panel,
+  .term-secondary-view .term-stat-grid,
+  .term-secondary-view .term-info-banner {
+    background: Canvas;
+    border-color: CanvasText;
+    box-shadow: none;
+  }
+}
+
+/* Neutral substrate prevents translucent steel from inheriting a blue cast. */
+.term-secondary-view{--term-text:#e7e7e7;--term-muted:#949494;color:#e7e7e7}
+.plankton-docs .doc-example-leverage,.plankton-docs .doc-example-value small,.plankton-docs .doc-example-value strong span,.plankton-docs .doc-range-label{color:#a3a3a3}
+.plankton-docs .doc-example-footnote{color:#8e8e8e!important}
+.plankton-docs .doc-waterfall svg{color:#8e8e8e}
+.term-secondary-view .term-detail>span,.term-secondary-view .term-tape-event p,.term-secondary-view .term-tape-event small{color:#989898}
+.term-secondary-view .term-detail>b{color:#d3d3d3}
+.term-secondary-view .term-muted{color:#919191!important}
+.term-secondary-view .term-text-link,.term-secondary-view .term-tape-event a{color:#bcbcbc}

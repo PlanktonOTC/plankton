@@ -1,0 +1,28 @@
+{
+  "name": "plankton",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*", "apps/*", "scripts", "web"],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "abi": "bun run scripts/gen-abis.ts",
+    "vectors": "bun run scripts/gen-vectors.ts",
+    "test": "bun test ./packages ./apps",
+    "test:contracts": "cd contracts && forge test",
+    "db:generate": "cd packages/db && bunx drizzle-kit generate",
+    "db:migrate": "bun run packages/db/src/migrate.ts",
+    "dev:web": "bun run --cwd web dev",
+    "build:web": "bun run --cwd web build",
+    "test:web": "bun run --cwd web test",
+    "dev:api": "bun run apps/api/src/index.ts",
+    "dev:signer": "bun run apps/signer/src/index.ts",
+    "dev:mark": "bun run apps/mark/src/index.ts",
+    "dev:keeper": "bun run apps/keeper/src/index.ts",
+    "dev:indexer": "bun run apps/indexer/src/index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.4",
+    "drizzle-kit": "^0.31.11",
+    "typescript": "^7.0.2"
+  }
+}

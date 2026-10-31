@@ -1,0 +1,29 @@
+{
+  "rung": "R0",
+  "markets": [
+    {
+      "symbol": "USAR",
+      "class": "smid",
+      "stockToken": "0xd917B029C761D264c6A312BBbcDA868658eF86a6",
+      "chainlinkFeed": "0xA994d3684e8400A6c8078226925779FdeE682DD9",
+      "enabled": true,
+      "note": "Feed verified on-chain 2026-10-31 (42 bp from Robinhood). Market cap is about $2.1B to $3.6B depending on the share count: confirm it and add a row to market-data.json before opens are allowed."
+    },
+    {
+      "symbol": "CLSK",
+      "class": "smid",
+      "stockToken": "0xcBB95BBF36099d34dA091dc6Fa6F49EfA257Cee3",
+      "chainlinkFeed": "0x810c12D3a554Bc47fd39597Fe3b3AAC4941F50eF",
+      "enabled": true,
+      "note": "Feed verified on-chain 2026-10-31, but 683 bp from Robinhood on a Saturday: tune agreeBps once weekday behaviour is seen. Market cap about $2.2B and near the $2B line: confirm before listing."
+    },
+    {
+      "symbol": "RGTI",
+      "class": "smid",
+      "stockToken": "0x284358abc07F9359f19f4b5b4aC91901Be2597Ba",
+      "chainlinkFeed": "0x2A045cF1C49c61c166C036d2f06FA2D2d984f765",
+      "enabled": true,
+      "note": "Feed verified on-chain 2026-10-31 (131 bp from Robinhood). Market cap about $3.7B to $5B: confirm it and add a row to market-data.json before opens are allowed."
+    }
+  ]
+}

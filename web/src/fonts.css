@@ -1,0 +1,12 @@
+/* Official Vercel Geist 1.8.2 variable webfonts, served locally under OFL 1.1. */
+@font-face{font-family:Geist;src:url('/fonts/Geist-Variable.woff2') format('woff2');font-style:normal;font-weight:100 900;font-display:swap}
+@font-face{font-family:'Geist Mono';src:url('/fonts/GeistMono-Variable.woff2') format('woff2');font-style:normal;font-weight:100 900;font-display:swap}
+:root{--font-sans:Geist,Arial,sans-serif;--font-mono:'Geist Mono',ui-monospace,monospace}
+#root :is(.hero-copy h1,.story-step h2,.arrival h2,.statement,.studio-opening h2,.studio-summary h3,.roadmap-intro h2,.case-study h2,.reach h2,.faq h2,.closing h2,.doc-article h1){font-weight:300}
+#root .identity-line{font-weight:200}
+#root :is(.overview-card h2,.feature-info-panel h3,.studio-bento h4,.roadmap-detail h3,.future-plan h3,.doc-sections h2){font-weight:400}
+.terminal .market-price,.terminal .market-change,.terminal .term-account-strip strong,.terminal .term-ohlc,.terminal input[type=number],.terminal .term-shortcut-list kbd,.plankton-docs code,.example-pnl>strong{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.terminal .market-price{letter-spacing:-.05em}
+.terminal .market-change{letter-spacing:-.065em}
+.terminal .term-nav nav,.terminal .term-market-list{scrollbar-width:none}
+.terminal .term-nav nav::-webkit-scrollbar,.terminal .term-market-list::-webkit-scrollbar{display:none}

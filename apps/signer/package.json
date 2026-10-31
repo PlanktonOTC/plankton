@@ -1,0 +1,14 @@
+{
+  "name": "@plankton/signer",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@plankton/chain": "workspace:*",
+    "@plankton/config": "workspace:*",
+    "@plankton/core": "workspace:*",
+    "hono": "^4.13.14",
+    "pino": "^10.4.0",
+    "viem": "^2.57.13",
+    "zod": "^4.6.7"
+  }
+}

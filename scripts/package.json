@@ -1,0 +1,13 @@
+{
+  "name": "@plankton/scripts",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@plankton/chain": "workspace:*",
+    "@plankton/config": "workspace:*",
+    "@plankton/core": "workspace:*",
+    "@plankton/db": "workspace:*",
+    "viem": "^2.57.13",
+    "zod": "^4.6.7"
+  }
+}

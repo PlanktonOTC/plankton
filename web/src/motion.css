@@ -1,0 +1,249 @@
+/* Reference geometry, enhanced by usePageMotion. Keep this after styles.css and
+   media.css. Sticky elements retain their normal flow height: no pin spacers or
+   negative stage margins, which would let a story film bleed into the arrival. */
+.hero-terminal { transform-origin: 50% 50%; }
+.hero-product, .hero-terminal, .hero-film { will-change: transform, opacity; }
+.product-cards { position: relative; z-index: 3; }
+.overview-card { will-change: transform, opacity; }
+
+.story {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+}
+.story-art {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  min-height: 0;
+  width: 100%;
+  margin-bottom: 0 !important;
+  overflow: hidden;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(transparent, #000 15%, #000 85%, transparent);
+  mask-image: linear-gradient(transparent, #000 15%, #000 85%, transparent);
+}
+.story-film {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transition: none;
+  will-change: opacity;
+}
+.story-film video, .story-film .film-poster { object-fit: cover; }
+.story-shade {
+  position: absolute;
+  inset: 0;
+  background: #101112;
+  pointer-events: none;
+  will-change: opacity;
+}
+.story-step { position: relative; z-index: 2; }
+.story-step h2, .story-step p, .story-step .eyebrow { will-change: transform, opacity; }
+.arrival { position: relative; isolation: isolate; overflow: clip; }
+.arrival-art {
+  overflow: hidden;
+  -webkit-mask-image: radial-gradient(ellipse 65% 61% at 50% 46%, #000 25%, #000 55%, transparent 98%);
+  mask-image: radial-gradient(ellipse 65% 61% at 50% 46%, #000 25%, #000 55%, transparent 98%);
+  will-change: transform, opacity;
+}
+.arrival h2, .statement { will-change: transform, opacity; }
+.arrival + .statement { position: relative; z-index: 1; }
+.studio { position: relative; overflow: clip; }
+.studio-transition { display: none; pointer-events: none; }
+.studio-zoom-stage { overflow: hidden; }
+.studio-wordmark { position: relative; transform-origin: 50% 50%; }
+.studio-wordmark [data-zoom-center], .studio-wordmark .center-letter { display: inline-block; }
+.studio-content { position: relative; z-index: 2; transform-origin: 50% 0; }
+.studio-opening { min-height: 0; padding-bottom: 100px; perspective: 1500px; }
+.studio-opening .studio-preview {
+  width: min(82%, 1180px);
+  margin: 120px auto 0;
+  transform: none;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+@media (min-width: 1291px) {
+  [data-page-motion="on"] .hero { height: 200vh; min-height: 0; }
+  [data-page-motion="on"] .hero-stage {
+    position: sticky;
+    top: 0;
+    height: 100svh;
+    min-height: 0;
+    padding-top: clamp(100px, 12vh, 150px);
+  }
+  [data-page-motion="on"] .hero-product {
+    height: 48vh;
+    min-height: min(365px, 43vh);
+    max-height: 48vh;
+  }
+}
+
+@media (min-width: 1024px) {
+  [data-page-motion="on"] .story {
+    height: 400vh;
+    margin-top: -50vh;
+  }
+  [data-page-motion="on"] .story-step {
+    height: 100vh;
+    min-height: 0;
+    justify-content: flex-start;
+    padding: 0 max(24px, 13vw);
+  }
+  [data-page-motion="on"] .story-step h2 { max-width: 1150px; }
+  [data-page-motion="on"] .story-step p {
+    position: absolute;
+    bottom: 50vh;
+    left: 0;
+    right: 0;
+    width: min(730px, calc(100% - 64px));
+    max-width: none;
+    margin: 0 auto;
+  }
+  [data-page-motion="on"] .studio { padding-top: 0; }
+  [data-page-motion="on"] .studio-transition {
+    display: block;
+    height: 460vh;
+    position: relative;
+    perspective: 1000px;
+    z-index: 0;
+  }
+  [data-page-motion="on"] .studio-zoom-stage {
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    display: grid;
+    place-items: center;
+  }
+  [data-page-motion="on"] .studio-wordmark {
+    font-size: clamp(70px, 9vw, 180px);
+    line-height: 1;
+    will-change: transform, color;
+  }
+  [data-page-motion="on"] .studio-content {
+    margin-top: -160vh;
+    padding-top: clamp(100px, 10vw, 190px);
+    background: none;
+    will-change: opacity, transform;
+  }
+}
+
+/* The source uses a separate full film below 1290px. This adaptation exposes
+   the actual final terminal there, keeping its content legible and usable. */
+@media (max-width: 1290px) {
+  .hero { height: auto; min-height: 100svh; }
+  .hero-stage {
+    position: relative;
+    height: auto;
+    min-height: 100svh;
+    padding-bottom: 100px;
+    overflow: visible;
+  }
+  .hero-film { display: none; }
+  .hero-terminal { opacity: 1 !important; visibility: visible !important; transform: none !important; }
+}
+
+@media (max-width: 1023px) {
+  [data-page-motion="on"] .story {
+    height: auto;
+    margin-top: 0;
+  }
+  [data-page-motion="on"] .story-art { height: 85svh; margin-bottom: 0 !important; }
+  [data-page-motion="on"] .story-step {
+    min-height: 80svh;
+    height: auto;
+    padding: 100px 24px;
+    justify-content: center;
+  }
+  [data-page-motion="on"] .story-step h2,
+  [data-page-motion="on"] .story-step p,
+  [data-page-motion="on"] .story-step .eyebrow { opacity: 1; visibility: visible; }
+  .studio-transition { display: block; }
+  .studio-content { margin-top: 0; opacity: 1; transform: none; }
+  .studio-opening { padding-bottom: 70px; }
+  .studio-opening .studio-preview { width: 100%; margin-top: 80px; transform: none; }
+}
+
+/* One transparent identity stage over the single, fixed site grid. */
+.studio{background:none!important}.studio-content{background:none!important}.studio-opening{overflow:visible}
+.story-shade{display:none}.story-art:after{background:linear-gradient(90deg,#d9dddd09 1px,transparent 1px),linear-gradient(#d9dddd09 1px,transparent 1px);background-size:48px 48px;background-attachment:fixed}
+[data-page-motion="on"] .studio-transition{display:block;height:460vh;position:relative;z-index:0;pointer-events:none}
+[data-page-motion="on"] .studio-zoom-stage{height:100svh;position:sticky;top:0;display:grid;place-items:center;overflow:clip}
+[data-page-motion="on"] .studio-content{margin-top:-160vh;padding-top:clamp(100px,10vw,190px);background:none;will-change:opacity}
+.identity-sculpture{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.8;mask-image:radial-gradient(ellipse at center,#000 30%,transparent 75%)}
+.identity-sculpture canvas{width:100%;height:100%;display:block}.identity-sculpture-fallback{position:absolute;width:50%;left:25%;top:40%;opacity:.22}.identity-sculpture.is-ready .identity-sculpture-fallback{display:none}
+.identity-copy{position:relative;width:100%;height:280px;display:grid;place-items:center;z-index:1;text-align:center;pointer-events:none}
+.identity-line{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;font-weight:500;letter-spacing:-.05em;line-height:.97;color:#f2f2ee;text-shadow:0 3px 35px #0006;will-change:transform,opacity}
+.identity-line.identity-brand{font-size:clamp(72px,11vw,180px)}.identity-tagline,.identity-chain{font-size:clamp(42px,7vw,118px);opacity:0;visibility:hidden}
+.identity-chain{transform-origin:50% 65%}.identity-scroll-note{position:absolute;bottom:12vh;left:0;right:0;text-align:center;font-size:9px;letter-spacing:.16em;color:#a9adaa}
+@media(max-width:760px){.identity-copy{height:230px}.identity-line.identity-brand{font-size:14vw}.identity-tagline,.identity-chain{font-size:10vw}.identity-sculpture{inset:10% -25%}.identity-scroll-note{font-size:7px;bottom:16vh}.story-art:after{background-size:32px 32px}}
+
+/* Pause and reduced motion collapse the long animation corridors. All copy,
+   controls, and static artwork remain visible, including cards formerly faded. */
+[data-page-motion="static"] .hero { height: auto; min-height: 100svh; }
+[data-page-motion="static"] .hero-stage {
+  position: relative;
+  height: auto;
+  min-height: 100svh;
+  padding-bottom: 100px;
+  overflow: visible;
+}
+[data-page-motion="static"] .hero-film,
+.hero[data-hero-media="failed"] .hero-film { display: none !important; }
+[data-page-motion="static"] .hero-terminal,
+.hero[data-hero-media="failed"] .hero-terminal {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: none !important;
+}
+[data-page-motion="static"] .hero-product,
+[data-page-motion="static"] .hero-copy > *,
+[data-page-motion="static"] .scroll-down,
+[data-page-motion="static"] .product-cards,
+[data-page-motion="static"] .overview-card,
+[data-page-motion="static"] .arrival h2,
+[data-page-motion="static"] .statement,
+[data-page-motion="static"] .story-step > * {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: none !important;
+}
+[data-page-motion="static"] .arrival-art { opacity: .68 !important; visibility: visible !important; }
+[data-page-motion="static"] .story { height: auto; margin-top: 0; padding: 40px 0; }
+[data-page-motion="static"] .story-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  opacity: .4;
+}
+[data-page-motion="static"] .story-film { opacity: 0 !important; visibility: hidden !important; }
+[data-page-motion="static"] .story-film:first-child { opacity: 1 !important; visibility: visible !important; }
+[data-page-motion="static"] .story-shade { opacity: .45 !important; }
+[data-page-motion="static"] .story-step {
+  height: auto;
+  min-height: clamp(360px, 65svh, 650px);
+  padding: 90px 24px;
+  justify-content: center;
+}
+[data-page-motion="static"] .story-step p { position: static; margin: 28px auto 0; }
+[data-page-motion="static"] .studio-transition { display: none !important; }
+[data-page-motion="static"] .studio-content { margin-top: 0; opacity: 1 !important; transform: none !important; }
+[data-page-motion="static"] .studio-preview { transform: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-transition { display: none !important; }
+  .studio-content { margin-top: 0 !important; opacity: 1 !important; transform: none !important; }
+  .hero { height: auto !important; }
+  .hero-stage { position: relative !important; }
+  .hero-product, .hero-copy > *, .overview-card, .product-cards, .arrival h2, .statement, .story-step > *, .studio-preview {
+    transform: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+  .story { height: auto !important; margin-top: 0 !important; }
+  .story-art { margin-bottom: 0 !important; }
+}

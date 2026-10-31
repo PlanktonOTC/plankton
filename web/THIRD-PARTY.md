@@ -1,0 +1,9 @@
+# Asset provenance
+
+- Clear Street (https://www.clearstreet.io/) is the user-selected design reference. Original HTML, CSS, JavaScript, font files and screenshots in reference/ are retained for comparison, with their original notices. PLANKTON application code is editable React/CSS rather than a remote iframe or screenshot.
+- The current site uses official Geist Sans and Geist Mono 1.8.2 variable WOFF2 files from https://github.com/vercel/geist-font/releases/tag/v1.8.2, following the user's selection at https://vercel.com/font. Fonts are served locally. Their SIL Open Font License 1.1 is included as `public/fonts/Geist-OFL.txt`.
+- Earlier Reyhan Regular and Medium WOFF2 files from the reference's public `/fonts/` path remain comparison material only; current site CSS does not load them. Original authors retain rights, and no broader redistribution license is asserted for those historical files.
+- The canonical wireframe PLANKTON image was supplied by the user. Its selected raster geometry is preserved in the transparent extraction. The SVG file embeds raster pixels and is not a vector trace.
+- Generated Kling assets, settings, provenance metadata and postproduction are listed in docs/media.md. Generated secondary artwork is not a replacement for the exact logo.
+- React and Vite package licenses are distributed through their packages; the dependency lockfile records exact revisions. No third-party tracking or analytics is included in the PLANKTON app.
+- Three.js and its RoomEnvironment provide the local, transparent identity sculpture. Geometry, material, lighting and scroll response are authored in `src/IdentitySculpture.jsx`; no external model is loaded. Three.js uses the MIT license. GSAP and ScrollTrigger drive the homepage choreography under their distributed package license. Exact versions and notices are in the lockfile and installed packages.
