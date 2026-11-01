@@ -3,7 +3,7 @@ import type { MarketClass } from './types.ts';
 
 // --- cap ladder (Overview section 7.1) ---
 
-export type Rung = 'R0' | 'R1' | 'R2' | 'R3' | 'R4';
+export type Rung = 'B0' | 'R0' | 'R1' | 'R2' | 'R3' | 'R4';
 
 export interface RungParams {
   netSkewBps: number;
@@ -16,6 +16,9 @@ export interface RungParams {
 }
 
 export const RUNGS: Record<Rung, RungParams> = {
+  // B0, the $100 beta before R0: the spec's percentages would allow a $1 position, so per-market caps are 5x wider
+  // (10% position, 20% net skew, 60% gross). The all-markets net cap stays 20% of V, so the worst case is the Counter.
+  B0: { netSkewBps: 2_000, grossOiBps: 6_000, positionBps: 1_000, totalNetBps: 2_000, maxMarkets: 12, leverage: { micro: 2, small: 3, smid: 3, index: 3 } },
   R0: { netSkewBps: 400, grossOiBps: 1_200, positionBps: 100, totalNetBps: 2_000, maxMarkets: 4, leverage: { micro: 2, small: 3, smid: 3, index: 3 } },
   R1: { netSkewBps: 400, grossOiBps: 1_200, positionBps: 100, totalNetBps: 2_000, maxMarkets: 8, leverage: { micro: 3, small: 3, smid: 5, index: 5 } },
   R2: { netSkewBps: 400, grossOiBps: 1_200, positionBps: 100, totalNetBps: 2_000, maxMarkets: 12, leverage: { micro: 3, small: 3, smid: 5, index: 5 } },
