@@ -7,7 +7,8 @@ import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step
 import {IMarkOracle, IAggregatorV3} from "./interfaces/Interfaces.sol";
 
 /// @notice Signed price attestations, bounded on-chain by Chainlink.
-/// A leaked signer key can move a mark only inside `bandBps` of a fresh Chainlink answer; anything outside needs a quorum.
+/// A leaked signer key can move a mark only inside `bandBps` of a fresh Chainlink answer, or, off-session, inside
+/// `heldBandBps` of a reference only Chainlink-bounded marks set. Anything outside needs a quorum.
 /// The owner is an EOA: tightening is instant, loosening and new signers wait 24h.
 contract MarkOracle is IMarkOracle, EIP712, Ownable2Step {
     bytes32 private constant ATTESTATION_TYPEHASH = keccak256(
@@ -34,6 +35,9 @@ contract MarkOracle is IMarkOracle, EIP712, Ownable2Step {
     mapping(bytes32 => PendingConfig) private _pending;
     mapping(bytes32 => Mark) private _mark;
     mapping(bytes32 => uint8) public consistentMarks;
+    mapping(bytes32 => uint256) private _regularClose;
+    mapping(bytes32 => uint256) private _lastBounded;
+    mapping(bytes32 => uint64) private _openSince;
 
     error NotConfigured();
     error StaleSequence();
@@ -80,14 +84,21 @@ contract MarkOracle is IMarkOracle, EIP712, Ownable2Step {
         if (valid == 0) revert BadSignature();
 
         // Does this mark need more than one signer?
+        bool bounded = a.status == Status.Open || a.status == Status.Extended;
         bool needQuorum;
-        if (a.status == Status.Open || a.status == Status.Extended) {
+        if (bounded) {
             (uint256 cl, uint64 clAt) = _chainlink(c.chainlinkFeed);
             bool fresh = clAt != 0 && block.timestamp <= uint256(clAt) + c.chainlinkMaxAgeSec;
             needQuorum = !fresh || _diffBps(a.markE18, cl) > c.bandBps;
-        } else if (m.priceE18 != 0) {
-            // Weekend, Frozen, Halted: Chainlink is not a usable bound, so the mark may only hold near the last one.
-            needQuorum = _diffBps(a.markE18, m.priceE18) > c.jumpBps;
+        } else {
+            // Weekend, Frozen, Halted: Chainlink is not a usable bound, so one signer may only hold the price near a
+            // reference that only Chainlink-bounded marks set. Measuring against the last mark instead would let a
+            // leaked key walk the price one step at a time. Weekend holds Friday's regular close; Frozen and Halted
+            // hold the last bounded mark. With no reference yet (cold start) a quorum is needed.
+            uint256 ref = a.status == Status.Weekend && _regularClose[a.marketId] != 0
+                ? _regularClose[a.marketId]
+                : _lastBounded[a.marketId];
+            needQuorum = ref == 0 || _diffBps(a.markE18, ref) > c.heldBandBps;
         }
         bool quorum = valid >= c.quorumOutsideBand;
         if (needQuorum && !quorum) revert QuorumRequired(valid, c.quorumOutsideBand);
@@ -113,6 +124,14 @@ contract MarkOracle is IMarkOracle, EIP712, Ownable2Step {
             consistentMarks[a.marketId] = n;
         }
 
+        if (bounded) {
+            _lastBounded[a.marketId] = a.markE18;
+            if (a.status == Status.Open) {
+                _regularClose[a.marketId] = a.markE18;
+                if (m.status != Status.Open) _openSince[a.marketId] = uint64(block.timestamp);
+            }
+        }
+
         uint64 observed = a.observedAt > block.timestamp ? uint64(block.timestamp) : a.observedAt;
         _mark[a.marketId] = Mark(a.markE18, a.confidenceBps, a.status, a.sequence, observed, breaker);
         emit MarkPublished(a.marketId, a.markE18, a.status, a.sequence, a.confidenceBps, breaker);
@@ -124,6 +143,14 @@ contract MarkOracle is IMarkOracle, EIP712, Ownable2Step {
 
     function configOf(bytes32 marketId) external view returns (OracleConfig memory) {
         return _config[marketId];
+    }
+
+    function referencesOf(bytes32 marketId)
+        external
+        view
+        returns (uint256 regularCloseE18, uint256 lastBoundedE18, uint64 openSince)
+    {
+        return (_regularClose[marketId], _lastBounded[marketId], _openSince[marketId]);
     }
 
     function chainlinkPrice(bytes32 marketId) external view returns (uint256 priceE18, uint64 updatedAt) {
