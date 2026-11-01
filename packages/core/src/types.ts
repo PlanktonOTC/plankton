@@ -32,7 +32,8 @@ export interface MarketMeta {
   symbol: string;
   marketId: `0x${string}`;
   stockToken: `0x${string}`;
-  chainlinkFeed: `0x${string}`;
+  /** Absent for a market Chainlink does not cover: priced from Robinhood's quote alone, every mark quorum-signed. */
+  chainlinkFeed?: `0x${string}`;
   pythFeedId?: string;
   class: MarketClass;
   tags: string[];

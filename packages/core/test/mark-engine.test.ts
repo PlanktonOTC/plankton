@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   DEFAULT_PRICING_CONFIG,
+  SINGLE_SOURCE_PRICING,
   Status,
   newEngineState,
   parseE18,
@@ -160,5 +161,39 @@ describe('when to publish', () => {
   });
   test('on the heartbeat even when nothing moved', () => {
     expect(shouldPublish(prev, { priceE18: parseE18('100'), status: Status.Open }, NOW + 60_000, opts)).toBe(true);
+  });
+});
+
+describe('single-source market (no Chainlink feed)', () => {
+  const single = { ...DEFAULT_PRICING_CONFIG, ...SINGLE_SOURCE_PRICING };
+  const rhOnly = (price: string, at = NOW) => {
+    const p = Number(price);
+    return [{ ...o('rh_quote', price), observedAt: at, sourceUpdatedAt: at - 1_000, bidE18: parseE18(String(p - 0.01)), askE18: parseE18(String(p + 0.01)) }];
+  };
+  const run = (state: EngineState, price: string, ticks: number, at = NOW) => {
+    let r = stepMark(state, input({ observations: rhOnly(price, at), now: at }), single, JUMP);
+    for (let i = 1; i < ticks; i++) r = stepMark(r.state, input({ observations: rhOnly(price, at + i * 2_000), now: at + i * 2_000 }), single, JUMP);
+    return r;
+  };
+
+  test('opens on Robinhood alone, but only after 20 live marks', () => {
+    const early = run(newEngineState(), '5', 19);
+    expect(early.decision!.confidenceBps).toBe(single.singleSourceConfidenceBps);
+    expect(early.decision!.reason).toContain('warming up');
+    const ready = run(newEngineState(), '5', 20);
+    expect(ready.decision!.confidenceBps).toBeLessThan(200);
+    expect(ready.decision!.reason).toBe('single-source market: Robinhood quote');
+  });
+
+  test('a price far from its 15-minute average takes no opens', () => {
+    const settled = run(newEngineState(), '5', 25);
+    const spike = stepMark(settled.state, input({ observations: rhOnly('5.4', NOW + 60_000), now: NOW + 60_000 }), single, JUMP); // +8%
+    expect(spike.decision!.confidenceBps).toBe(single.singleSourceConfidenceBps);
+    expect(spike.decision!.reason).toContain('15-minute average');
+  });
+
+  test('the same quote on a Chainlink market is still single source: reduce-only', () => {
+    const r = warm(newEngineState(), { observations: rhOnly('5') }, 25);
+    expect(r.decision!.reason).toBe('single source: reduce-only');
   });
 });

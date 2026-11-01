@@ -13,6 +13,13 @@ export interface PricingConfig {
   warmupSamples: number;
   /** Confidence reported while the book is held (weekend). */
   heldConfidenceBps: number;
+  /**
+   * Fresh primaries needed before opens. 2 everywhere Chainlink covers the market. 1 for a market it does not cover,
+   * which is then priced from Robinhood's quote alone, with the single-source guards below.
+   */
+  minSources: number;
+  /** Single-source guard: opens stop while the mark is further than this from its own 15-minute average. 0 = off. */
+  maxAvgDeviationBps: number;
 }
 
 /**
@@ -27,7 +34,22 @@ export const DEFAULT_PRICING_CONFIG: PricingConfig = {
   singleSourceConfidenceBps: 9_999,
   warmupSamples: 3,
   heldConfidenceBps: 25,
+  minSources: 2,
+  maxAvgDeviationBps: 0,
 };
+
+/**
+ * A market Chainlink does not cover, priced from Robinhood's quote alone. Every on-chain mark is quorum-signed, and opens
+ * also wait for 20 live marks after a start or gap and stop while the mark is over 3% from its 15-minute average.
+ */
+export const SINGLE_SOURCE_PRICING: Pick<PricingConfig, 'minSources' | 'warmupSamples' | 'maxAvgDeviationBps'> = {
+  minSources: 1,
+  warmupSamples: 20,
+  maxAvgDeviationBps: 300,
+};
+
+/** Single-source guard: a Robinhood bid/ask that has not changed for this long counts as stale. */
+export const MAX_UNCHANGED_QUOTE_MS = 10 * 60_000;
 
 /** Robinhood quotes are underlying share prices: token price = underlying * multiplier. */
 export const tokenPriceFromUnderlying = (underlyingE18: bigint, multiplierE18: bigint): bigint =>
@@ -108,12 +130,13 @@ export function aggregate(obs: Observation[], now: number, cfg: PricingConfig): 
   if (used.length === 0) return { used, priceE18: null, dispersionBps: 0, confidenceBps: 9_999, agree: false };
   const prices = used.map((o) => o.priceE18);
   const disp = Number(dispersionBps(prices));
-  const agree = used.length >= 2 && disp <= cfg.agreeBps;
+  const enough = used.length >= cfg.minSources;
+  const agree = enough && (used.length < 2 || disp <= cfg.agreeBps);
   return {
     used,
     priceE18: median(prices),
     dispersionBps: disp,
-    confidenceBps: used.length >= 2 ? confidenceBps(used) : cfg.singleSourceConfidenceBps,
+    confidenceBps: enough ? confidenceBps(used) : cfg.singleSourceConfidenceBps,
     agree,
   };
 }

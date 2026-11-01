@@ -9,7 +9,11 @@ export interface EngineState {
   agreeStreak: number;
   lastPublishedE18: bigint | null;
   lastPublishedAt: number | null;
+  /** Agreeing prices of the last 15 minutes, for the single-source average band. */
+  window: Array<{ at: number; priceE18: bigint }>;
 }
+
+const AVG_WINDOW_MS = 15 * 60_000;
 
 export const newEngineState = (): EngineState => ({
   lastGoodE18: null,
@@ -18,6 +22,7 @@ export const newEngineState = (): EngineState => ({
   agreeStreak: 0,
   lastPublishedE18: null,
   lastPublishedAt: null,
+  window: [],
 });
 
 export interface EngineInput {
@@ -119,8 +124,8 @@ export function stepMark(prev: EngineState, input: EngineInput, cfg: PricingConf
   else state.agreeStreak = 0;
 
   let confidence = agg.confidenceBps;
-  let reason = 'two sources agree';
-  if (agg.used.length < 2) {
+  let reason = agg.used.length >= 2 ? 'two sources agree' : 'single-source market: Robinhood quote';
+  if (agg.used.length < cfg.minSources) {
     reason = 'single source: reduce-only';
   } else if (!agg.agree) {
     confidence = Math.max(confidence, cfg.singleSourceConfidenceBps);
@@ -130,7 +135,18 @@ export function stepMark(prev: EngineState, input: EngineInput, cfg: PricingConf
     reason = `warming up ${state.agreeStreak}/${cfg.warmupSamples}`;
   }
 
-  // Only a two-source agreement may become the new "last good" price.
+  // Single-source guard: a mark far from its own 15-minute average takes no opens (a bad print cannot open a book).
+  if (agg.agree && cfg.maxAvgDeviationBps > 0) {
+    state.window = [...state.window.filter((p) => input.now - p.at <= AVG_WINDOW_MS), { at: input.now, priceE18: agg.priceE18 }];
+    const avg = state.window.reduce((t, p) => t + p.priceE18, 0n) / BigInt(state.window.length);
+    const dev = jumpBps(agg.priceE18, avg);
+    if (dev > BigInt(cfg.maxAvgDeviationBps)) {
+      confidence = Math.max(confidence, cfg.singleSourceConfidenceBps);
+      reason = `price is ${dev} bps from its 15-minute average`;
+    }
+  }
+
+  // Only an agreeing price (two sources, or the one a single-source market is allowed) becomes the new "last good".
   if (agg.agree) {
     state.lastGoodE18 = agg.priceE18;
     state.lastGoodAt = input.now;
