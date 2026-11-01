@@ -46,15 +46,19 @@ library MarketConfigLib {
         pm.eta = 0;
     }
 
-    /// No silent defaults: every session profile that allows opens must say how much leverage and size.
+    /// No silent defaults: every session profile that allows opens must say how much leverage and size, and a position
+    /// opened at full leverage must start above maintenance margin.
     function validate(MarketConfig memory c) public pure {
         if (
             c.state == MarketState.Unset || c.maintenanceMarginBps == 0 || c.netSkewBpsOfV == 0 || c.grossOiBpsOfV == 0
                 || c.positionBpsOfV == 0 || c.skewScaleE18 == 0 || c.maxMarkAgeSec == 0 || c.feeBps > 100
+                || (c.openGuardSec != 0 && c.openGuardPositionBpsOfV == 0)
         ) revert InvalidMarketConfig();
         for (uint256 i = 1; i < 6; ++i) {
             SessionProfile memory sp = c.profiles[i];
-            if (sp.opensAllowed && (sp.maxLeverageE18 == 0 || sp.maxPositionBpsOfV == 0)) revert InvalidMarketConfig();
+            if (!sp.opensAllowed) continue;
+            if (sp.maxLeverageE18 < 1e18 || sp.maxPositionBpsOfV == 0) revert InvalidMarketConfig();
+            if (1e18 * 10_000 / uint256(sp.maxLeverageE18) <= c.maintenanceMarginBps) revert InvalidMarketConfig();
         }
     }
 
@@ -66,6 +70,8 @@ library MarketConfigLib {
                 || n.netSkewBpsOfV > o.netSkewBpsOfV || n.grossOiBpsOfV > o.grossOiBpsOfV || n.positionBpsOfV > o.positionBpsOfV
                 || n.skewScaleE18 > o.skewScaleE18 || n.feeBps > o.feeBps || n.borrowBaseBpsPerHour > o.borrowBaseBpsPerHour
                 || n.minHoldSec < o.minHoldSec || n.fallbackSpreadBps > o.fallbackSpreadBps || n.frozenSpreadBps > o.frozenSpreadBps
+                || n.openGuardSec < o.openGuardSec || n.openGuardSpreadBps < o.openGuardSpreadBps
+                || n.openGuardPositionBpsOfV > o.openGuardPositionBpsOfV
         ) return true;
         if (o.absOiCapUsdg != 0 && (n.absOiCapUsdg == 0 || n.absOiCapUsdg > o.absOiCapUsdg)) return true;
         for (uint256 i = 1; i < 6; ++i) {
