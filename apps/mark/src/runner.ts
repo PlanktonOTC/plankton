@@ -1,6 +1,8 @@
 import type { Logger } from 'pino';
 import {
   DEFAULT_PRICING_CONFIG,
+  MAX_UNCHANGED_QUOTE_MS,
+  SINGLE_SOURCE_PRICING,
   checkEligibility,
   newEngineState,
   sessionAt,
@@ -57,6 +59,10 @@ interface Runtime {
   freezeReasons: string[];
   eligibility: Eligibility | null;
   warnedIneligible: boolean;
+  /** Single-source markets: the current Robinhood bid/ask and when it last changed (0 = never seen changing). */
+  rhChange?: { key: string; at: number };
+  /** Single-source markets: the latest quote as Robinhood reported it, before the unchanged-quote rule ages it. */
+  rhRaw?: Observation;
 }
 
 export interface RunnerDeps {
@@ -110,20 +116,46 @@ export class MarkRunner {
     r.engine.refCloseE18 ??= priceE18;
   }
 
+  /** The asset list (contracts, multipliers, status) changes rarely: refresh it every 5 minutes, keep the last good one. */
+  private assets: { at: number; list: Awaited<ReturnType<typeof fetchRhAssets>> } | null = null;
+
+  private async rhAssets(): Promise<Awaited<ReturnType<typeof fetchRhAssets>>> {
+    if (this.assets && Date.now() - this.assets.at < 300_000) return this.assets.list;
+    try {
+      this.assets = { at: Date.now(), list: await fetchRhAssets(this.d.env.RH_API_BASE) };
+    } catch (err) {
+      if (!this.assets) throw err;
+      this.d.log.warn({ err: (err as Error).message }, 'robinhood asset list refresh failed; using the last one');
+    }
+    return this.assets.list;
+  }
+
   async pollRobinhood(): Promise<void> {
-    const [quotes, assets] = await Promise.all([fetchRhPrices(this.d.env.RH_API_BASE), fetchRhAssets(this.d.env.RH_API_BASE)]);
+    const [quotes, assets] = await Promise.all([fetchRhPrices(this.d.env.RH_API_BASE), this.rhAssets()]);
+    const now = Date.now();
     for (const r of this.rt.values()) {
       const reading = rhReading(r.cfg.symbol, r.cfg.stockToken, ROBINHOOD_CHAIN_ID, quotes, assets);
       r.rhIssues = reading.issues;
       r.rhHalted = reading.halted;
-      if (reading.observation) r.obs.set('rh_quote', reading.observation);
+      const o = reading.observation;
+      r.rhRaw = o ? { ...o } : undefined;
+      if (o && !r.cfg.chainlinkFeed) {
+        // Single-source market: a bid/ask that has not changed for 10 minutes is stale, and so is one never seen
+        // changing since start-up. The quote is the only price, so a frozen feed must not look live.
+        const key = `${o.bidE18}:${o.askE18}`;
+        if (r.rhChange?.key !== key) r.rhChange = { key, at: r.rhChange ? now : 0 };
+        if (now - r.rhChange.at > MAX_UNCHANGED_QUOTE_MS) o.sourceUpdatedAt = Math.min(o.sourceUpdatedAt, r.rhChange.at);
+      }
+      if (o) r.obs.set('rh_quote', o);
       else r.obs.delete('rh_quote');
     }
     this.lastOk.robinhood = Date.now();
   }
 
   async pollChainlink(): Promise<void> {
-    const feeds = [...this.rt.values()].map((r) => ({ symbol: r.cfg.symbol, feed: r.cfg.chainlinkFeed as `0x${string}` }));
+    const feeds = [...this.rt.values()]
+      .filter((r) => r.cfg.chainlinkFeed)
+      .map((r) => ({ symbol: r.cfg.symbol, feed: r.cfg.chainlinkFeed as `0x${string}` }));
     const readings = await readChainlink(this.d.client, feeds);
     for (const [symbol, obs] of readings) {
       const r = this.rt.get(symbol)!;
@@ -176,6 +208,7 @@ export class MarkRunner {
       const halted = r.rhHalted || this.halts.has(symbol);
       const pricing: PricingConfig = {
         ...DEFAULT_PRICING_CONFIG,
+        ...(r.cfg.chainlinkFeed ? {} : SINGLE_SOURCE_PRICING),
         agreeBps: r.cfg.agreeBps ?? DEFAULT_PRICING_CONFIG.agreeBps,
         maxAgeMs: {
           ...DEFAULT_PRICING_CONFIG.maxAgeMs,
@@ -183,7 +216,9 @@ export class MarkRunner {
         },
       };
       // Cold start on a closed session: the newest Chainlink answer, if it is under 4 days old, opens the weekend hold.
-      const cl = r.obs.get('chainlink');
+      // A single-source market seeds from Robinhood's quote as reported: over a weekend it does not change (the stock is
+      // shut), which the unchanged-quote rule rightly treats as stale for live pricing, but it is exactly Friday's close.
+      const cl = r.obs.get('chainlink') ?? (r.cfg.chainlinkFeed ? undefined : r.rhRaw);
       const seed = cl && now - cl.sourceUpdatedAt <= 4 * 86_400_000 ? cl.priceE18 : null;
       // The listing rule. In enforce mode a market that fails it publishes marks no open can pass; exits are untouched.
       const priceSource = r.obs.get('rh_quote') ?? r.obs.get('chainlink');
@@ -215,6 +250,11 @@ export class MarkRunner {
       }
     }
     this.lastOk.tick = now;
+  }
+
+  /** The latest decision for a market, for an on-demand publish. */
+  decisionOf(symbol: string): MarkDecision | null {
+    return this.rt.get(symbol)?.decision ?? null;
   }
 
   marks() {

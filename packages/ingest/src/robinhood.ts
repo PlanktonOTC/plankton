@@ -39,8 +39,10 @@ export type RhQuote = z.infer<typeof quote>;
 export type RhAsset = z.infer<typeof asset>;
 export type RhCorpAction = z.infer<typeof corpAction>;
 
+// Robinhood's public endpoints were measured answering in 3 to 30 s (2026-11-01), so the timeout is generous. Callers
+// poll on an interval that never overlaps itself, so a slow answer delays the next poll instead of stacking requests.
 async function getJson(url: string): Promise<unknown> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(10_000), headers: { accept: 'application/json' } });
+  const res = await fetch(url, { signal: AbortSignal.timeout(25_000), headers: { accept: 'application/json' } });
   if (!res.ok) throw new Error(`GET ${url} -> HTTP ${res.status}`);
   return res.json();
 }
