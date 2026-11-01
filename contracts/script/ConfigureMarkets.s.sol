@@ -65,7 +65,10 @@ contract ConfigureMarkets is Script {
             chainlinkMaxAgeSec: e.chainlinkMaxAgeSec,
             liqAgreementBps: 100,
             reanchorConfirmations: 3,
-            quorumOutsideBand: uint8(vm.envOr("MARK_QUORUM", uint256(2)))
+            quorumOutsideBand: uint8(vm.envOr("MARK_QUORUM", uint256(2))),
+            // Weekend/Frozen/Halted marks hold a reference price; the mark service republishes on 10 bp moves, so 1% is
+            // ample room for one signer and the most a leaked key can move a held mark.
+            heldBandBps: 100
         });
     }
 
@@ -130,7 +133,9 @@ contract ConfigureMarkets is Script {
             e.stockToken = vm.parseJsonAddress(json, string.concat(p, ".stockToken"));
             e.feed = vm.parseJsonAddress(json, string.concat(p, ".chainlinkFeed"));
             string memory ageKey = string.concat(p, ".chainlinkMaxAgeSec");
-            e.chainlinkMaxAgeSec = vm.keyExists(json, ageKey) ? uint32(vm.parseJsonUint(json, ageKey)) : 90_000;
+            // 6 hours unless the market says otherwise. The band and the liquidation agreement both trust Chainlink only
+            // this long, so it must not cover a whole day of a stuck feed.
+            e.chainlinkMaxAgeSec = vm.keyExists(json, ageKey) ? uint32(vm.parseJsonUint(json, ageKey)) : 21_600;
             e.absOiCapUsdg = _absOiCap(e.symbol);
             // Must match packages/chain marketIdFor().
             e.id = keccak256(abi.encode("plankton.mkt.v1", e.symbol, e.stockToken));
