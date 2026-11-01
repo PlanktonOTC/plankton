@@ -14,6 +14,7 @@ import {
   type QuoteResult,
   type Rung,
   type SessionProfileCfg,
+  OPEN_GUARD_EXTRA_SPREAD_BPS,
 } from '@plankton/core';
 import type { MarketSnapshot, TraderSnapshot } from '@plankton/chain';
 
@@ -86,12 +87,18 @@ export function quoteFromChain(i: ChainQuoteInput): ChainQuote {
     breaker: snap.mark.breaker,
   };
   const session = sessionAt(i.nowMs, i.calendar, { windowTz: i.windowTz, openGuardMinutes: 20 });
+  // The contract runs its own guard from the moment the market entered Open on-chain. Quote inside either window, and
+  // never below the contract's guard spread or above its guard ticket, so the quote cannot revert.
+  const nowSec = BigInt(Math.floor(i.nowMs / 1000));
+  const chainGuard = status === Status.Open && cfg.openGuardSec > 0 && nowSec < snap.openSince + BigInt(cfg.openGuardSec);
   const req: QuoteRequest = {
     sizeDeltaE18: i.sizeDeltaE18,
     marginUsdg: i.marginUsdg,
     existingMarginUsdg: BigInt(trader.position.margin),
     positionSizeE18: trader.position.size,
-    openGuard: session.openGuard,
+    openGuard: session.openGuard || chainGuard,
+    openGuardSpreadBps: Math.max(OPEN_GUARD_EXTRA_SPREAD_BPS, cfg.openGuardSpreadBps),
+    openGuardPositionBpsOfV: cfg.openGuardSec > 0 ? cfg.openGuardPositionBpsOfV : undefined,
     profile,
     walletNotionalUsdg: trader.walletNotionalUsdg,
     maxMarkAgeSec: cfg.maxMarkAgeSec,
@@ -101,14 +108,17 @@ export function quoteFromChain(i: ChainQuoteInput): ChainQuote {
   const maxLevOnChain = chainProfile.maxLeverageE18;
   const maxLeverageE18 = result.ok ? (result.maxLeverageE18 < maxLevOnChain ? result.maxLeverageE18 : maxLevOnChain) : 0n;
 
-  // The contract measures leverage at the execution price; the builder measured it at the mark. Re-check so a quote
-  // that would revert on-chain is refused here instead.
+  // The contract measures leverage on equity at the execution price; the builder measured margin at the mark. Re-check
+  // so a quote that would revert on-chain is refused here instead. Adding to a losing position counts its loss.
   if (result.ok && !result.reducing) {
     const newSize = trader.position.size + i.sizeDeltaE18;
     const sameSide = trader.position.size !== 0n && trader.position.size > 0n === i.sizeDeltaE18 > 0n;
     const totalMargin = (sameSide ? BigInt(trader.position.margin) : 0n) + i.marginUsdg;
+    const oldSize = trader.position.size;
+    const oldPnl = sameSide ? ((result.execPriceE18 - trader.position.entry) * oldSize) / E18 / 10n ** 12n : 0n;
+    const equity = BigInt(totalMargin) + oldPnl;
     const abs = newSize < 0n ? -newSize : newSize;
-    if (notionalUsdg(abs, result.execPriceE18) * E18 > totalMargin * maxLeverageE18) {
+    if (equity <= 0n || notionalUsdg(abs, result.execPriceE18) * E18 > equity * maxLeverageE18) {
       return { result: { ok: false, code: 'leverage_exceeded', message: 'add margin: leverage at the execution price is above the maximum' }, maxLeverageE18: 0n };
     }
   }
