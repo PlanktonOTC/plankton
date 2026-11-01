@@ -14,7 +14,8 @@ import {MarketConfig, MarketState, SessionProfile} from "../src/ExchangeTypes.so
 ///   (24 hours later)
 ///   forge script script/ConfigureMarkets.s.sol --sig "applyAll()"   --rpc-url <rpc> --broadcast --private-key <anyone>
 ///
-/// The sender of schedule() must be the contracts' owner. Optional env: INITIAL_V_USDG (default 50000e6, the R0 Counter size)
+/// The sender of schedule() must be the contracts' owner. Optional env: INITIAL_V_USDG (default 50000e6, the R0 Counter size;
+/// 100e6 for the B0 beta)
 /// is used only to size the skew scale so a trade to the net-skew cap pays about 0.75%.
 contract ConfigureMarkets is Script {
     struct Entry {
@@ -36,7 +37,7 @@ contract ConfigureMarkets is Script {
         for (uint256 i; i < entries.length; ++i) {
             Entry memory e = entries[i];
             oracle.scheduleConfig(e.id, _oracleConfig(e));
-            exchange.scheduleMarket(e.id, _marketConfig(e.micro, v, e.absOiCapUsdg));
+            exchange.scheduleMarket(e.id, _marketConfig(e.micro, v, e.absOiCapUsdg, _isBeta()));
             console2.log("scheduled", e.symbol);
         }
         vm.stopBroadcast();
@@ -73,7 +74,7 @@ contract ConfigureMarkets is Script {
     }
 
     /// Defaults from the spec (section 9, "calibrate on tape"), at the R0 leverage ceilings (micro 2x, small 3x).
-    function _marketConfig(bool micro, uint256 vUsdg, uint128 absOiCapUsdg)
+    function _marketConfig(bool micro, uint256 vUsdg, uint128 absOiCapUsdg, bool beta)
         internal
         pure
         returns (MarketConfig memory c)
@@ -83,9 +84,11 @@ contract ConfigureMarkets is Script {
         c.maxExecDeviationBps = 500;
         c.maxConfidenceBps = 200;
         c.maxMarkAgeSec = 180;
-        c.netSkewBpsOfV = 400;
-        c.grossOiBpsOfV = 1_200;
-        c.positionBpsOfV = 100;
+        // B0, the $100 beta: the spec's percentages would allow a $1 position, so caps are 5x wider. The worst case is
+        // still the Counter itself, and every cap shrinks back by a tightening (instant) when the Counter grows.
+        c.netSkewBpsOfV = beta ? 2_000 : 400;
+        c.grossOiBpsOfV = beta ? 6_000 : 1_200;
+        c.positionBpsOfV = beta ? 1_000 : 100;
         c.absOiCapUsdg = absOiCapUsdg; // 1% of the stock's daily dollar volume, from config/market-data.json (0 = no data, no extra cap)
         // A trade from flat to the net-skew cap should pay ~0.75% on average: scale = netCap / (2 * 0.0075).
         c.skewScaleE18 = (vUsdg * c.netSkewBpsOfV / 10_000) * 1e12 * 10_000 / 150;
@@ -96,9 +99,10 @@ contract ConfigureMarkets is Script {
         c.frozenSpreadBps = 200;
 
         //                                   opens  wallet spread maxPos(bps of V) maxLeverage
-        c.profiles[1] = SessionProfile(true, false, 0, 100, micro ? 2e18 : 3e18); // Open
-        c.profiles[2] = SessionProfile(true, false, 50, 50, micro ? 1.5e18 : 2.5e18); // Extended
-        c.profiles[3] = SessionProfile(true, true, 150, 25, micro ? 1.5e18 : 2e18); // Weekend: per-wallet allowance
+        uint16 k = beta ? 10 : 1; // B0: session ticket caps scale with the wider position cap
+        c.profiles[1] = SessionProfile(true, false, 0, 100 * k, micro ? 2e18 : 3e18); // Open
+        c.profiles[2] = SessionProfile(true, false, 50, 50 * k, micro ? 1.5e18 : 2.5e18); // Extended
+        c.profiles[3] = SessionProfile(true, true, 150, 25 * k, micro ? 1.5e18 : 2e18); // Weekend: per-wallet allowance
         c.profiles[4] = SessionProfile(false, false, 200, 0, 0); // Frozen: closes only
         c.profiles[5] = SessionProfile(false, false, 300, 0, 0); // Halted: closes only
 
@@ -127,6 +131,10 @@ contract ConfigureMarkets is Script {
         return uint128(vm.parseJsonUint(json, key) * 1e6 / 100);
     }
 
+    function _isBeta() internal view returns (bool) {
+        return keccak256(bytes(vm.parseJsonString(vm.readFile("../config/markets.json"), ".rung"))) == keccak256("B0");
+    }
+
     function _entries() internal view returns (Entry[] memory out) {
         string memory json = vm.readFile("../config/markets.json");
         // Probe each index: parseJson on ".markets[*]" returns a bare value, not an array, when there is a single market.
@@ -144,7 +152,9 @@ contract ConfigureMarkets is Script {
             e.symbol = vm.parseJsonString(json, string.concat(p, ".symbol"));
             e.micro = keccak256(bytes(vm.parseJsonString(json, string.concat(p, ".class")))) == keccak256("micro");
             e.stockToken = vm.parseJsonAddress(json, string.concat(p, ".stockToken"));
-            e.feed = vm.parseJsonAddress(json, string.concat(p, ".chainlinkFeed"));
+            // No feed key: a market Chainlink does not cover. Its oracle config then needs a quorum on every mark.
+            string memory feedKey = string.concat(p, ".chainlinkFeed");
+            e.feed = vm.keyExists(json, feedKey) ? vm.parseJsonAddress(json, feedKey) : address(0);
             string memory ageKey = string.concat(p, ".chainlinkMaxAgeSec");
             // 6 hours unless the market says otherwise. The band and the liquidation agreement both trust Chainlink only
             // this long, so it must not cover a whole day of a stuck feed.
