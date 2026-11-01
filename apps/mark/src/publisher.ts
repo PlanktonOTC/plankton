@@ -3,6 +3,7 @@ import { BaseError, ContractFunctionRevertedError, type Address, type Hex } from
 import { acquireLease, type Db } from '@plankton/db';
 import {
   chainTimeSec,
+  exchangeAbi,
   createChainWallet,
   oracleAbi,
   writeWithGasMargin,
@@ -35,8 +36,10 @@ export interface PublisherDeps {
 }
 
 /**
- * Turns mark decisions into oracle transactions.
- * - Publishes on a price move above 10 bps, a status change, or a 60 s heartbeat.
+ * Turns mark decisions into oracle transactions, spending gas only when a price is needed (Float's rule):
+ * - On schedule, only for markets where someone holds a position (exits and liquidations need a live price), on a
+ *   price move above 10 bps, a status change, or a 120 s heartbeat (the contract accepts marks up to 180 s old).
+ * - On demand, right before the API quotes a trade (`ensureFresh`), so an idle market costs nothing.
  * - Asks one signer first; asks the second only when the contract demands a quorum (out-of-band mark).
  * - Submits without waiting for receipts, so a slow block never delays the next mark.
  */
@@ -45,6 +48,9 @@ export class Publisher implements MarkSink {
   private readonly last = new Map<string, { priceE18: bigint; at: number; status: Status }>();
   private readonly sequence = new Map<Hex, bigint>();
   private readonly busy = new Set<string>();
+  private readonly inFlight = new Map<string, Promise<boolean>>();
+  private exposed = new Set<string>();
+  private exposureAt = 0;
   private leaderUntil = 0;
 
   constructor(private readonly d: PublisherDeps) {
@@ -55,7 +61,8 @@ export class Publisher implements MarkSink {
   async onDecision(symbol: string, decision: MarkDecision, now: number): Promise<void> {
     if (this.busy.has(symbol)) return;
     const prev = this.last.get(symbol) ?? null;
-    if (!shouldPublish(prev, { priceE18: decision.priceE18, status: decision.status }, now, { republishBps: 10, heartbeatMs: 60_000 })) return;
+    if (!(await this.hasExposure(symbol, now))) return; // no position open: published on demand instead
+    if (!shouldPublish(prev, { priceE18: decision.priceE18, status: decision.status }, now, { republishBps: 10, heartbeatMs: 120_000 })) return;
     if (!(await this.isLeader(now))) return;
 
     this.busy.add(symbol);
@@ -68,6 +75,65 @@ export class Publisher implements MarkSink {
     }
   }
 
+  /**
+   * Called by the API right before it quotes a trade. Publishes the current decision and waits for it to land, unless
+   * the on-chain mark is already current (under 60 s old, same status, within 10 bps). Concurrent calls share one publish.
+   * Returns true when it published.
+   */
+  async ensureFresh(symbol: string, decision: MarkDecision): Promise<boolean> {
+    const running = this.inFlight.get(symbol);
+    if (running) return running;
+    const task = this.ensureFreshInner(symbol, decision).finally(() => this.inFlight.delete(symbol));
+    this.inFlight.set(symbol, task);
+    return task;
+  }
+
+  private async ensureFreshInner(symbol: string, decision: MarkDecision): Promise<boolean> {
+    const marketId = this.d.markets.get(symbol);
+    if (!marketId) throw new Error('unknown market');
+    const [mark, nowSec] = await Promise.all([
+      this.d.client.readContract({ address: this.d.dep.oracle, abi: oracleAbi, functionName: 'markOf', args: [marketId] }),
+      chainTimeSec(this.d.client),
+    ]);
+    const current =
+      mark.priceE18 > 0n &&
+      nowSec - BigInt(mark.updatedAt) <= 60n &&
+      mark.status === decision.status &&
+      !shouldPublish({ priceE18: mark.priceE18, at: Date.now(), status: mark.status as Status }, decision, Date.now(), {
+        republishBps: 10,
+        heartbeatMs: Number.MAX_SAFE_INTEGER,
+      });
+    if (current) return false;
+    if (!(await this.isLeader(Date.now()))) return false;
+    while (this.busy.has(symbol)) await new Promise((res) => setTimeout(res, 100));
+    this.busy.add(symbol);
+    try {
+      await this.publish(symbol, decision, Date.now(), true);
+      return true;
+    } finally {
+      this.busy.delete(symbol);
+    }
+  }
+
+  /** Markets with an open position, from the Exchange, refreshed at most every 10 s. */
+  private async hasExposure(symbol: string, now: number): Promise<boolean> {
+    if (now - this.exposureAt > 10_000) {
+      this.exposureAt = now;
+      const entries = [...this.d.markets.entries()];
+      const infos = await this.d.client.multicall({
+        allowFailure: true,
+        contracts: entries.map(([, id]) => ({ address: this.d.dep.exchange, abi: exchangeAbi, functionName: 'marketInfo' as const, args: [id] })),
+      });
+      const next = new Set<string>();
+      infos.forEach((r, i) => {
+        // On a failed read, assume a position may be open: a missing mark can trap an exit, an extra one only costs gas.
+        if (r.status !== 'success' || r.result[2] !== 0n || r.result[3] !== 0n) next.add(entries[i]![0]);
+      });
+      this.exposed = next;
+    }
+    return this.exposed.has(symbol);
+  }
+
   private async isLeader(now: number): Promise<boolean> {
     if (!this.d.db) return true;
     if (now < this.leaderUntil) return true;
@@ -76,7 +142,7 @@ export class Publisher implements MarkSink {
     return ok;
   }
 
-  private async publish(symbol: string, decision: MarkDecision, nowMs: number): Promise<void> {
+  private async publish(symbol: string, decision: MarkDecision, nowMs: number, wait = false): Promise<void> {
     const marketId = this.d.markets.get(symbol);
     if (!marketId) return;
 
@@ -124,19 +190,21 @@ export class Publisher implements MarkSink {
     this.sequence.set(marketId, sequence);
     this.last.set(symbol, { priceE18: decision.priceE18, at: nowMs, status: decision.status });
 
-    // Do not block on the receipt. Log a revert if one shows up.
-    void this.d.client
+    // Scheduled publishes do not block on the receipt; an on-demand one (`wait`) does, so the quote that follows sees it.
+    const landed = this.d.client
       .waitForTransactionReceipt({ hash, timeout: 60_000 })
       .then((r) => {
-        if (r.status !== 'success') {
-          this.sequence.delete(marketId);
-          this.d.log.error({ symbol, hash }, 'publish transaction reverted');
-        }
+        if (r.status === 'success') return true;
+        this.sequence.delete(marketId);
+        this.d.log.error({ symbol, hash }, 'publish transaction reverted');
+        return false;
       })
       .catch((err) => {
         this.sequence.delete(marketId);
         this.d.log.warn({ symbol, hash, err: describe(err) }, 'no receipt for publish');
+        return false;
       });
+    if (wait) await landed;
   }
 
   private async sign(a: AttestationMsg, url: string): Promise<{ signature: Hex; signer: Address }> {

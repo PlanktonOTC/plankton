@@ -79,6 +79,25 @@ async function fromMark<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+/**
+ * Float's on-demand rule: prices go on-chain only when someone is about to trade. Before a quote, ask the mark service
+ * to publish the current mark and wait for it (a no-op when the on-chain mark is already current). If it cannot, the
+ * quote below still runs and fails cleanly on a stale mark, carrying the closeAtMark exit.
+ */
+async function ensureFreshMark(symbol: string): Promise<void> {
+  if (!env.SIGNER_AUTH_TOKEN) return;
+  try {
+    const res = await fetch(`${env.MARK_SERVICE_URL}/publish/${symbol}`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${env.SIGNER_AUTH_TOKEN}` },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) log.warn({ symbol, status: res.status }, 'on-demand mark not published');
+  } catch (err) {
+    log.warn({ symbol, err: (err as Error).message }, 'on-demand mark request failed');
+  }
+}
+
 // ---------------------------------------------------------------- quote signing (the API never holds a key)
 
 async function signQuote(msg: TradeQuoteMsg): Promise<{ signature: Hex; signer: Address }> {
@@ -253,6 +272,7 @@ app.get('/v1/status', async () => {
 async function issueQuote(symbol: string, trader: Address, sizeDeltaE18: bigint, marginUsdg: bigint) {
   const m = market(symbol);
   const { client, dep } = chain();
+  await ensureFreshMark(m.cfg.symbol);
   const [snap, tr] = await Promise.all([readMarket(client, dep, m.marketId), readTrader(client, dep, m.marketId, trader)]);
   if (snap.mark.priceE18 === 0n) throw new HttpError(503, 'no_mark', { closeAtMark: closeAtMarkCall(m.marketId, 10_000) });
 

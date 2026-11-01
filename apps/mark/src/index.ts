@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { hostname } from 'node:os';
 import { Hono } from 'hono';
 import pino from 'pino';
@@ -39,12 +40,12 @@ const client = createChainClient(env.RPC_URLS);
 // The publisher needs deployed contracts, signer services and a funded wallet. Without them the service still
 // computes and serves marks, so prices can be checked before launch.
 const sinks: MarkSink[] = [logSink];
+let publisher: Publisher | null = null;
 try {
   const dep = loadDeployment();
   const signerUrls = urlList(env.MARK_SIGNER_URLS);
   if (env.PUBLISHER_PRIVATE_KEY && env.SIGNER_AUTH_TOKEN && signerUrls.length > 0) {
-    sinks.push(
-      new Publisher({
+    publisher = new Publisher({
         log,
         client,
         rpcUrls: env.RPC_URLS,
@@ -55,8 +56,8 @@ try {
         signerToken: env.SIGNER_AUTH_TOKEN,
         db: env.DATABASE_URL ? createDb(env.DATABASE_URL, { max: 2 }).db : undefined,
         holder: `${hostname()}-${process.pid}`,
-      }),
-    );
+    });
+    sinks.push(publisher);
   } else {
     log.warn('publisher disabled: set PUBLISHER_PRIVATE_KEY, MARK_SIGNER_URLS and SIGNER_AUTH_TOKEN');
   }
@@ -126,6 +127,27 @@ const app = new Hono();
 app.get('/health', () => json({ ok: true, rung, ...runner.health() }));
 app.get('/marks', () => json(runner.marks()));
 app.get('/eligibility', () => json(runner.eligibility()));
+
+// On demand (Float's rule): the API calls this right before quoting, so the oracle holds a current price only when
+// someone is about to trade. Internal only: same bearer token the signers use.
+app.post('/publish/:symbol', async (c) => {
+  const auth = c.req.header('authorization') ?? '';
+  const expected = `Bearer ${env.SIGNER_AUTH_TOKEN ?? ''}`;
+  if (!env.SIGNER_AUTH_TOKEN || auth.length !== expected.length || !timingSafeEqual(Buffer.from(auth), Buffer.from(expected))) {
+    return json({ error: 'unauthorized' }, 401);
+  }
+  if (!publisher) return json({ error: 'publisher disabled' }, 503);
+  const symbol = c.req.param('symbol').toUpperCase();
+  const decision = runner.decisionOf(symbol);
+  if (!decision) return json({ error: 'no mark for this market yet' }, 503);
+  try {
+    return json({ published: await publisher.ensureFresh(symbol, decision) });
+  } catch (err) {
+    log.warn({ symbol, err: (err as Error).message }, 'on-demand publish failed');
+    return json({ error: 'publish failed' }, 503);
+  }
+});
+
 app.get('/sources/:symbol', (c) => {
   const s = runner.sources(c.req.param('symbol').toUpperCase());
   return s ? json(s) : json({ error: 'unknown market' }, 404);
