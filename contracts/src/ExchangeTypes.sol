@@ -40,6 +40,10 @@ struct MarketConfig {
     uint16 fallbackSpreadBps;
     uint16 frozenSpreadBps;
     SessionProfile[6] profiles; // indexed by IMarkOracle.Status
+    // Open guard: the first minutes after the market enters Open, opens pay an extra spread and get a smaller ticket.
+    uint32 openGuardSec; // 0 = no guard
+    uint16 openGuardSpreadBps;
+    uint16 openGuardPositionBpsOfV;
 }
 
 struct Market {
@@ -50,6 +54,7 @@ struct Market {
     uint128 longSize; // token units E18
     uint128 shortSize;
     uint128 badDebt; // shortfall the waterfall could not cover
+    uint128 marginTotal; // margin held for every open position, the most the Counter can collect from them
     uint64 lastAccrual;
     uint256 longIdx; // cumulative borrow, E18 fraction of notional
     uint256 shortIdx;
@@ -80,6 +85,7 @@ struct Trade {
     uint64 markSeq;
     uint8 path; // 0 quote, 1 order, 2 closeAtMark
     bool checkPrice;
+    bool noProfit; // closing at a stale price: losses settle, profit is not paid
 }
 
 /// Everything the trade engine reads and writes, so it can live in a linked library.
@@ -100,4 +106,6 @@ struct State {
     uint256 totalAbsNet;
     uint256 totalBadDebt;
     mapping(uint256 => uint256) profitInHour;
+    mapping(address => mapping(bytes32 => uint64)) closedAt; // when the position last went to zero
+    mapping(address => address) referrer;
 }
