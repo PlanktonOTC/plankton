@@ -7,6 +7,8 @@ evm_version = "cancun"
 optimizer = true
 optimizer_runs = 1
 via_ir = true
+# Libraries are vendored in lib/ (sources and licenses only) so a plain `git clone` builds:
+#   forge-std v1.16.2 (bf647bd), OpenZeppelin Contracts v5.4.0 (c64a1ed), Contracts Upgradeable v5.4.0 (e725abd).
 remappings = [
   "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
   "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
