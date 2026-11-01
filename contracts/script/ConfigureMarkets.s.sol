@@ -97,6 +97,12 @@ contract ConfigureMarkets is Script {
         c.profiles[3] = SessionProfile(true, true, 150, 25, micro ? 1.5e18 : 2e18); // Weekend: per-wallet allowance
         c.profiles[4] = SessionProfile(false, false, 200, 0, 0); // Frozen: closes only
         c.profiles[5] = SessionProfile(false, false, 300, 0, 0); // Halted: closes only
+
+        // Open guard: the first 10 minutes of each Open session (and Monday's reopen),
+        // opens pay 15 bp more and are limited to half the normal ticket. Closes are unchanged.
+        c.openGuardSec = 600;
+        c.openGuardSpreadBps = 15;
+        c.openGuardPositionBpsOfV = c.positionBpsOfV / 2;
     }
 
     // ------------------------------------------------------------------ files
