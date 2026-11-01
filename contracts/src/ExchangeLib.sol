@@ -189,6 +189,17 @@ library ExchangeLib {
         }
     }
 
+    /// The vault prices LP deposits and withdrawals only on marks it can trust.
+    function navPricesFresh(State storage s) external view returns (bool) {
+        for (uint256 i; i < s.marketIds.length; ++i) {
+            Market storage d = s.markets[s.marketIds[i]];
+            if ((d.longSize | d.shortSize) == 0) continue;
+            IMarkOracle.Mark memory mk = s.oracle.markOf(s.marketIds[i]);
+            if (mk.priceE18 == 0 || mk.breaker || block.timestamp > uint256(mk.updatedAt) + d.cfg.maxMarkAgeSec) return false;
+        }
+        return true;
+    }
+
     /// Cash the Counter must keep against its net exposure; not available for withdrawals.
     function counterReserve(State storage s) external view returns (uint256 reserve) {
         for (uint256 i; i < s.marketIds.length; ++i) reserve += _absNet(s.markets[s.marketIds[i]]);
