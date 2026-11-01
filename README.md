@@ -21,12 +21,12 @@ Perpetuals on small-cap Robinhood Stock Tokens, on Robinhood Chain (4663), settl
 Needs [Bun](https://bun.sh) 1.4+, [Foundry](https://getfoundry.sh) and Postgres 16 for the services.
 
 ```sh
-git clone --recurse-submodules <repo>
+git clone <repo>
 bun install
 cp .env.example .env   # then fill it in
 ```
 
-Already cloned without submodules: `git submodule update --init`.
+The contract libraries (forge-std, OpenZeppelin) are vendored in `contracts/lib`, so there is nothing else to fetch.
 
 ## Test
 
