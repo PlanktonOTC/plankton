@@ -13,3 +13,6 @@ contracts/test/vectors.json.bak
 docs
 CLAUDE.md
 AGENTS.md
+# Notes, research and handoff docs stay local. Only the root README is published.
+*.md
+!/README.md
