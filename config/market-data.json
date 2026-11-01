@@ -1,3 +1,64 @@
 {
-  "_readme": "Hand-maintained market data for the listing rule. One entry per ticker in markets.json. A market with no entry, or an entry older than 14 days, takes no new positions (exits still work). Figures are USD; asOf is YYYY-MM-DD. Optional counters you keep: sessionsAbove2B and sessionsAbove10B (consecutive sessions the market cap has been above $2B / $10B). Add a row only with figures you have checked on a live quote page or the company's latest filing."
+  "_readme": "Hand-maintained market data for the listing rule. One entry per ticker in markets.json. A market with no entry, or an entry older than 14 days, takes no new positions (exits still work). Figures are USD; asOf is YYYY-MM-DD. Optional counters you keep: sessionsAbove2B and sessionsAbove10B (consecutive sessions the market cap has been above $2B / $10B). Add a row only with figures you have checked on a live quote page or the company's latest filing.",
+  "_source": "Nasdaq quote summaries (market cap, average share volume x previous close), read 2026-11-01 for the 2026-10-30 close. Re-pull before any listing change and at least every 14 days.",
+  "WYFI": {
+    "marketCapUsd": 469115677,
+    "avgDailyDollarVolumeUsd": 19775142,
+    "asOf": "2026-10-30"
+  },
+  "NNE": {
+    "marketCapUsd": 625583401,
+    "avgDailyDollarVolumeUsd": 22643884,
+    "asOf": "2026-10-30"
+  },
+  "RCAT": {
+    "marketCapUsd": 707067496,
+    "avgDailyDollarVolumeUsd": 36701743,
+    "asOf": "2026-10-30"
+  },
+  "TE": {
+    "marketCapUsd": 808646971,
+    "avgDailyDollarVolumeUsd": 6997095,
+    "asOf": "2026-10-30"
+  },
+  "XNDU": {
+    "marketCapUsd": 879207429,
+    "avgDailyDollarVolumeUsd": 17318150,
+    "asOf": "2026-10-30"
+  },
+  "POET": {
+    "marketCapUsd": 899902058,
+    "avgDailyDollarVolumeUsd": 44896053,
+    "asOf": "2026-10-30"
+  },
+  "FLNC": {
+    "marketCapUsd": 1055891231,
+    "avgDailyDollarVolumeUsd": 41484598,
+    "asOf": "2026-10-30"
+  },
+  "QUBT": {
+    "marketCapUsd": 1493889283,
+    "avgDailyDollarVolumeUsd": 46538240,
+    "asOf": "2026-10-30"
+  },
+  "DJT": {
+    "marketCapUsd": 1553691722,
+    "avgDailyDollarVolumeUsd": 21958173,
+    "asOf": "2026-10-30"
+  },
+  "RUN": {
+    "marketCapUsd": 1801535425,
+    "avgDailyDollarVolumeUsd": 57576366,
+    "asOf": "2026-10-30"
+  },
+  "SLS": {
+    "marketCapUsd": 1954834463,
+    "avgDailyDollarVolumeUsd": 69711069,
+    "asOf": "2026-10-30"
+  },
+  "CLSK": {
+    "marketCapUsd": 1969786950,
+    "avgDailyDollarVolumeUsd": 142139677,
+    "asOf": "2026-10-30"
+  }
 }

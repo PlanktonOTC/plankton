@@ -1,29 +1,90 @@
 {
-  "rung": "R0",
+  "rung": "B0",
   "markets": [
     {
-      "symbol": "USAR",
-      "class": "smid",
-      "stockToken": "0xd917B029C761D264c6A312BBbcDA868658eF86a6",
-      "chainlinkFeed": "0xA994d3684e8400A6c8078226925779FdeE682DD9",
+      "symbol": "WYFI",
+      "class": "small",
+      "stockToken": "0x9e7ABD3C9139D14E4c86DcE0e455AAB7A0C2FB3E",
       "enabled": true,
-      "note": "Feed verified on-chain 2026-10-31 (42 bp from Robinhood). Market cap is about $2.1B to $3.6B depending on the share count: confirm it and add a row to market-data.json before opens are allowed."
+      "note": "No Chainlink feed on Robinhood Chain: priced from Robinhood's quote alone, every mark quorum-signed. Market cap $469M on 2026-10-30."
+    },
+    {
+      "symbol": "NNE",
+      "class": "small",
+      "stockToken": "0xBEF75684C43c4ea7BD18Dd532a2244674Ee8b926",
+      "enabled": true,
+      "note": "No Chainlink feed on Robinhood Chain: priced from Robinhood's quote alone, every mark quorum-signed. Market cap $626M on 2026-10-30."
+    },
+    {
+      "symbol": "RCAT",
+      "class": "small",
+      "stockToken": "0xFDE6b5d9BB419B10C23268c74e369AbFF39C0460",
+      "enabled": true,
+      "note": "No Chainlink feed on Robinhood Chain: priced from Robinhood's quote alone, every mark quorum-signed. Market cap $707M on 2026-10-30."
+    },
+    {
+      "symbol": "TE",
+      "class": "small",
+      "stockToken": "0xb1969f6604CA1AE7a2cD3F1827876e914594CA2D",
+      "enabled": true,
+      "note": "No Chainlink feed on Robinhood Chain: priced from Robinhood's quote alone, every mark quorum-signed. Market cap $809M on 2026-10-30."
+    },
+    {
+      "symbol": "XNDU",
+      "class": "small",
+      "stockToken": "0xA8eB3BCcbf2017eE7CBfb652eB51CF2E1B153289",
+      "enabled": true,
+      "note": "No Chainlink feed on Robinhood Chain: priced from Robinhood's quote alone, every mark quorum-signed. Market cap $879M on 2026-10-30."
+    },
+    {
+      "symbol": "POET",
+      "class": "small",
+      "stockToken": "0xcf6B2D875361be807EAfa57458c80f28521F9333",
+      "enabled": true,
+      "note": "No Chainlink feed on Robinhood Chain: priced from Robinhood's quote alone, every mark quorum-signed. Market cap $900M on 2026-10-30."
+    },
+    {
+      "symbol": "FLNC",
+      "class": "small",
+      "stockToken": "0x282e87451E10fA6679BC7D76C69BE44cD3fC777C",
+      "enabled": true,
+      "note": "No Chainlink feed on Robinhood Chain: priced from Robinhood's quote alone, every mark quorum-signed. Market cap $1,056M on 2026-10-30."
+    },
+    {
+      "symbol": "QUBT",
+      "class": "small",
+      "stockToken": "0x59818904ab4cE163b3cE4FfB64f2D6Ca02c434B4",
+      "enabled": true,
+      "note": "No Chainlink feed on Robinhood Chain: priced from Robinhood's quote alone, every mark quorum-signed. Market cap $1,494M on 2026-10-30."
+    },
+    {
+      "symbol": "DJT",
+      "class": "small",
+      "stockToken": "0x1D11f0496982706C5e14A514D4E79F2e6BdE4516",
+      "enabled": true,
+      "note": "No Chainlink feed on Robinhood Chain: priced from Robinhood's quote alone, every mark quorum-signed. Market cap $1,554M on 2026-10-30."
+    },
+    {
+      "symbol": "RUN",
+      "class": "small",
+      "stockToken": "0x756Bc80af765C82da966a788858d65aDF14f3793",
+      "enabled": true,
+      "note": "No Chainlink feed on Robinhood Chain: priced from Robinhood's quote alone, every mark quorum-signed. Market cap $1,802M on 2026-10-30."
+    },
+    {
+      "symbol": "SLS",
+      "class": "small",
+      "stockToken": "0x285b231728c7E4333799183DF1094d775246a535",
+      "enabled": true,
+      "note": "No Chainlink feed on Robinhood Chain: priced from Robinhood's quote alone, every mark quorum-signed. Market cap $1,955M on 2026-10-30."
     },
     {
       "symbol": "CLSK",
-      "class": "smid",
+      "class": "small",
       "stockToken": "0xcBB95BBF36099d34dA091dc6Fa6F49EfA257Cee3",
+      "enabled": true,
       "chainlinkFeed": "0x810c12D3a554Bc47fd39597Fe3b3AAC4941F50eF",
-      "enabled": true,
-      "note": "Feed verified on-chain 2026-10-31, but 683 bp from Robinhood on a Saturday: tune agreeBps once weekday behaviour is seen. Market cap about $2.2B and near the $2B line: confirm before listing."
-    },
-    {
-      "symbol": "RGTI",
-      "class": "smid",
-      "stockToken": "0x284358abc07F9359f19f4b5b4aC91901Be2597Ba",
-      "chainlinkFeed": "0x2A045cF1C49c61c166C036d2f06FA2D2d984f765",
-      "enabled": true,
-      "note": "Feed verified on-chain 2026-10-31 (131 bp from Robinhood). Market cap about $3.7B to $5B: confirm it and add a row to market-data.json before opens are allowed."
+      "note": "Chainlink-fenced. Feed sat 683 bp from Robinhood on Sunday 2026-11-01 (weekend); confirm agreement on a weekday before opens. Market cap $1.97B, just under the $2B line."
     }
   ]
 }
