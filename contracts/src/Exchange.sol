@@ -180,6 +180,7 @@ contract Exchange is IExchangeCounterView, EIP712Upgradeable, DelayedUpgrade {
         if (amount > s.collateral[msg.sender]) revert InsufficientCollateral();
         s.collateral[msg.sender] -= amount;
         p.margin += amount;
+        s.markets[marketId].marginTotal += amount;
         emit ExchangeLib.PositionUpdated(msg.sender, marketId, p.size, p.entry, p.margin);
     }
 
@@ -305,6 +306,18 @@ contract Exchange is IExchangeCounterView, EIP712Upgradeable, DelayedUpgrade {
 
     function counterReserveUsdg() external view returns (uint256) {
         return ExchangeLib.counterReserve(s);
+    }
+
+    function navPricesFresh() external view returns (bool) {
+        return ExchangeLib.navPricesFresh(s);
+    }
+
+    function referrerOf(address trader) external view returns (address) {
+        return s.referrer[trader];
+    }
+
+    function closedAtOf(address trader, bytes32 marketId) external view returns (uint64) {
+        return s.closedAt[trader][marketId];
     }
 
     function positionOf(address trader, bytes32 marketId) external view returns (Position memory) {
@@ -437,7 +450,7 @@ contract Exchange is IExchangeCounterView, EIP712Upgradeable, DelayedUpgrade {
         usedQuoteNonce[trader][q.nonce] = true;
         ExchangeLib.applyTrade(
             s,
-            Trade(trader, q.marketId, q.sizeDeltaE18, q.execPriceE18, q.feeUsdg, margin, q.maxLeverageE18, q.markSequence, path, true)
+            Trade(trader, q.marketId, q.sizeDeltaE18, q.execPriceE18, q.feeUsdg, margin, q.maxLeverageE18, q.markSequence, path, true, false)
         );
     }
 
