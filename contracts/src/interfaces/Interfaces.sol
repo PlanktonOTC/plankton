@@ -10,7 +10,14 @@ interface IAggregatorV3 {
 }
 
 interface IMarkOracle {
-    enum Status { Unset, Open, Extended, Weekend, Frozen, Halted }
+    enum Status {
+        Unset,
+        Open,
+        Extended,
+        Weekend,
+        Frozen,
+        Halted
+    }
 
     struct OracleConfig {
         address chainlinkFeed;
@@ -50,7 +57,9 @@ interface IMarkOracle {
     /// Chainlink answer already in Stock Token terms (multiplier embedded). Never multiply again.
     function chainlinkPrice(bytes32 marketId) external view returns (uint256 priceE18, uint64 updatedAt);
 
-    event MarkPublished(bytes32 indexed marketId, uint256 priceE18, Status status, uint64 sequence, uint16 confidenceBps, bool breaker);
+    event MarkPublished(
+        bytes32 indexed marketId, uint256 priceE18, Status status, uint64 sequence, uint16 confidenceBps, bool breaker
+    );
     event BreakerSet(bytes32 indexed marketId, uint256 priorE18, uint256 newE18);
     event Reanchored(bytes32 indexed marketId, uint256 priceE18);
     event ConfigScheduled(bytes32 indexed marketId, OracleConfig config, uint64 effectiveAt);
@@ -59,7 +68,10 @@ interface IMarkOracle {
     /// Held references, set only by Chainlink-bounded (Open/Extended) marks. A single signer can never move them.
     /// regularClose: the last Open mark (Friday's close over the weekend). lastBounded: the last Open or Extended mark.
     /// openSince: when the market last entered Open from another status (start of the open guard).
-    function referencesOf(bytes32 marketId) external view returns (uint256 regularCloseE18, uint256 lastBoundedE18, uint64 openSince);
+    function referencesOf(bytes32 marketId)
+        external
+        view
+        returns (uint256 regularCloseE18, uint256 lastBoundedE18, uint64 openSince);
 }
 
 interface ICounterVault {

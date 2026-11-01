@@ -180,9 +180,9 @@ contract MarkOracle is IMarkOracle, EIP712, Ownable2Step {
 
     function scheduleConfig(bytes32 marketId, OracleConfig calldata c) external onlyOwner {
         if (
-            c.chainlinkFeed == address(0) || c.bandBps == 0 || c.jumpBps == 0 || c.maxAgeSec == 0 || c.chainlinkMaxAgeSec == 0
-                || c.reanchorConfirmations == 0 || c.quorumOutsideBand == 0 || c.quorumOutsideBand > MAX_SIGNERS
-                || c.heldBandBps == 0
+            c.chainlinkFeed == address(0) || c.bandBps == 0 || c.jumpBps == 0 || c.maxAgeSec == 0
+                || c.chainlinkMaxAgeSec == 0 || c.reanchorConfirmations == 0 || c.quorumOutsideBand == 0
+                || c.quorumOutsideBand > MAX_SIGNERS || c.heldBandBps == 0
         ) revert InvalidConfig();
 
         if (!configured[marketId]) {
@@ -277,9 +277,9 @@ contract MarkOracle is IMarkOracle, EIP712, Ownable2Step {
     }
 
     function _isLoosening(OracleConfig memory o, OracleConfig calldata n) private pure returns (bool) {
-        return n.chainlinkFeed != o.chainlinkFeed || n.bandBps > o.bandBps || n.jumpBps > o.jumpBps || n.maxAgeSec > o.maxAgeSec
-            || n.chainlinkMaxAgeSec > o.chainlinkMaxAgeSec || n.liqAgreementBps > o.liqAgreementBps
-            || n.reanchorConfirmations < o.reanchorConfirmations || n.quorumOutsideBand < o.quorumOutsideBand
-            || n.heldBandBps > o.heldBandBps;
+        return n.chainlinkFeed != o.chainlinkFeed || n.bandBps > o.bandBps || n.jumpBps > o.jumpBps
+            || n.maxAgeSec > o.maxAgeSec || n.chainlinkMaxAgeSec > o.chainlinkMaxAgeSec
+            || n.liqAgreementBps > o.liqAgreementBps || n.reanchorConfirmations < o.reanchorConfirmations
+            || n.quorumOutsideBand < o.quorumOutsideBand || n.heldBandBps > o.heldBandBps;
     }
 }

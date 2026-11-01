@@ -13,7 +13,12 @@ import {
 
 // Shared by Exchange, ExchangeLib and MarketConfigLib. One file so all three see identical storage layouts.
 
-enum MarketState { Unset, Active, CloseOnly, Paused } // Paused = no new entries; reduces always allowed
+enum MarketState {
+    Unset, // Paused = no new entries; reduces always allowed
+    Active,
+    CloseOnly,
+    Paused
+}
 
 struct SessionProfile {
     bool opensAllowed;
