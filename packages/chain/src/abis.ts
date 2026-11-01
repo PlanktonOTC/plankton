@@ -32,6 +32,19 @@ export const oracleAbi = [
   },
   {
     "type": "function",
+    "name": "MAX_SEQUENCE_GAP",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_SIGNERS",
     "inputs": [],
     "outputs": [
@@ -155,6 +168,11 @@ export const oracleAbi = [
             "name": "quorumOutsideBand",
             "type": "uint8",
             "internalType": "uint8"
+          },
+          {
+            "name": "heldBandBps",
+            "type": "uint16",
+            "internalType": "uint16"
           }
         ]
       }
@@ -446,6 +464,11 @@ export const oracleAbi = [
                 "name": "quorumOutsideBand",
                 "type": "uint8",
                 "internalType": "uint8"
+              },
+              {
+                "name": "heldBandBps",
+                "type": "uint16",
+                "internalType": "uint16"
               }
             ]
           },
@@ -534,6 +557,35 @@ export const oracleAbi = [
   },
   {
     "type": "function",
+    "name": "referencesOf",
+    "inputs": [
+      {
+        "name": "marketId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "regularCloseE18",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "lastBoundedE18",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "openSince",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "renounceOwnership",
     "inputs": [],
     "outputs": [],
@@ -592,6 +644,11 @@ export const oracleAbi = [
             "name": "quorumOutsideBand",
             "type": "uint8",
             "internalType": "uint8"
+          },
+          {
+            "name": "heldBandBps",
+            "type": "uint16",
+            "internalType": "uint16"
           }
         ]
       }
@@ -742,6 +799,11 @@ export const oracleAbi = [
             "name": "quorumOutsideBand",
             "type": "uint8",
             "internalType": "uint8"
+          },
+          {
+            "name": "heldBandBps",
+            "type": "uint16",
+            "internalType": "uint16"
           }
         ]
       },
@@ -997,6 +1059,11 @@ export const oracleAbi = [
   },
   {
     "type": "error",
+    "name": "SequenceGap",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "SignerLimit",
     "inputs": []
   },
@@ -1095,6 +1162,19 @@ export const exchangeAbi = [
         "name": "",
         "type": "string",
         "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "UPGRADE_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -1240,6 +1320,30 @@ export const exchangeAbi = [
   },
   {
     "type": "function",
+    "name": "closedAtOf",
+    "inputs": [
+      {
+        "name": "trader",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "marketId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "collateral",
     "inputs": [
       {
@@ -1379,6 +1483,21 @@ export const exchangeAbi = [
                 "internalType": "uint64"
               }
             ]
+          },
+          {
+            "name": "openGuardSec",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "openGuardSpreadBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "openGuardPositionBpsOfV",
+            "type": "uint16",
+            "internalType": "uint16"
           }
         ]
       }
@@ -2028,6 +2147,19 @@ export const exchangeAbi = [
   },
   {
     "type": "function",
+    "name": "navPricesFresh",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "orderNonceFloor",
     "inputs": [
       {
@@ -2198,6 +2330,21 @@ export const exchangeAbi = [
                     "internalType": "uint64"
                   }
                 ]
+              },
+              {
+                "name": "openGuardSec",
+                "type": "uint32",
+                "internalType": "uint32"
+              },
+              {
+                "name": "openGuardSpreadBps",
+                "type": "uint16",
+                "internalType": "uint16"
+              },
+              {
+                "name": "openGuardPositionBpsOfV",
+                "type": "uint16",
+                "internalType": "uint16"
               }
             ]
           },
@@ -2459,6 +2606,25 @@ export const exchangeAbi = [
   },
   {
     "type": "function",
+    "name": "referrerOf",
+    "inputs": [
+      {
+        "name": "trader",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "renounceOwnership",
     "inputs": [],
     "outputs": [],
@@ -2584,6 +2750,21 @@ export const exchangeAbi = [
                 "internalType": "uint64"
               }
             ]
+          },
+          {
+            "name": "openGuardSec",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "openGuardSpreadBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "openGuardPositionBpsOfV",
+            "type": "uint16",
+            "internalType": "uint16"
           }
         ]
       }
@@ -2630,6 +2811,19 @@ export const exchangeAbi = [
         "name": "allowed",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setReferrer",
+    "inputs": [
+      {
+        "name": "referrer",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [],
@@ -3014,6 +3208,25 @@ export const exchangeAbi = [
   },
   {
     "type": "event",
+    "name": "ReferrerSet",
+    "inputs": [
+      {
+        "name": "trader",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "referrer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "UpgradeCancelled",
     "inputs": [
       {
@@ -3086,6 +3299,11 @@ export const exchangeAbi = [
         "internalType": "address"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "AlreadySet",
+    "inputs": []
   },
   {
     "type": "error",
@@ -3292,6 +3510,11 @@ export const exchangeAbi = [
   {
     "type": "error",
     "name": "UnknownMarket",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UpgradeLapsed",
     "inputs": []
   },
   {
@@ -3601,6 +3824,19 @@ export const vaultAbi = [
   },
   {
     "type": "function",
+    "name": "MIN_WITHDRAW_USDG",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "UPGRADE_DELAY",
     "inputs": [],
     "outputs": [
@@ -3621,6 +3857,19 @@ export const vaultAbi = [
         "name": "",
         "type": "string",
         "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "UPGRADE_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -4766,6 +5015,11 @@ export const vaultAbi = [
   },
   {
     "type": "error",
+    "name": "TooSmall",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "UUPSUnauthorizedCallContext",
     "inputs": []
   },
@@ -4779,6 +5033,11 @@ export const vaultAbi = [
         "internalType": "bytes32"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "UpgradeLapsed",
+    "inputs": []
   },
   {
     "type": "error",
