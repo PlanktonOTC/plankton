@@ -60,7 +60,9 @@ abstract contract DelayedUpgrade is Initializable, Ownable2StepUpgradeable, UUPS
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {
         DelayedUpgradeStorage storage $ = _du();
-        if (newImplementation == address(0) || newImplementation != $.pendingImplementation) revert UpgradeNotScheduled();
+        if (newImplementation == address(0) || newImplementation != $.pendingImplementation) {
+            revert UpgradeNotScheduled();
+        }
         if (block.timestamp < $.upgradeEta) revert UpgradeTooEarly();
         if (block.timestamp > uint256($.upgradeEta) + UPGRADE_WINDOW) revert UpgradeLapsed();
         delete $.pendingImplementation;

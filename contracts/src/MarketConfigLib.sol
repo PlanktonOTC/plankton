@@ -67,9 +67,10 @@ library MarketConfigLib {
         if (
             n.maintenanceMarginBps != o.maintenanceMarginBps || n.maxExecDeviationBps > o.maxExecDeviationBps
                 || n.maxConfidenceBps > o.maxConfidenceBps || n.maxMarkAgeSec > o.maxMarkAgeSec
-                || n.netSkewBpsOfV > o.netSkewBpsOfV || n.grossOiBpsOfV > o.grossOiBpsOfV || n.positionBpsOfV > o.positionBpsOfV
-                || n.skewScaleE18 > o.skewScaleE18 || n.feeBps > o.feeBps || n.borrowBaseBpsPerHour > o.borrowBaseBpsPerHour
-                || n.minHoldSec < o.minHoldSec || n.fallbackSpreadBps > o.fallbackSpreadBps || n.frozenSpreadBps > o.frozenSpreadBps
+                || n.netSkewBpsOfV > o.netSkewBpsOfV || n.grossOiBpsOfV > o.grossOiBpsOfV
+                || n.positionBpsOfV > o.positionBpsOfV || n.skewScaleE18 > o.skewScaleE18 || n.feeBps > o.feeBps
+                || n.borrowBaseBpsPerHour > o.borrowBaseBpsPerHour || n.minHoldSec < o.minHoldSec
+                || n.fallbackSpreadBps > o.fallbackSpreadBps || n.frozenSpreadBps > o.frozenSpreadBps
                 || n.openGuardSec < o.openGuardSec || n.openGuardSpreadBps < o.openGuardSpreadBps
                 || n.openGuardPositionBpsOfV > o.openGuardPositionBpsOfV
         ) return true;
