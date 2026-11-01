@@ -216,9 +216,11 @@ library ExchangeLib {
             openSize = absDelta;
         }
         if (openSize > 0 && !t.checkPrice) revert NotReducing(); // the fallback exit can only reduce
+        if (closeSize > 0 && closeSize == M.abs(p.size)) s.closedAt[t.trader][t.id] = uint64(block.timestamp);
 
         SessionProfile memory prof = d.cfg.profiles[uint8(mk.status)];
-        if (t.checkPrice) _checkPrice(d, mk, t, absDelta, openSize == 0);
+        bool guard = openSize > 0 && _inOpenGuard(s, d, t.id, mk);
+        if (t.checkPrice) _checkPrice(d, mk, t, absDelta, _sessionSpread(d, mk, prof, openSize == 0, guard));
         if (openSize > 0) _checkOpenPre(s, d, mk, prof, V);
 
         if (p.size != 0) _settleBorrow(s, d, p, t.id);
@@ -240,9 +242,9 @@ library ExchangeLib {
             feePaid = M.min(t.fee, avail); // an exit is never blocked by an unpaid fee
         }
         s.collateral[t.trader] = avail - marginIn - feePaid;
-        if (feePaid > 0) s.feeRouter.route(feePaid, address(0));
+        if (feePaid > 0) s.feeRouter.route(feePaid, s.referrer[t.trader]);
 
-        if (openSize > 0) _checkOpenPost(s, d, p, prof, t, V, netBefore);
+        if (openSize > 0) _checkOpenPost(s, d, p, prof, t, V, netBefore, guard);
         s.totalAbsNet = s.totalAbsNet - netBefore + _absNet(d);
 
         emit TradeExecuted(t.trader, t.id, t.delta, t.exec, feePaid, realized, t.path);
@@ -325,24 +327,41 @@ library ExchangeLib {
 
     // ================================================================== checks
 
-    function _checkPrice(Market storage d, IMarkOracle.Mark memory mk, Trade memory t, uint256 absDelta, bool reducingOnly)
+    /// Spread a trade must pay on top of the skew price. Opens pay the session's spread (weekend band, extended hours)
+    /// plus the open guard's; closes pay nothing extra except in frozen, halted or close-only markets.
+    function _sessionSpread(Market storage d, IMarkOracle.Mark memory mk, SessionProfile memory prof, bool reducingOnly, bool guard)
+        private
+        view
+        returns (uint256)
+    {
+        if (reducingOnly) {
+            bool frozen = mk.status == IMarkOracle.Status.Frozen || mk.status == IMarkOracle.Status.Halted
+                || d.cfg.state != MarketState.Active;
+            return frozen ? d.cfg.frozenSpreadBps : 0;
+        }
+        return uint256(prof.extraSpreadBps) + (guard ? d.cfg.openGuardSpreadBps : 0);
+    }
+
+    /// The first `openGuardSec` after the market entered Open (each morning, and Monday's reopen).
+    function _inOpenGuard(State storage s, Market storage d, bytes32 id, IMarkOracle.Mark memory mk) private view returns (bool) {
+        if (d.cfg.openGuardSec == 0 || mk.status != IMarkOracle.Status.Open) return false;
+        (,, uint64 since) = s.oracle.referencesOf(id);
+        return block.timestamp < uint256(since) + d.cfg.openGuardSec;
+    }
+
+    function _checkPrice(Market storage d, IMarkOracle.Mark memory mk, Trade memory t, uint256 absDelta, uint256 spread)
         private
         view
     {
         uint256 mark = mk.priceE18;
-        uint256 maxDev = d.cfg.maxExecDeviationBps;
-        if (
-            reducingOnly
-                && (mk.status == IMarkOracle.Status.Frozen || mk.status == IMarkOracle.Status.Halted || d.cfg.state != MarketState.Active)
-        ) {
-            maxDev += d.cfg.frozenSpreadBps; // closes in frozen/halted/close-only states pay the frozen spread
-        }
-        if (M.diffBps(t.exec, mark) > maxDev) revert ExecDeviation();
+        if (M.diffBps(t.exec, mark) > d.cfg.maxExecDeviationBps + spread) revert ExecDeviation();
 
-        // The quote may never be better for the trader than the skew-impact price (SIP-279 style).
+        // The quote may never be better for the trader than the skew-impact price (SIP-279 style), moved against the
+        // trader by the session spread. So the spreads are charged, not just allowed.
         int256 skewBefore = (int256(uint256(d.longOI)) - int256(uint256(d.shortOI))) * int256(USDG_SCALE);
         int256 tradeE18 = int256(M.notional(absDelta, mark) * USDG_SCALE) * (t.delta > 0 ? int256(1) : int256(-1));
         uint256 fill = M.skewFill(mark, skewBefore, skewBefore + tradeE18, d.cfg.skewScaleE18);
+        fill = t.delta > 0 ? fill * (BPS + spread) / BPS : fill * (BPS - spread) / BPS;
         if (t.delta > 0 ? t.exec < fill : t.exec > fill) revert BetterThanSkew();
 
         uint256 notional = M.notional(absDelta, t.exec);
@@ -371,7 +390,8 @@ library ExchangeLib {
         SessionProfile memory prof,
         Trade memory t,
         uint256 V,
-        uint256 netBefore
+        uint256 netBefore,
+        bool guard
     ) private view {
         uint256 posNotional = M.notional(M.abs(p.size), t.exec);
         if (t.maxLev == 0 || t.maxLev > prof.maxLeverageE18) revert LeverageTooHigh();
