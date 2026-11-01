@@ -7,7 +7,8 @@ import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step
 import {IFeeRouter, IBackstopFund, ICounterVault} from "./interfaces/Interfaces.sol";
 
 /// @notice Splits trading fees between the Counter, Backstop Fund, First-Loss tranche and treasury, on-chain.
-/// A referral rebate (10%) comes off first. Split changes wait 24h. Pull-based: it only moves what a caller sends.
+/// A referral rebate (0-10%) comes off first. Split changes and rebate increases wait 24h; a rebate cut applies at once.
+/// Pull-based: it only moves what a caller sends.
 contract FeeRouter is IFeeRouter, Ownable2Step {
     using SafeERC20 for IERC20;
 
@@ -19,7 +20,7 @@ contract FeeRouter is IFeeRouter, Ownable2Step {
     }
 
     uint256 public constant SPLIT_DELAY = 24 hours;
-    uint256 public constant REFERRAL_BPS = 1_000;
+    uint256 public constant MAX_REFERRAL_BPS = 1_000;
     uint256 private constant BPS = 10_000;
 
     IERC20 public immutable usdg;
@@ -32,9 +33,14 @@ contract FeeRouter is IFeeRouter, Ownable2Step {
     Split public pendingSplit;
     uint64 public pendingSplitEta;
 
+    uint16 public referralBps = uint16(MAX_REFERRAL_BPS);
+    uint16 public pendingReferralBps;
+    uint64 public pendingReferralEta;
+
     event Routed(uint256 fee, uint256 referral, uint256 counter, uint256 backstop, uint256 junior, uint256 treasury);
     event SplitScheduled(Split split, uint64 eta);
     event TreasuryChanged(address treasury);
+    event ReferralBpsScheduled(uint16 bps, uint64 eta);
 
     error BadSplit();
     error NothingPending();
@@ -64,7 +70,7 @@ contract FeeRouter is IFeeRouter, Ownable2Step {
         if (feeUsdg == 0) return;
         usdg.safeTransferFrom(msg.sender, address(this), feeUsdg);
 
-        uint256 rebate = referrer != address(0) ? feeUsdg * REFERRAL_BPS / BPS : 0;
+        uint256 rebate = referrer != address(0) ? feeUsdg * referralBps / BPS : 0;
         if (rebate > 0) usdg.safeTransfer(referrer, rebate);
         uint256 net = feeUsdg - rebate;
 
@@ -96,6 +102,29 @@ contract FeeRouter is IFeeRouter, Ownable2Step {
         split = pendingSplit;
         delete pendingSplit;
         delete pendingSplitEta;
+    }
+
+    /// A cut applies at once (more fee stays with the Counter); a raise waits 24h.
+    function setReferralBps(uint16 bps) external onlyOwner {
+        if (bps > MAX_REFERRAL_BPS) revert BadSplit();
+        if (bps <= referralBps) {
+            referralBps = bps;
+            delete pendingReferralBps;
+            delete pendingReferralEta;
+            emit ReferralBpsScheduled(bps, uint64(block.timestamp));
+            return;
+        }
+        pendingReferralBps = bps;
+        pendingReferralEta = uint64(block.timestamp + SPLIT_DELAY);
+        emit ReferralBpsScheduled(bps, pendingReferralEta);
+    }
+
+    function applyReferralBps() external {
+        if (pendingReferralEta == 0) revert NothingPending();
+        if (block.timestamp < pendingReferralEta) revert TooEarly();
+        referralBps = pendingReferralBps;
+        delete pendingReferralBps;
+        delete pendingReferralEta;
     }
 
     function setTreasury(address treasury_) external onlyOwner {
