@@ -83,10 +83,10 @@ library ExchangeLib {
         if (sizeBps == 0 || sizeBps > BPS) revert ZeroSize();
 
         int256 delta = M.fractionClose(p.size, sizeBps);
-        (uint256 price, uint256 spread) = _fallbackPrice(s, marketId, d);
+        (uint256 price, uint256 spread, bool stale) = _fallbackPrice(s, marketId, d);
         uint256 exec = price * (p.size > 0 ? BPS - spread : BPS + spread) / BPS;
         uint256 fee = M.notional(M.abs(delta), exec) * d.cfg.feeBps / BPS;
-        _applyTrade(s, Trade(trader, marketId, delta, exec, fee, 0, 0, 0, 2, false));
+        _applyTrade(s, Trade(trader, marketId, delta, exec, fee, 0, 0, 0, 2, false, stale));
     }
 
     /// Permissionless. Open/Extended need the signed mark and a fresh Chainlink answer to agree. Weekend liquidates on
@@ -261,6 +261,7 @@ library ExchangeLib {
         bool isLong = p.size > 0;
 
         pnl = M.pnl(isLong, p.entry, t.exec, closeSize);
+        if (pnl > 0 && t.noProfit) pnl = 0;
         if (pnl > 0 && block.timestamp < uint256(p.openedAt) + d.cfg.minHoldSec) {
             uint256 cap = M.notional(closeSize, t.exec) * MIN_HOLD_PROFIT_CAP_BPS / BPS;
             if (uint256(pnl) > cap) pnl = int256(cap);
@@ -507,11 +508,12 @@ library ExchangeLib {
         }
     }
 
-    /// Mark source order for `closeAtMark`: fresh signed mark, fresh Chainlink, last mark. Frozen and stale cases pay the frozen spread.
+    /// Mark source order for `closeAtMark`: fresh signed mark, fresh Chainlink, last mark. Frozen and stale cases pay the
+    /// frozen spread. On the last-mark path (`stale`) the real price is unknown, so the exit settles losses but pays no profit.
     function _fallbackPrice(State storage s, bytes32 marketId, Market storage d)
         private
         view
-        returns (uint256 price, uint256 spread)
+        returns (uint256 price, uint256 spread, bool stale)
     {
         IMarkOracle.Mark memory mk = s.oracle.markOf(marketId);
         spread = d.cfg.fallbackSpreadBps;
@@ -526,6 +528,7 @@ library ExchangeLib {
             } else {
                 price = mk.priceE18;
                 spread = d.cfg.frozenSpreadBps;
+                stale = true;
             }
         }
         if (mk.status == IMarkOracle.Status.Frozen || mk.status == IMarkOracle.Status.Halted) {
