@@ -53,6 +53,7 @@ contract CounterVault is ICounterVault, ERC20Upgradeable, DelayedUpgrade {
     event Settled(uint256 indexed id, address indexed owner, bool deposit, uint256 assets, uint256 shares);
     event PartialFill(uint256 indexed id, uint256 filledShares, uint256 remainingShares);
     event DepositsPaused(bool paused);
+    event Linked(address indexed exchange, address indexed payoutDesk);
 
     error AlreadyLinked();
     error NotLinked();
@@ -82,6 +83,7 @@ contract CounterVault is ICounterVault, ERC20Upgradeable, DelayedUpgrade {
         if (address(exchange_) == address(0) || address(desk_) == address(0)) revert ZeroAddress();
         exchange = exchange_;
         payoutDesk = desk_;
+        emit Linked(address(exchange_), address(desk_));
     }
 
     function decimals() public pure override returns (uint8) {

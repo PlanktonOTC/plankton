@@ -32,6 +32,7 @@ contract PayoutDesk is IPayoutDesk, Ownable2Step {
     event Claimed(uint256 indexed id, address indexed trader, uint256 amount);
     event Frozen(uint256 indexed id, uint64 until);
     event GuardianChanged(address guardian);
+    event Linked(address indexed exchange, address indexed vault);
 
     error AlreadyLinked();
     error NotExchange();
@@ -47,6 +48,7 @@ contract PayoutDesk is IPayoutDesk, Ownable2Step {
         if (exchange_ == address(0) || address(vault_) == address(0)) revert ZeroAddress();
         exchange = exchange_;
         vault = vault_;
+        emit Linked(exchange_, address(vault_));
     }
 
     function setGuardian(address guardian_) external onlyOwner {

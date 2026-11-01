@@ -66,8 +66,14 @@ describe('listing-rule data', () => {
   test('the rule is enforced in production and only reported elsewhere, unless set explicitly', () => {
     expect(eligibilityMode(loadEnv({ NODE_ENV: 'production' }))).toBe('enforce');
     expect(eligibilityMode(loadEnv({ NODE_ENV: 'development' }))).toBe('warn');
-    expect(eligibilityMode(loadEnv({ NODE_ENV: 'production', ELIGIBILITY_MODE: 'off' }))).toBe('off');
+    expect(eligibilityMode(loadEnv({ NODE_ENV: 'development', ELIGIBILITY_MODE: 'off' }))).toBe('off');
+    expect(eligibilityMode(loadEnv({ NODE_ENV: 'production', ELIGIBILITY_MODE: 'enforce' }))).toBe('enforce');
     expect(() => loadEnv({ ELIGIBILITY_MODE: 'maybe' })).toThrow(/ELIGIBILITY_MODE/);
+  });
+
+  test('production refuses to run with the listing rule switched off or only warning', () => {
+    expect(() => loadEnv({ NODE_ENV: 'production', ELIGIBILITY_MODE: 'off' })).toThrow(/enforce/);
+    expect(() => loadEnv({ NODE_ENV: 'production', ELIGIBILITY_MODE: 'warn' })).toThrow(/enforce/);
   });
 });
 

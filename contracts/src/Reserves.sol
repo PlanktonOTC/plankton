@@ -15,6 +15,8 @@ abstract contract LossReserve is Ownable2Step {
     address public exchange;
     ICounterVault public vault;
 
+    event Linked(address indexed exchange, address indexed vault);
+
     error AlreadyLinked();
     error NotExchange();
     error ZeroAddress();
@@ -29,6 +31,7 @@ abstract contract LossReserve is Ownable2Step {
         if (exchange_ == address(0) || address(vault_) == address(0)) revert ZeroAddress();
         exchange = exchange_;
         vault = vault_;
+        emit Linked(exchange_, address(vault_));
     }
 
     modifier onlyExchange() {

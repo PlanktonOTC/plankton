@@ -48,6 +48,14 @@ const revertName = (err: unknown): string | undefined => {
 };
 const msg = (err: unknown) => (err instanceof Error ? err.message.split('\n')[0]! : String(err));
 
+// The keeper's own calls to the API skip the public rate limit when INTERNAL_API_TOKEN is set on both sides.
+const apiHeaders: Record<string, string> = { 'content-type': 'application/json', ...(env.INTERNAL_API_TOKEN ? { 'x-internal-token': env.INTERNAL_API_TOKEN } : {}) };
+
+/** Drops expired cooldown entries so the maps cannot grow forever. */
+function pruneCooldowns(now: number): void {
+  for (const m of [cooldown, orderCooldown]) for (const [k, until] of m) if (until <= now) m.delete(k);
+}
+
 const health = { liquidate: 0, orders: 0, settle: 0, probe: 0, quoteServiceDownSince: null as number | null, sent: 0 };
 
 /** Run `fn` every `ms`, never overlapping itself, never throwing. */
@@ -156,7 +164,7 @@ async function triggerOrders(): Promise<void> {
       }
       const res = await fetch(`${env.API_URL}/v1/quote/trade`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: apiHeaders,
         body: toJson({ market: m.symbol, trader: order.trader, sizeDeltaE18: sizeDelta, marginUsdg: order.marginUsdg }),
         signal: AbortSignal.timeout(5_000),
       });
@@ -232,7 +240,7 @@ async function probeQuoteService(): Promise<void> {
   try {
     const res = await fetch(`${env.API_URL}/v1/quote/trade`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: apiHeaders,
       body: JSON.stringify({ market: m.symbol, trader: account.address, sizeDeltaE18: '1000000000000', marginUsdg: '1000000' }),
       signal: AbortSignal.timeout(8_000),
     });
@@ -253,6 +261,7 @@ async function probeQuoteService(): Promise<void> {
   }
 }
 
+every('cooldown-cleanup', 60_000, async () => pruneCooldowns(Date.now()));
 every('liquidations', 5_000, liquidations);
 every('orders', 3_000, triggerOrders);
 every('settle', 30_000, settleCounter);

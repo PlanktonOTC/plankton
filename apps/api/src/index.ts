@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import pino from 'pino';
 import { encodeFunctionData, parseAbi, recoverTypedDataAddress, verifyMessage, type Address, type Hex } from 'viem';
 import { z, ZodError } from 'zod';
@@ -12,6 +13,7 @@ import {
   marketIdFor,
   orderTypes,
   orderWire,
+  payoutDeskAbi,
   permitTypedData,
   quoteWire,
   readCounter,
@@ -27,6 +29,7 @@ import {
 import { and, createDb, desc, eq, orders, positions, sql, trades, type Db } from '@plankton/db';
 import { closeSizeDeltaE18, stressNavUsdg } from '@plankton/core';
 import { quoteFromChain } from './quote.ts';
+import { clientIp, corsOrigins, createRateLimiter, isInternal } from './limits.ts';
 
 const env = loadEnv();
 const log = pino({ level: env.LOG_LEVEL });
@@ -130,7 +133,28 @@ const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const MAX_OPEN_ORDERS_PER_TRADER = 50;
 const QUOTE_TTL_SEC = 20n;
 
-const app = new Hono();
+const app = new Hono<{ Bindings: { ip?: string } }>();
+
+// ---------------------------------------------------------------- protection for a public endpoint
+
+const rateCheck = createRateLimiter();
+const production = env.NODE_ENV === 'production';
+app.use('*', cors({ origin: corsOrigins(env.CORS_ORIGINS, production) as never, allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'], maxAge: 600 }));
+app.use('*', async (c, next) => {
+  c.header('x-content-type-options', 'nosniff');
+  c.header('cache-control', 'no-store');
+  if (c.req.path === '/health' || isInternal(c.req.raw.headers, env.INTERNAL_API_TOKEN)) return next();
+  // Quotes spend a signer's notional budget and orders write to the database, so they get a third of the general allowance.
+  const heavy = c.req.method !== 'GET' && c.req.method !== 'OPTIONS';
+  const limit = heavy ? Math.max(1, Math.floor(env.API_RATE_LIMIT_PER_MIN / 3)) : env.API_RATE_LIMIT_PER_MIN;
+  const ip = clientIp(c.req.raw.headers, c.env?.ip, env.TRUST_PROXY === 'true');
+  const r = rateCheck(`${heavy ? 'w' : 'r'}:${ip}`, limit);
+  if (!r.ok) {
+    c.header('retry-after', String(r.retryAfterSec));
+    return json({ error: 'rate limit reached, slow down' }, 429);
+  }
+  return next();
+});
 
 app.get('/health', (c) => c.json({ ok: true, rung }));
 
@@ -248,6 +272,14 @@ app.get('/v1/tx/close-at-mark', (c) => {
   return json(closeAtMarkCall(m.marketId, bps));
 });
 
+// Calldata to collect a deferred profit once it is claimable (anyone may send it; the money goes to the trader).
+app.get('/v1/tx/claim', (c) => {
+  const id = c.req.query('id') ?? '';
+  if (!/^\d+$/.test(id)) throw new HttpError(400, 'id must be a whole number');
+  const { dep } = chain();
+  return json({ to: dep.payoutDesk, data: encodeFunctionData({ abi: payoutDeskAbi, functionName: 'claim', args: [BigInt(id)] }) });
+});
+
 // ---------------------------------------------------------------- orders (executed by keepers)
 
 app.post('/v1/orders', async (c) => {
@@ -335,6 +367,37 @@ app.get('/v1/accounts/:addr', async (c) => {
   return json({ trader, positions: pos, openOrders: open, recentTrades: recent });
 });
 
+// Profits above the hourly payout limit are paid late through the PayoutDesk. This lists a trader's IOUs, read from the
+// chain: the newest 500 claims are scanned, which covers many days at the volumes the hourly limit allows.
+const CLAIM_SCAN = 500n;
+app.get('/v1/accounts/:addr/claims', async (c) => {
+  const addr = c.req.param('addr');
+  if (!ADDRESS.test(addr)) throw new HttpError(400, 'invalid address');
+  const { client, dep } = chain();
+  const next = await client.readContract({ address: dep.payoutDesk, abi: payoutDeskAbi, functionName: 'nextClaimId' });
+  const first = next > CLAIM_SCAN ? next - CLAIM_SCAN : 1n;
+  const ids: bigint[] = [];
+  for (let id = first; id < next; id++) ids.push(id);
+  const [rows, now] = await Promise.all([
+    ids.length === 0
+      ? Promise.resolve([])
+      : client.multicall({ allowFailure: false, contracts: ids.map((id) => ({ address: dep.payoutDesk, abi: payoutDeskAbi, functionName: 'claims' as const, args: [id] as const })) }),
+    chainTimeSec(client),
+  ]);
+  const mine = ids
+    .map((id, i) => ({ id, row: rows[i]! }))
+    .filter(({ row }) => row[0].toLowerCase() === addr.toLowerCase())
+    .map(({ id, row }) => ({
+      id,
+      amountUsdg: row[1],
+      claimableAt: row[2],
+      frozenUntil: row[3],
+      claimed: row[4],
+      claimableNow: !row[4] && now >= BigInt(row[2]) && now >= BigInt(row[3]),
+    }));
+  return json({ trader: addr.toLowerCase(), claims: mine, scannedFromId: first });
+});
+
 app.get('/v1/counter', async () => {
   const { client, dep } = chain();
   return json(await readCounter(client, dep));
@@ -378,5 +441,9 @@ app.onError((err, c) => {
   return json({ error: 'internal error' }, 500);
 });
 
-const server = Bun.serve({ port: env.API_PORT, fetch: app.fetch });
+const server = Bun.serve({
+  port: env.API_PORT,
+  maxRequestBodySize: 64 * 1024, // the largest legitimate body is a signed order, well under 2 KB
+  fetch: (req, srv) => app.fetch(req, { ip: srv.requestIP(req)?.address }),
+});
 log.info({ port: server.port, markets: markets.map((m) => m.symbol), rung }, 'api started');

@@ -32,6 +32,14 @@ const schema = z.object({
   MARK_PORT: z.coerce.number().default(8788),
   MARK_SERVICE_URL: z.string().default('http://127.0.0.1:8788'),
   API_PORT: z.coerce.number().default(8787),
+  /** Comma-separated browser origins allowed to call the API (for example https://app.example.com). Empty: none in production, any in development. */
+  CORS_ORIGINS: z.string().optional(),
+  /** Requests per minute one client address may make to the API. Quote and order routes get a third of this. */
+  API_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(240),
+  /** Set to true only behind a trusted proxy (Railway, a load balancer) that sets x-real-ip / x-forwarded-for. */
+  TRUST_PROXY: z.enum(['true', 'false']).default('false'),
+  /** Lets the keeper's own calls skip the rate limit. Send it as the x-internal-token header. */
+  INTERNAL_API_TOKEN: z.string().min(16).optional(),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
 });
 
@@ -43,6 +51,9 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   const parsed = schema.safeParse(present);
   if (!parsed.success) {
     throw new Error(`invalid environment: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
+  }
+  if (parsed.data.NODE_ENV === 'production' && parsed.data.ELIGIBILITY_MODE && parsed.data.ELIGIBILITY_MODE !== 'enforce') {
+    throw new Error('invalid environment: ELIGIBILITY_MODE must be enforce (or unset) in production');
   }
   const rpcUrls = parsed.data.RPC_URLS.split(',').map((s) => s.trim()).filter(Boolean);
   if (rpcUrls.length === 0) throw new Error('invalid environment: RPC_URLS is empty');

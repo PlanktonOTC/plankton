@@ -6,3 +6,4 @@ export * from './typed-data.ts';
 export * from './ids.ts';
 export * from './wire.ts';
 export * from './reads.ts';
+export * from './blocks.ts';

@@ -1,7 +1,7 @@
 import pino from 'pino';
 import { parseEventLogs, type Log } from 'viem';
 import { loadDeployment, loadEnv, requireDatabaseUrl } from '@plankton/config';
-import { createChainClient, exchangeAbi } from '@plankton/chain';
+import { blockAtOrAfter, createChainClient, exchangeAbi, readRangeSplitting } from '@plankton/chain';
 import { and, createDb, eq, indexerCursor, lte, orders, positions, sql, trades } from '@plankton/db';
 
 // Copies Exchange events into Postgres: positions (current state), trades (history) and order cancels.
@@ -30,16 +30,8 @@ async function blockTime(n: bigint): Promise<Date> {
   return t;
 }
 
-async function getLogs(fromBlock: bigint, toBlock: bigint): Promise<Log[]> {
-  try {
-    return await client.getLogs({ address: dep.exchange, fromBlock, toBlock });
-  } catch (err) {
-    if (toBlock <= fromBlock) throw err;
-    const mid = fromBlock + (toBlock - fromBlock) / 2n;
-    log.debug({ fromBlock, toBlock }, 'range rejected, splitting');
-    return [...(await getLogs(fromBlock, mid)), ...(await getLogs(mid + 1n, toBlock))];
-  }
-}
+const getLogs = (fromBlock: bigint, toBlock: bigint): Promise<Log[]> =>
+  readRangeSplitting(fromBlock, toBlock, (a, b) => client.getLogs({ address: dep.exchange, fromBlock: a, toBlock: b }));
 
 async function handle(logs: Log[]): Promise<void> {
   const events = parseEventLogs({ abi: exchangeAbi, logs });
@@ -106,27 +98,10 @@ async function handle(logs: Log[]): Promise<void> {
   }
 }
 
-/**
- * The first block at or after a Unix time, by binary search on block timestamps. Works on any node (no archive state)
- * and does not care which block-number convention the chain uses: on Arbitrum-style chains a contract's block.number is
- * the Ethereum block number, which is why the deploy records a time and not a block.
- */
-async function blockAtOrAfter(unixSec: number, head: bigint): Promise<bigint> {
-  let lo = 0n;
-  let hi = head;
-  while (lo < hi) {
-    const mid = (lo + hi) / 2n;
-    const b = await client.getBlock({ blockNumber: mid });
-    if (Number(b.timestamp) < unixSec) lo = mid + 1n;
-    else hi = mid;
-  }
-  return lo;
-}
-
 let startBlockCache: bigint | null = null;
 async function startBlock(head: bigint): Promise<bigint> {
   // Two minutes of slack before the deploy: reading a little too early is harmless, too late would lose events.
-  startBlockCache ??= await blockAtOrAfter(dep.deployedAt - 120, head);
+  startBlockCache ??= await blockAtOrAfter(client, dep.deployedAt - 120, head);
   return startBlockCache;
 }
 
