@@ -180,8 +180,10 @@ contract CounterVault is ICounterVault, ERC20Upgradeable, DelayedUpgrade {
     // ---------------------------------------------------------------- settlement
 
     /// Permissionless. Processes up to `maxRequests` that have seen a new mark since they were requested.
+    /// Does nothing while a market with open interest has no trustworthy mark: NAV would be wrong.
     function settle(uint256 maxRequests) external {
         _requireLinked();
+        if (!exchange.navPricesFresh()) return;
         uint256 epoch = exchange.markEpoch();
         uint256 budget = maxRequests;
 
