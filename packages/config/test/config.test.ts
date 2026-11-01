@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { Status } from '@plankton/core';
+import { RUNGS, Status } from '@plankton/core';
 import { MIN_CALENDAR_HORIZON_DAYS, eligibilityMode, loadCalendar, loadEnv, loadMarketData, loadMarkets, need, urlList } from '../src/index.ts';
 
 describe('settings', () => {
@@ -43,12 +43,12 @@ describe('settings', () => {
 describe('market list', () => {
   test('the shipped markets.json is valid and within its rung', () => {
     const { rung, markets } = loadMarkets();
-    expect(rung).toBe('R0');
     expect(markets.length).toBeGreaterThan(0);
-    expect(markets.length).toBeLessThanOrEqual(4);
+    expect(markets.length).toBeLessThanOrEqual(RUNGS[rung].maxMarkets);
     for (const m of markets) {
       expect(m.stockToken).toMatch(/^0x[0-9a-fA-F]{40}$/);
-      expect(m.chainlinkFeed).toMatch(/^0x[0-9a-fA-F]{40}$/);
+      // A feed is optional (most sub-$2B names have none), but when given it must be an address.
+      if (m.chainlinkFeed !== undefined) expect(m.chainlinkFeed).toMatch(/^0x[0-9a-fA-F]{40}$/);
     }
   });
 });

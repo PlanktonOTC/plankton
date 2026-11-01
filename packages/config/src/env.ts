@@ -19,6 +19,8 @@ const schema = z.object({
   SIGNER_MAX_NOTIONAL_PER_DAY_USDG: z.coerce.bigint().default(10_000_000_000_000n),
   /** Hard cap on how far a mark may sit from this signer's own Chainlink read before it refuses to sign. */
   SIGNER_MARK_MAX_DEV_BPS: z.coerce.number().default(1_000),
+  /** Market with no Chainlink feed: how far an Open/Extended mark may sit from this signer's own Robinhood read. */
+  SIGNER_SINGLE_SOURCE_MAX_DEV_BPS: z.coerce.number().default(200),
   SIGNER_TLS_CERT: z.string().optional(),
   SIGNER_TLS_KEY: z.string().optional(),
   SIGNER_TLS_CA: z.string().optional(),

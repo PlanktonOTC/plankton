@@ -38,7 +38,9 @@ const marketsFile = z.object({
       symbol: z.string().min(1),
       class: z.enum(['micro', 'small', 'smid', 'index']),
       stockToken: address,
-      chainlinkFeed: address,
+      /** Omit for a market Chainlink does not cover: it is priced from Robinhood's quote alone (single source) and every
+       *  on-chain mark needs a quorum of signers. */
+      chainlinkFeed: address.optional(),
       enabled: z.boolean().default(true),
       /** Max spread between Chainlink and Robinhood for the mark to be openable. Default 150 bps. */
       agreeBps: z.number().int().positive().optional(),
