@@ -395,9 +395,12 @@ library ExchangeLib {
     ) private view {
         uint256 posNotional = M.notional(M.abs(p.size), t.exec);
         if (t.maxLev == 0 || t.maxLev > prof.maxLeverageE18) revert LeverageTooHigh();
-        if (posNotional * E18 > uint256(p.margin) * t.maxLev) revert LeverageTooHigh();
+        // Leverage on equity, not margin: adding to a losing position cannot exceed the cap.
+        int256 equity = int256(uint256(p.margin)) + M.pnl(p.size > 0, p.entry, t.exec, M.abs(p.size));
+        if (equity <= 0 || posNotional * E18 > uint256(equity) * t.maxLev) revert LeverageTooHigh();
 
         if (posNotional > V * d.cfg.positionBpsOfV / BPS) revert PositionTooLarge();
+        if (guard && posNotional > V * d.cfg.openGuardPositionBpsOfV / BPS) revert PositionTooLarge();
         if (prof.perWallet) {
             if (s.walletNotional[t.trader] > V * prof.maxPositionBpsOfV / BPS) revert WalletLimit();
         } else if (posNotional > V * prof.maxPositionBpsOfV / BPS) {
