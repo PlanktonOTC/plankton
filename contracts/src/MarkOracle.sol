@@ -17,6 +17,8 @@ contract MarkOracle is IMarkOracle, EIP712, Ownable2Step {
     uint8 public constant MAX_SIGNERS = 3;
     uint256 private constant BPS = 10_000;
     uint256 private constant CLOCK_SKEW = 5; // seconds of tolerated future observedAt
+    /// Largest sequence step one publish may take. The publisher steps by 1 and skips only failed attempts.
+    uint64 public constant MAX_SEQUENCE_GAP = 1_000_000;
 
     struct PendingConfig {
         OracleConfig config;
@@ -35,6 +37,7 @@ contract MarkOracle is IMarkOracle, EIP712, Ownable2Step {
 
     error NotConfigured();
     error StaleSequence();
+    error SequenceGap();
     error Expired();
     error TooOld();
     error FutureObservation();
@@ -69,6 +72,9 @@ contract MarkOracle is IMarkOracle, EIP712, Ownable2Step {
         if (a.observedAt > block.timestamp + CLOCK_SKEW) revert FutureObservation();
         if (block.timestamp > uint256(a.observedAt) + c.maxAgeSec) revert TooOld();
         if (a.markE18 == 0 || a.status == Status.Unset) revert BadAttestation();
+
+        // A leaked key could otherwise publish sequence 2^64-1 and freeze the market for good.
+        if (a.sequence - m.sequence > MAX_SEQUENCE_GAP) revert SequenceGap();
 
         uint256 valid = _countSigners(a, sigs);
         if (valid == 0) revert BadSignature();
