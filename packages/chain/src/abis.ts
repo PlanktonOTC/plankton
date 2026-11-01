@@ -1966,6 +1966,19 @@ export const exchangeAbi = [
   },
   {
     "type": "function",
+    "name": "hasOpenInterest",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "initialize",
     "inputs": [
       {
