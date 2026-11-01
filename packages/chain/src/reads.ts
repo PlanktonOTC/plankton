@@ -33,11 +33,13 @@ export interface MarketSnapshot {
   navUsdg: bigint;
   deleveraging: boolean;
   totalAbsNet: bigint;
+  /** Unix seconds the market last entered Open on-chain: the contract's open guard runs from here. */
+  openSince: bigint;
 }
 
 /** Everything the quote builder needs about one market, in a single multicall. */
 export async function readMarket(client: ChainClient, dep: Deployment, marketId: Hex): Promise<MarketSnapshot> {
-  const [mark, cfg, info, navUsdg, deleveraging, totalAbsNet] = await client.multicall({
+  const [mark, cfg, info, navUsdg, deleveraging, totalAbsNet, refs] = await client.multicall({
     allowFailure: false,
     contracts: [
       { address: dep.oracle, abi: oracleAbi, functionName: 'markOf', args: [marketId] },
@@ -46,6 +48,7 @@ export async function readMarket(client: ChainClient, dep: Deployment, marketId:
       { address: dep.vault, abi: vaultAbi, functionName: 'navUsdg' },
       { address: dep.vault, abi: vaultAbi, functionName: 'deleveraging' },
       { address: dep.exchange, abi: exchangeAbi, functionName: 'totalAbsNet' },
+      { address: dep.oracle, abi: oracleAbi, functionName: 'referencesOf', args: [marketId] },
     ],
   });
   const [longOI, shortOI, longSize, shortSize, badDebt] = info;
@@ -60,6 +63,7 @@ export async function readMarket(client: ChainClient, dep: Deployment, marketId:
     navUsdg,
     deleveraging,
     totalAbsNet,
+    openSince: BigInt(refs[2]),
   };
 }
 
