@@ -131,7 +131,8 @@ abstract contract Base is Test {
             chainlinkMaxAgeSec: 90_000,
             liqAgreementBps: 100,
             reanchorConfirmations: 3,
-            quorumOutsideBand: 2
+            quorumOutsideBand: 2,
+            heldBandBps: 100
         });
     }
 
