@@ -10,7 +10,14 @@ import {Exchange} from "../src/Exchange.sol";
 import {FeeRouter} from "../src/FeeRouter.sol";
 import {PayoutDesk} from "../src/PayoutDesk.sol";
 import {BackstopFund, FirstLossTranche} from "../src/Reserves.sol";
-import {IBackstopFund, ICounterVault, IFirstLossTranche, IFeeRouter, IMarkOracle, IPayoutDesk} from "../src/interfaces/Interfaces.sol";
+import {
+    IBackstopFund,
+    ICounterVault,
+    IFirstLossTranche,
+    IFeeRouter,
+    IMarkOracle,
+    IPayoutDesk
+} from "../src/interfaces/Interfaces.sol";
 import {MarketConfig, MarketState, Position, SessionProfile} from "../src/ExchangeTypes.sol";
 import {ExchangeMath as M} from "../src/ExchangeMath.sol";
 import {MockUSDG, MockFeed} from "./mocks/Mocks.sol";
@@ -60,7 +67,11 @@ abstract contract Base is Test {
         oracle = new MarkOracle(owner, markSigners);
 
         vault = CounterVault(
-            address(new ERC1967Proxy(address(new CounterVault()), abi.encodeCall(CounterVault.initialize, (IERC20(address(usdg)), owner))))
+            address(
+                new ERC1967Proxy(
+                    address(new CounterVault()), abi.encodeCall(CounterVault.initialize, (IERC20(address(usdg)), owner))
+                )
+            )
         );
         backstop = new BackstopFund(IERC20(address(usdg)), owner);
         firstLoss = new FirstLossTranche(IERC20(address(usdg)), owner);
@@ -87,7 +98,11 @@ abstract contract Base is Test {
             payoutDesk: IPayoutDesk(address(desk))
         });
         exchange = Exchange(
-            address(new ERC1967Proxy(address(new Exchange()), abi.encodeCall(Exchange.initialize, (owner, deps, quoteSigners))))
+            address(
+                new ERC1967Proxy(
+                    address(new Exchange()), abi.encodeCall(Exchange.initialize, (owner, deps, quoteSigners))
+                )
+            )
         );
 
         vm.startPrank(owner);
@@ -161,8 +176,13 @@ abstract contract Base is Test {
 
     // ------------------------------------------------------------------ oracle helpers
 
-    function attest(uint256 price, IMarkOracle.Status st, uint16 conf) internal returns (IMarkOracle.Attestation memory) {
-        return IMarkOracle.Attestation(ID, price, price, conf, st, ++seq, uint64(block.timestamp), uint64(block.timestamp + 120));
+    function attest(uint256 price, IMarkOracle.Status st, uint16 conf)
+        internal
+        returns (IMarkOracle.Attestation memory)
+    {
+        return IMarkOracle.Attestation(
+            ID, price, price, conf, st, ++seq, uint64(block.timestamp), uint64(block.timestamp + 120)
+        );
     }
 
     function sign(uint256 pk, IMarkOracle.Attestation memory a) internal view returns (bytes memory) {
@@ -234,7 +254,10 @@ abstract contract Base is Test {
         }
         uint256 spread = c.profiles[uint8(mk.status)].extraSpreadBps;
         (,, uint64 since) = oracle.referencesOf(ID);
-        if (mk.status == IMarkOracle.Status.Open && c.openGuardSec != 0 && block.timestamp < uint256(since) + c.openGuardSec) {
+        if (
+            mk.status == IMarkOracle.Status.Open && c.openGuardSec != 0
+                && block.timestamp < uint256(since) + c.openGuardSec
+        ) {
             spread += c.openGuardSpreadBps;
         }
         return spread;
@@ -266,7 +289,18 @@ abstract contract Base is Test {
 
     function quoteSig(Exchange.TradeQuote memory q) internal view returns (bytes memory) {
         bytes32 structHash = keccak256(
-            abi.encode(QUOTE_TYPEHASH, q.marketId, q.trader, q.sizeDeltaE18, q.execPriceE18, q.feeUsdg, q.maxLeverageE18, q.markSequence, q.nonce, q.expiry)
+            abi.encode(
+                QUOTE_TYPEHASH,
+                q.marketId,
+                q.trader,
+                q.sizeDeltaE18,
+                q.execPriceE18,
+                q.feeUsdg,
+                q.maxLeverageE18,
+                q.markSequence,
+                q.nonce,
+                q.expiry
+            )
         );
         bytes32 domain = keccak256(
             abi.encode(

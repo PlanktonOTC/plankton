@@ -33,7 +33,12 @@ contract AgreementTest is Test {
         uint256 n = _n("skewFill");
         assertGt(n, 100, "vectors were generated");
         for (uint256 i; i < n; ++i) {
-            uint256 got = M.skewFill(_u("skewFill", i, "mark"), _i("skewFill", i, "before"), _i("skewFill", i, "after"), _u("skewFill", i, "scale"));
+            uint256 got = M.skewFill(
+                _u("skewFill", i, "mark"),
+                _i("skewFill", i, "before"),
+                _i("skewFill", i, "after"),
+                _u("skewFill", i, "scale")
+            );
             assertEq(got, _u("skewFill", i, "expected"), string.concat("skew fill vector ", vm.toString(i)));
         }
     }
@@ -42,7 +47,11 @@ contract AgreementTest is Test {
         uint256 n = _n("notional");
         assertGt(n, 10);
         for (uint256 i; i < n; ++i) {
-            assertEq(M.notional(_u("notional", i, "size"), _u("notional", i, "price")), _u("notional", i, "expected"), string.concat("notional vector ", vm.toString(i)));
+            assertEq(
+                M.notional(_u("notional", i, "size"), _u("notional", i, "price")),
+                _u("notional", i, "expected"),
+                string.concat("notional vector ", vm.toString(i))
+            );
         }
     }
 
@@ -60,7 +69,11 @@ contract AgreementTest is Test {
         uint256 n = _n("fractionClose");
         assertGt(n, 10);
         for (uint256 i; i < n; ++i) {
-            assertEq(M.fractionClose(_i("fractionClose", i, "size"), _u("fractionClose", i, "bps")), _i("fractionClose", i, "expected"), string.concat("close vector ", vm.toString(i)));
+            assertEq(
+                M.fractionClose(_i("fractionClose", i, "size"), _u("fractionClose", i, "bps")),
+                _i("fractionClose", i, "expected"),
+                string.concat("close vector ", vm.toString(i))
+            );
         }
     }
 
@@ -69,7 +82,11 @@ contract AgreementTest is Test {
         assertGt(n, 5);
         for (uint256 i; i < n; ++i) {
             // The contract takes fee = notional * feeBps / 10,000, the same as the backend's tradeFeeUsdg.
-            assertEq(_u("fee", i, "notional") * _u("fee", i, "bps") / 10_000, _u("fee", i, "expected"), string.concat("fee vector ", vm.toString(i)));
+            assertEq(
+                _u("fee", i, "notional") * _u("fee", i, "bps") / 10_000,
+                _u("fee", i, "expected"),
+                string.concat("fee vector ", vm.toString(i))
+            );
         }
     }
 

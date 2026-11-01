@@ -56,7 +56,14 @@ contract AuditFixesTest is Base {
         vm.prank(owner);
         oracle.scheduleConfig(id2, oracleConfig());
         IMarkOracle.Attestation memory a = IMarkOracle.Attestation(
-            id2, 100e18, 100e18, 25, IMarkOracle.Status.Weekend, 1, uint64(block.timestamp), uint64(block.timestamp + 120)
+            id2,
+            100e18,
+            100e18,
+            25,
+            IMarkOracle.Status.Weekend,
+            1,
+            uint64(block.timestamp),
+            uint64(block.timestamp + 120)
         );
         bytes[] memory one = sigs(a, false);
         vm.expectRevert(abi.encodeWithSelector(MarkOracle.QuorumRequired.selector, 1, 2));
@@ -167,12 +174,34 @@ contract AuditFixesTest is Base {
 
     function _orderSig(Exchange.Order memory o) internal view returns (bytes memory) {
         bytes32 structHash = keccak256(
-            abi.encode(ORDER_TYPEHASH, o.marketId, o.trader, o.kind, o.sizeDeltaE18, o.sizeBps, o.triggerE18, o.triggerAbove, o.reduceOnly, o.maxSlippageBps, o.marginUsdg, o.validAfter, o.expiry, o.nonce)
+            abi.encode(
+                ORDER_TYPEHASH,
+                o.marketId,
+                o.trader,
+                o.kind,
+                o.sizeDeltaE18,
+                o.sizeBps,
+                o.triggerE18,
+                o.triggerAbove,
+                o.reduceOnly,
+                o.maxSlippageBps,
+                o.marginUsdg,
+                o.validAfter,
+                o.expiry,
+                o.nonce
+            )
         );
         bytes32 domain = keccak256(
-            abi.encode(keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"), keccak256("PlanktonExchange"), keccak256("1"), block.chainid, address(exchange))
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256("PlanktonExchange"),
+                keccak256("1"),
+                block.chainid,
+                address(exchange)
+            )
         );
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(PK_TRADER, keccak256(abi.encodePacked("\x19\x01", domain, structHash)));
+        (uint8 v, bytes32 r, bytes32 s) =
+            vm.sign(PK_TRADER, keccak256(abi.encodePacked("\x19\x01", domain, structHash)));
         return abi.encodePacked(r, s, v);
     }
 

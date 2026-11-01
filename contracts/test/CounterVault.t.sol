@@ -26,7 +26,11 @@ contract CounterVaultTest is Test {
         ex = new MockExchangeView();
         desk = new PayoutDesk(owner);
         vault = CounterVault(
-            address(new ERC1967Proxy(address(new CounterVault()), abi.encodeCall(CounterVault.initialize, (IERC20(address(usdg)), owner))))
+            address(
+                new ERC1967Proxy(
+                    address(new CounterVault()), abi.encodeCall(CounterVault.initialize, (IERC20(address(usdg)), owner))
+                )
+            )
         );
         vm.startPrank(owner);
         vault.link(IExchangeCounterView(address(ex)), IPayoutDesk(address(desk)));
@@ -57,7 +61,7 @@ contract CounterVaultTest is Test {
 
         vault.settle(10); // no new mark yet
         assertEq(vault.balanceOf(alice), 0, "same mark: nothing settles");
-        (, , bool done,,,,,) = vault.requests(id);
+        (,, bool done,,,,,) = vault.requests(id);
         assertFalse(done);
 
         ex.bump();
@@ -76,7 +80,9 @@ contract CounterVaultTest is Test {
         _deposit(alice, 10_000e6);
         deal(address(usdg), address(vault), usdg.balanceOf(address(vault)) + 10_000e6); // trading profit doubles NAV
         _deposit(bob, 10_000e6);
-        assertApproxEqRel(vault.balanceOf(bob) * 2, vault.balanceOf(alice), 0.001e18, "half as many shares for the same money");
+        assertApproxEqRel(
+            vault.balanceOf(bob) * 2, vault.balanceOf(alice), 0.001e18, "half as many shares for the same money"
+        );
     }
 
     function test_depositUsesTheWorseOfTheRequestAndSettlePrices() public {
@@ -141,7 +147,7 @@ contract CounterVaultTest is Test {
         // Both asked for the same amount, so both are filled in the same proportion: $2,500 each.
         assertApproxEqAbs(usdg.balanceOf(alice), 1_000_000e6 - 10_000e6 + 2_500e6, 2e6);
         assertApproxEqAbs(usdg.balanceOf(bob), 1_000_000e6 - 10_000e6 + 2_500e6, 2e6);
-        (, , bool done,,,,,) = vault.requests(ida);
+        (,, bool done,,,,,) = vault.requests(ida);
         assertFalse(done, "the rest of the request stays pending, never cancelled");
     }
 

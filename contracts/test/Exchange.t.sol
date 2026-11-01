@@ -66,7 +66,8 @@ contract ExchangeTest is Base {
                 deadline
             )
         );
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(PK_TRADER, keccak256(abi.encodePacked("\x19\x01", usdg.DOMAIN_SEPARATOR(), structHash)));
+        (uint8 v, bytes32 r, bytes32 s) =
+            vm.sign(PK_TRADER, keccak256(abi.encodePacked("\x19\x01", usdg.DOMAIN_SEPARATOR(), structHash)));
 
         vm.prank(trader);
         usdg.approve(address(exchange), 0); // no standing approval: the permit must do the work
@@ -83,7 +84,9 @@ contract ExchangeTest is Base {
         vm.prank(trader);
         usdg.approve(address(exchange), amount);
         vm.prank(trader);
-        exchange.permitAndExecute(amount, block.timestamp + 600, 27, bytes32(uint256(1)), bytes32(uint256(2)), q, qs, 200e6);
+        exchange.permitAndExecute(
+            amount, block.timestamp + 600, 27, bytes32(uint256(1)), bytes32(uint256(2)), q, qs, 200e6
+        );
         assertEq(pos(trader).size, 5e18);
     }
 
@@ -132,12 +135,28 @@ contract ExchangeTest is Base {
         Exchange.TradeQuote memory q = quoteFor(trader, 2e18, 0);
         bytes32 structHash = keccak256(
             abi.encode(
-                keccak256("TradeQuote(bytes32 marketId,address trader,int256 sizeDeltaE18,uint256 execPriceE18,uint256 feeUsdg,uint64 maxLeverageE18,uint64 markSequence,uint64 nonce,uint64 expiry)"),
-                q.marketId, q.trader, q.sizeDeltaE18, q.execPriceE18, q.feeUsdg, q.maxLeverageE18, q.markSequence, q.nonce, q.expiry
+                keccak256(
+                    "TradeQuote(bytes32 marketId,address trader,int256 sizeDeltaE18,uint256 execPriceE18,uint256 feeUsdg,uint64 maxLeverageE18,uint64 markSequence,uint64 nonce,uint64 expiry)"
+                ),
+                q.marketId,
+                q.trader,
+                q.sizeDeltaE18,
+                q.execPriceE18,
+                q.feeUsdg,
+                q.maxLeverageE18,
+                q.markSequence,
+                q.nonce,
+                q.expiry
             )
         );
         bytes32 domain = keccak256(
-            abi.encode(keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"), keccak256("PlanktonExchange"), keccak256("1"), block.chainid, address(exchange))
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256("PlanktonExchange"),
+                keccak256("1"),
+                block.chainid,
+                address(exchange)
+            )
         );
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(0xBADBAD, keccak256(abi.encodePacked("\x19\x01", domain, structHash)));
         usdg.mint(trader, 1_000e6);
@@ -229,7 +248,9 @@ contract ExchangeTest is Base {
     }
 
     function test_netSkewCapStopsTheFifthLongButNotAShort() public {
-        for (uint256 i; i < 4; ++i) open(makeAddr(string.concat("long", vm.toString(i))), 9.5e18, 400e6); // 4 x ~$960 = ~$3,800
+        for (uint256 i; i < 4; ++i) {
+            open(makeAddr(string.concat("long", vm.toString(i))), 9.5e18, 400e6); // 4 x ~$960 = ~$3,800
+        }
         address fifth = makeAddr("long4");
         Exchange.TradeQuote memory q = quoteFor(fifth, 9.5e18, 0);
         bytes memory qs = quoteSig(q);
@@ -635,12 +656,34 @@ contract ExchangeTest is Base {
 
     function _orderSig(Exchange.Order memory o) internal view returns (bytes memory) {
         bytes32 structHash = keccak256(
-            abi.encode(ORDER_TYPEHASH, o.marketId, o.trader, o.kind, o.sizeDeltaE18, o.sizeBps, o.triggerE18, o.triggerAbove, o.reduceOnly, o.maxSlippageBps, o.marginUsdg, o.validAfter, o.expiry, o.nonce)
+            abi.encode(
+                ORDER_TYPEHASH,
+                o.marketId,
+                o.trader,
+                o.kind,
+                o.sizeDeltaE18,
+                o.sizeBps,
+                o.triggerE18,
+                o.triggerAbove,
+                o.reduceOnly,
+                o.maxSlippageBps,
+                o.marginUsdg,
+                o.validAfter,
+                o.expiry,
+                o.nonce
+            )
         );
         bytes32 domain = keccak256(
-            abi.encode(keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"), keccak256("PlanktonExchange"), keccak256("1"), block.chainid, address(exchange))
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256("PlanktonExchange"),
+                keccak256("1"),
+                block.chainid,
+                address(exchange)
+            )
         );
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(PK_TRADER, keccak256(abi.encodePacked("\x19\x01", domain, structHash)));
+        (uint8 v, bytes32 r, bytes32 s) =
+            vm.sign(PK_TRADER, keccak256(abi.encodePacked("\x19\x01", domain, structHash)));
         return abi.encodePacked(r, s, v);
     }
 
@@ -745,7 +788,9 @@ contract ExchangeTest is Base {
     function test_theCrowdedSidePaysBorrowOverTime() public {
         address crowded = makeAddr("L0");
         open(crowded, 9.5e18, 400e6);
-        for (uint256 i = 1; i < 4; ++i) open(makeAddr(string.concat("L", vm.toString(i))), 9.5e18, 400e6); // net ~ $3,800 of a $4,000 cap
+        for (uint256 i = 1; i < 4; ++i) {
+            open(makeAddr(string.concat("L", vm.toString(i))), 9.5e18, 400e6); // net ~ $3,800 of a $4,000 cap
+        }
 
         uint256 marginBefore = pos(crowded).margin;
         skip(1 hours);
@@ -838,7 +883,9 @@ contract ExchangeTest is Base {
         exchange.scheduleMarket(extra, marketConfig());
         vm.stopPrank();
         skip(24 hours);
-        for (uint256 i = 1; i < 64; ++i) exchange.applyMarket(keccak256(abi.encode("m", i)));
+        for (uint256 i = 1; i < 64; ++i) {
+            exchange.applyMarket(keccak256(abi.encode("m", i)));
+        }
         assertEq(exchange.marketCount(), 64);
         vm.expectRevert(Exchange.TooManyMarkets.selector);
         exchange.applyMarket(extra);
@@ -897,7 +944,11 @@ contract ExchangeTest is Base {
 
     /// The Exchange holds exactly the traders' free collateral plus their position margins: nothing else.
     function _assertExchangeSolvent() internal view {
-        assertEq(usdg.balanceOf(address(exchange)), exchange.collateral(trader) + pos(trader).margin, "exchange balance == collateral + margin");
+        assertEq(
+            usdg.balanceOf(address(exchange)),
+            exchange.collateral(trader) + pos(trader).margin,
+            "exchange balance == collateral + margin"
+        );
     }
 
     function testFuzz_roundTripKeepsTheExchangeSolvent(uint256 sizeSeed, uint256 movePct, bool long) public {
@@ -1001,7 +1052,7 @@ contract ExchangePayoutTest is Base {
         skip(61);
         setPrice(120e18);
         reduce(whale, 10_000);
-        (, , uint64 claimableAt,,) = desk.claims(1);
+        (,, uint64 claimableAt,,) = desk.claims(1);
         vm.prank(guardian);
         vm.expectRevert(PayoutDesk.BadFreeze.selector);
         desk.freeze(1, claimableAt + 73 hours);
