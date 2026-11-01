@@ -214,6 +214,14 @@ library ExchangeLib {
         return true;
     }
 
+    function hasOpenInterest(State storage s) external view returns (bool) {
+        for (uint256 i; i < s.marketIds.length; ++i) {
+            Market storage d = s.markets[s.marketIds[i]];
+            if ((d.longSize | d.shortSize) != 0) return true;
+        }
+        return false;
+    }
+
     /// Cash the Counter must keep against its net exposure; not available for withdrawals.
     function counterReserve(State storage s) external view returns (uint256 reserve) {
         for (uint256 i; i < s.marketIds.length; ++i) {

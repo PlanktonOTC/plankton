@@ -52,6 +52,16 @@ contract MockExchangeView {
         return fresh;
     }
 
+    bool public openInterest = true;
+
+    function setOpenInterest(bool v) external {
+        openInterest = v;
+    }
+
+    function hasOpenInterest() external view returns (bool) {
+        return openInterest;
+    }
+
     function bump() external {
         ++epoch;
     }

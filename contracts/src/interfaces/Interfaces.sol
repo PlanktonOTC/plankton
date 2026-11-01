@@ -90,6 +90,8 @@ interface IExchangeCounterView {
     function counterReserveUsdg() external view returns (uint256);
     /// False while any market with open interest has no mark, a set breaker or a stale mark: the vault does not settle on it.
     function navPricesFresh() external view returns (bool);
+    /// True while any market has an open position. With none, NAV cannot move, so LP requests settle without a new mark.
+    function hasOpenInterest() external view returns (bool);
 }
 
 interface IPayoutDesk {

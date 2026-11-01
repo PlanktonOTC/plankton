@@ -314,6 +314,10 @@ contract Exchange is IExchangeCounterView, EIP712Upgradeable, DelayedUpgrade {
         return ExchangeLib.navPricesFresh(s);
     }
 
+    function hasOpenInterest() external view returns (bool) {
+        return ExchangeLib.hasOpenInterest(s);
+    }
+
     function referrerOf(address trader) external view returns (address) {
         return s.referrer[trader];
     }

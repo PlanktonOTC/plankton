@@ -186,23 +186,25 @@ contract CounterVault is ICounterVault, ERC20Upgradeable, DelayedUpgrade {
 
     // ---------------------------------------------------------------- settlement
 
-    /// Permissionless. Processes up to `maxRequests` that have seen a new mark since they were requested.
+    /// Permissionless. Processes up to `maxRequests` that have seen a new mark since they were requested, or all of them
+    /// at once while nobody holds a position (NAV cannot move then, so an LP can exit even if no mark is ever published).
     /// Does nothing while a market with open interest has no trustworthy mark: NAV would be wrong.
     function settle(uint256 maxRequests) external {
         _requireLinked();
         if (!exchange.navPricesFresh()) return;
         uint256 epoch = exchange.markEpoch();
+        bool flat = !exchange.hasOpenInterest();
         uint256 budget = maxRequests;
 
         while (budget > 0 && _depositHead < _depositQueue.length) {
             uint256 id = _depositQueue[_depositHead];
             Request storage r = requests[id];
-            if (epoch <= r.epoch) break;
+            if (epoch <= r.epoch && !flat) break;
             _settleDeposit(id, r);
             ++_depositHead;
             --budget;
         }
-        _settleWithdrawals(epoch, budget);
+        _settleWithdrawals(epoch, budget, flat);
     }
 
     function _settleDeposit(uint256 id, Request storage r) private {
@@ -216,7 +218,7 @@ contract CounterVault is ICounterVault, ERC20Upgradeable, DelayedUpgrade {
         emit Settled(id, r.owner, true, r.amount, shares);
     }
 
-    function _settleWithdrawals(uint256 epoch, uint256 budget) private {
+    function _settleWithdrawals(uint256 epoch, uint256 budget, bool flat) private {
         while (_withdrawHead < _withdrawQueue.length && requests[_withdrawQueue[_withdrawHead]].done) ++_withdrawHead;
         if (budget == 0) return;
 
@@ -228,7 +230,7 @@ contract CounterVault is ICounterVault, ERC20Upgradeable, DelayedUpgrade {
         for (uint256 i = _withdrawHead; i < _withdrawQueue.length && n < budget; ++i) {
             Request storage r = requests[_withdrawQueue[i]];
             if (r.done) continue;
-            if (epoch <= r.epoch) break;
+            if (epoch <= r.epoch && !flat) break;
             uint256 price = r.npsE18 < nps ? r.npsE18 : nps; // worse of the two prices for the withdrawer
             ids[n] = _withdrawQueue[i];
             want[n] = (uint256(r.amount) - r.filled) * price / E18;
