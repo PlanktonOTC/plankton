@@ -221,8 +221,29 @@ abstract contract Base is Test {
         return marketConfig().skewScaleE18;
     }
 
-    /// A quote at exactly the minimum price the contract accepts for the trader (skew-impact price plus a spread).
+    /// Spread the contract charges this trade on top of the skew price: the session's (and open guard's) for opens,
+    /// the frozen spread for closes in a frozen, halted or close-only market.
+    function requiredSpread(address who, int256 size) internal view returns (uint256) {
+        IMarkOracle.Mark memory mk = oracle.markOf(ID);
+        MarketConfig memory c = exchange.configOf(ID);
+        int256 cur = exchange.positionOf(who, ID).size;
+        if (M.isReducing(cur, size)) {
+            bool frozen = mk.status == IMarkOracle.Status.Frozen || mk.status == IMarkOracle.Status.Halted
+                || c.state != MarketState.Active;
+            return frozen ? c.frozenSpreadBps : 0;
+        }
+        uint256 spread = c.profiles[uint8(mk.status)].extraSpreadBps;
+        (,, uint64 since) = oracle.referencesOf(ID);
+        if (mk.status == IMarkOracle.Status.Open && c.openGuardSec != 0 && block.timestamp < uint256(since) + c.openGuardSec) {
+            spread += c.openGuardSpreadBps;
+        }
+        return spread;
+    }
+
+    /// A quote at exactly the minimum price the contract accepts for the trader: skew-impact price, plus the spread the
+    /// contract requires, plus `spreadBps` more.
     function quoteFor(address who, int256 size, uint256 spreadBps) internal returns (Exchange.TradeQuote memory q) {
+        spreadBps += requiredSpread(who, size);
         IMarkOracle.Mark memory mk = oracle.markOf(ID);
         (uint128 l, uint128 sh,,,) = exchange.marketInfo(ID);
         int256 before_ = (int256(uint256(l)) - int256(uint256(sh))) * 1e12;
