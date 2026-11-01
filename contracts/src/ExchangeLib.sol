@@ -198,6 +198,8 @@ library ExchangeLib {
         if (t.checkPrice) {
             if (mk.priceE18 == 0) revert NoMark();
             if (t.markSeq > mk.sequence) revert FutureMark();
+            // A quoted trade needs a current mark; with a stale one the exit is closeAtMark.
+            if (block.timestamp > uint256(mk.updatedAt) + d.cfg.maxMarkAgeSec) revert StaleMark();
         }
 
         uint256 V = s.vault.navUsdg();
