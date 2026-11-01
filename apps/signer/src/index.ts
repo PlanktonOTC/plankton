@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { Hono } from 'hono';
 import pino from 'pino';
 import { privateKeyToAccount } from 'viem/accounts';
-import { loadDeployment, loadEnv, need } from '@plankton/config';
+import { loadDeployment, loadEnv, loadMarkets, need } from '@plankton/config';
+import { fetchRhAssets, fetchRhPrices, rhReading } from '@plankton/ingest';
 import {
   attestationTypes,
   attestationWire,
@@ -12,7 +13,9 @@ import {
   exchangeAbi,
   exchangeDomain,
   markDomain,
+  marketIdFor,
   oracleAbi,
+  ROBINHOOD_CHAIN_ID,
   quoteTypes,
   quoteWire,
 } from '@plankton/chain';
@@ -40,6 +43,21 @@ const tls =
       }
     : undefined;
 if (env.NODE_ENV === 'production' && !tls) throw new Error('production needs SIGNER_TLS_CERT, SIGNER_TLS_KEY and SIGNER_TLS_CA (mTLS)');
+
+// Markets Chainlink does not cover, by marketId. Their marks have no on-chain fence, so this key checks each one
+// against its own Robinhood read before signing: the quorum is then two independent checks, not two rubber stamps.
+const singleSource = new Map(
+  loadMarkets()
+    .markets.filter((m) => !m.chainlinkFeed)
+    .map((m) => [marketIdFor(m.symbol, m.stockToken as `0x${string}`).toLowerCase(), m]),
+);
+let rhCache: { at: number; read: Promise<[Awaited<ReturnType<typeof fetchRhPrices>>, Awaited<ReturnType<typeof fetchRhAssets>>]> } | null = null;
+const rhNow = () => {
+  if (!rhCache || Date.now() - rhCache.at > 10_000) {
+    rhCache = { at: Date.now(), read: Promise.all([fetchRhPrices(env.RH_API_BASE), fetchRhAssets(env.RH_API_BASE)]) };
+  }
+  return rhCache.read;
+};
 
 // Deadlines are judged against chain time, because that is what the contracts compare them to.
 const nowSec = async () => Number(await chainTimeSec(client));
@@ -129,6 +147,13 @@ app.post('/sign/mark', async (c) => {
   if (a.status === 1 || a.status === 2) {
     const [cl, clAt] = await client.readContract({ address: dep.oracle, abi: oracleAbi, functionName: 'chainlinkPrice', args: [a.marketId] });
     if (clAt !== 0n && diffBps(a.markE18, cl) > BigInt(env.SIGNER_MARK_MAX_DEV_BPS)) return reject('mark too far from Chainlink');
+    const m = singleSource.get(a.marketId.toLowerCase());
+    if (m) {
+      const [quotes, assets] = await rhNow().catch(() => [[], []] as [never[], never[]]);
+      const own = rhReading(m.symbol, m.stockToken, ROBINHOOD_CHAIN_ID, quotes, assets).observation;
+      if (!own) return reject('no Robinhood quote of my own to check this mark against');
+      if (diffBps(a.markE18, own.priceE18) > BigInt(env.SIGNER_SINGLE_SOURCE_MAX_DEV_BPS)) return reject('mark too far from my Robinhood read');
+    }
   }
   lastMarkSequence.set(a.marketId, a.sequence);
 
