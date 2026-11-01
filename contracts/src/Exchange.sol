@@ -5,6 +5,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import {DelayedUpgrade} from "./DelayedUpgrade.sol";
 import {MarketState, MarketConfig, Market, PendingMarket, Position, Trade, State} from "./ExchangeTypes.sol";
@@ -225,8 +226,12 @@ contract Exchange is IExchangeCounterView, EIP712Upgradeable, DelayedUpgrade {
     function executeOrder(Order calldata o, bytes calldata traderSig, TradeQuote calldata q, bytes calldata quoteSig)
         external
     {
-        if (ECDSA.recover(_hashOrder(o), traderSig) != o.trader) revert BadSigner();
+        // EOA or smart-contract wallet (ERC-1271).
+        if (!SignatureChecker.isValidSignatureNow(o.trader, _hashOrder(o), traderSig)) revert BadSigner();
         if (block.timestamp < o.validAfter || block.timestamp > o.expiry) revert OrderNotActive();
+        // A take-profit or stop-loss belongs to the position it was placed on. Once that position has closed, it must
+        // not fire on a later one in the same market.
+        if ((o.reduceOnly || o.sizeBps > 0) && o.validAfter <= s.closedAt[o.trader][o.marketId]) revert OrderNotActive();
         if (o.nonce < orderNonceFloor[o.trader] || usedOrderNonce[o.trader][o.nonce]) revert NonceUsed();
         if (q.marketId != o.marketId || q.trader != o.trader) revert OrderMismatch();
         usedOrderNonce[o.trader][o.nonce] = true;
