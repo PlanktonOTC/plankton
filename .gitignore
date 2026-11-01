@@ -16,3 +16,8 @@ AGENTS.md
 # Notes, research and handoff docs stay local. Only the root README is published.
 *.md
 !/README.md
+
+# Design-reference capture and delivery packaging from the website handoff
+web/reference/
+web/DELIVERY-MANIFEST.json
+web/tools/package-delivery.mjs

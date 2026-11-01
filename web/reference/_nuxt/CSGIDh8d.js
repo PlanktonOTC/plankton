@@ -1,1 +1,0 @@
-import{d as t,e as l,f as n}from"./DC05YFLF.js";const o={width:"24",height:"24",viewBox:"0 0 24 24",fill:"none",xmlns:"http://www.w3.org/2000/svg"};function r(d,e){return t(),l("svg",o,e[0]||(e[0]=[n("path",{"fill-rule":"evenodd","clip-rule":"evenodd",d:"M2.5 10.5H21.5V13.5H2.5V10.5Z",fill:"black"},null,-1)]))}const s={render:r};export{s as default,r as render};

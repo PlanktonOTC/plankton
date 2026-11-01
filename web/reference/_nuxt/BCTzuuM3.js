@@ -1,1 +1,0 @@
-import{d as t,e as o,f as n}from"./DC05YFLF.js";const r={width:"24",height:"24",viewBox:"0 0 24 24",fill:"none",xmlns:"http://www.w3.org/2000/svg"};function s(l,e){return t(),o("svg",r,e[0]||(e[0]=[n("path",{d:"M20 12H4",stroke:"black","stroke-width":"3","stroke-linecap":"square","stroke-linejoin":"round"},null,-1)]))}const d={render:s};export{d as default,s as render};

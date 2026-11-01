@@ -1,1 +1,0 @@
-import{d as t,e as o,f as l}from"./DC05YFLF.js";const n={width:"24",height:"24",viewBox:"0 0 24 24",fill:"none",xmlns:"http://www.w3.org/2000/svg"};function r(s,e){return t(),o("svg",n,e[0]||(e[0]=[l("path",{d:"M19 12L5 20L5 4L19 12Z",fill:"black"},null,-1)]))}const d={render:r};export{d as default,r as render};
