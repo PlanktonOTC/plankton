@@ -42,6 +42,10 @@ export interface QuoteRequest {
   /** Current signed position size, E18 (0 when flat). */
   positionSizeE18: bigint;
   openGuard: boolean;
+  /** Extra spread while the open guard runs; defaults to OPEN_GUARD_EXTRA_SPREAD_BPS. Never below the contract's. */
+  openGuardSpreadBps?: number;
+  /** Ticket limit (bps of V) while the open guard runs; undefined = no extra limit. */
+  openGuardPositionBpsOfV?: number;
   profile: SessionProfileCfg;
   /** Sum of the wallet's open notionals across markets, for per-wallet (weekend) limits. */
   walletNotionalUsdg?: bigint;
@@ -91,12 +95,15 @@ export function buildTradeQuote(m: QuoteMarket, mark: QuoteMark, r: QuoteRequest
   const buy = r.sizeDeltaE18 > 0n;
   const tradeNotionalUsdg = notionalOf(r.sizeDeltaE18, mark.priceE18);
 
-  // Spread: frozen/close-only/halted closes pay the frozen spread, otherwise the session profile (plus open guard).
-  let spreadBps = r.profile.extraSpreadBps;
-  if (reducing && (mark.status === Status.Frozen || mark.status === Status.Halted || m.state !== MarketState.Active)) {
-    spreadBps = Math.max(spreadBps, m.frozenSpreadBps);
+  // Spread, exactly as the contract charges it: closes pay only the frozen spread, and only in a frozen, halted or
+  // close-only market; opens pay the session profile's spread plus the open guard's.
+  let spreadBps: number;
+  if (reducing) {
+    const frozen = mark.status === Status.Frozen || mark.status === Status.Halted || m.state !== MarketState.Active;
+    spreadBps = frozen ? m.frozenSpreadBps : 0;
+  } else {
+    spreadBps = r.profile.extraSpreadBps + (r.openGuard ? (r.openGuardSpreadBps ?? OPEN_GUARD_EXTRA_SPREAD_BPS) : 0);
   }
-  if (r.openGuard) spreadBps += OPEN_GUARD_EXTRA_SPREAD_BPS;
 
   if (!reducing) {
     if (m.state !== MarketState.Active) return fail('market_not_active', 'market is close-only or paused');
@@ -119,7 +126,10 @@ export function buildTradeQuote(m: QuoteMarket, mark: QuoteMark, r: QuoteRequest
       return fail('leverage_exceeded', `max leverage is ${levCap}x`);
     }
 
-    const posCapUsdg = r.profile.perWallet ? bpsOf(m.navUsdg, r.profile.maxPositionBpsOfV) : min2(m.caps.positionUsdg, bpsOf(m.navUsdg, r.profile.maxPositionBpsOfV));
+    let posCapUsdg = r.profile.perWallet ? bpsOf(m.navUsdg, r.profile.maxPositionBpsOfV) : min2(m.caps.positionUsdg, bpsOf(m.navUsdg, r.profile.maxPositionBpsOfV));
+    if (r.openGuard && r.openGuardPositionBpsOfV !== undefined && !r.profile.perWallet) {
+      posCapUsdg = min2(posCapUsdg, bpsOf(m.navUsdg, r.openGuardPositionBpsOfV));
+    }
     if (r.profile.perWallet) {
       if ((r.walletNotionalUsdg ?? 0n) + tradeNotionalUsdg > posCapUsdg) return fail('wallet_limit', 'weekend per-wallet allowance reached');
     } else if (newNotional > posCapUsdg) {
@@ -137,8 +147,8 @@ export function buildTradeQuote(m: QuoteMarket, mark: QuoteMark, r: QuoteRequest
   const base = skewFillPriceE18(mark.priceE18, skewBefore, skewBefore + signedNotionalE18, m.skewScaleE18);
   const execPriceE18 = (base * (BPS + BigInt(buy ? spreadBps : -spreadBps))) / BPS;
 
-  // Frozen spreads on closes are allowed to exceed the normal deviation bound.
-  const bound = BigInt(Math.max(m.maxExecDeviationBps, reducing ? m.frozenSpreadBps + 100 : 0));
+  // The contract allows the normal deviation plus whatever spread it charges.
+  const bound = BigInt(m.maxExecDeviationBps + spreadBps);
   if (diffBps(execPriceE18, mark.priceE18) > bound) return fail('exec_deviation', 'execution price too far from mark');
 
   const notionalUsdg = notionalOf(r.sizeDeltaE18, execPriceE18);
