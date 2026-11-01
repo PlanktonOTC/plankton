@@ -6,7 +6,6 @@ node_modules
 dist
 contracts/out
 contracts/cache
-contracts/lib
 research_notes
 contracts/broadcast
 contracts/test/vectors.json.bak
