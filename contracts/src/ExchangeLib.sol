@@ -176,13 +176,16 @@ library ExchangeLib {
     }
 
     /// Trader profit (positive) or loss (negative) on all open positions at the last marks. The vault subtracts it from NAV.
+    /// A market's net trader loss counts only up to the margin held there: a loss past the margin is bad debt, not an asset.
     function traderUnrealizedPnl(State storage s) external view returns (int256 total) {
         for (uint256 i; i < s.marketIds.length; ++i) {
             Market storage d = s.markets[s.marketIds[i]];
             uint256 price = s.oracle.markOf(s.marketIds[i]).priceE18;
             if (price == 0) continue;
-            total += int256(M.notional(d.longSize, price)) - int256(uint256(d.longOI));
-            total += int256(uint256(d.shortOI)) - int256(M.notional(d.shortSize, price));
+            int256 m = int256(M.notional(d.longSize, price)) - int256(uint256(d.longOI));
+            m += int256(uint256(d.shortOI)) - int256(M.notional(d.shortSize, price));
+            int256 floor_ = -int256(uint256(d.marginTotal));
+            total += m < floor_ ? floor_ : m;
         }
     }
 
@@ -276,6 +279,7 @@ library ExchangeLib {
 
         uint256 released = uint256(p.margin) * closeSize / absOld;
         p.margin -= uint128(released);
+        d.marginTotal = M.sub128(d.marginTotal, released);
         _removeFromBooks(s, d, t.trader, isLong, closeSize, p.entry);
         p.size += isLong ? -int256(closeSize) : int256(closeSize);
 
@@ -303,6 +307,7 @@ library ExchangeLib {
             p.size += signed;
             p.margin += uint128(t.margin);
         }
+        d.marginTotal += uint128(t.margin);
         p.openedAt = uint64(block.timestamp);
         p.openedBlock = uint64(block.number);
         p.borrowSnap = buy ? d.longIdx : d.shortIdx;
@@ -478,6 +483,7 @@ library ExchangeLib {
         if (owed == 0) return;
         uint256 take = M.min(owed, p.margin);
         p.margin -= uint128(take);
+        d.marginTotal = M.sub128(d.marginTotal, take);
         if (take > 0) s.usdg.safeTransfer(address(s.vault), take);
         if (owed > take) _bad(s, marketId, d, owed - take);
     }
