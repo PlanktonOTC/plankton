@@ -5,6 +5,7 @@ import {MarketState, SessionProfile, MarketConfig, Market, PendingMarket} from "
 
 /// @notice Market config rules, in a linked library only to keep Exchange under the 24 KB contract size limit.
 /// Tightening applies at once; anything that lets traders take more risk, or charges them more, waits 24h.
+/// Raising maintenance margin waits too: applied at once it would let the owner liquidate open positions at will.
 library MarketConfigLib {
     uint256 internal constant CHANGE_DELAY = 24 hours;
 
@@ -60,7 +61,7 @@ library MarketConfigLib {
     function isLoosening(MarketConfig storage o, MarketConfig calldata n) public view returns (bool) {
         if (o.state != MarketState.Active && n.state == MarketState.Active) return true;
         if (
-            n.maintenanceMarginBps < o.maintenanceMarginBps || n.maxExecDeviationBps > o.maxExecDeviationBps
+            n.maintenanceMarginBps != o.maintenanceMarginBps || n.maxExecDeviationBps > o.maxExecDeviationBps
                 || n.maxConfidenceBps > o.maxConfidenceBps || n.maxMarkAgeSec > o.maxMarkAgeSec
                 || n.netSkewBpsOfV > o.netSkewBpsOfV || n.grossOiBpsOfV > o.grossOiBpsOfV || n.positionBpsOfV > o.positionBpsOfV
                 || n.skewScaleE18 > o.skewScaleE18 || n.feeBps > o.feeBps || n.borrowBaseBpsPerHour > o.borrowBaseBpsPerHour
