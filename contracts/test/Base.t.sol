@@ -49,6 +49,8 @@ abstract contract Base is Test {
     bytes32 internal constant ID = keccak256(abi.encode("plankton.mkt.v1", "TEST", address(0xBEEF)));
     uint256 internal constant PRICE = 100e18;
     uint64 internal seq;
+    /// Market the helpers below act on. Tests with a second market point it there.
+    bytes32 internal mkt = ID;
     uint64 internal nonce;
 
     bytes32 private constant QUOTE_TYPEHASH = keccak256(
@@ -181,7 +183,7 @@ abstract contract Base is Test {
         returns (IMarkOracle.Attestation memory)
     {
         return IMarkOracle.Attestation(
-            ID, price, price, conf, st, ++seq, uint64(block.timestamp), uint64(block.timestamp + 120)
+            mkt, price, price, conf, st, ++seq, uint64(block.timestamp), uint64(block.timestamp + 120)
         );
     }
 
@@ -223,7 +225,7 @@ abstract contract Base is Test {
     }
 
     function pos(address who) internal view returns (Position memory) {
-        return exchange.positionOf(who, ID);
+        return exchange.positionOf(who, mkt);
     }
 
     function cash() internal view returns (uint256) {
@@ -244,16 +246,16 @@ abstract contract Base is Test {
     /// Spread the contract charges this trade on top of the skew price: the session's (and open guard's) for opens,
     /// the frozen spread for closes in a frozen, halted or close-only market.
     function requiredSpread(address who, int256 size) internal view returns (uint256) {
-        IMarkOracle.Mark memory mk = oracle.markOf(ID);
-        MarketConfig memory c = exchange.configOf(ID);
-        int256 cur = exchange.positionOf(who, ID).size;
+        IMarkOracle.Mark memory mk = oracle.markOf(mkt);
+        MarketConfig memory c = exchange.configOf(mkt);
+        int256 cur = exchange.positionOf(who, mkt).size;
         if (M.isReducing(cur, size)) {
             bool frozen = mk.status == IMarkOracle.Status.Frozen || mk.status == IMarkOracle.Status.Halted
                 || c.state != MarketState.Active;
             return frozen ? c.frozenSpreadBps : 0;
         }
         uint256 spread = c.profiles[uint8(mk.status)].extraSpreadBps;
-        (,, uint64 since) = oracle.referencesOf(ID);
+        (,, uint64 since) = oracle.referencesOf(mkt);
         if (
             mk.status == IMarkOracle.Status.Open && c.openGuardSec != 0
                 && block.timestamp < uint256(since) + c.openGuardSec
@@ -267,15 +269,15 @@ abstract contract Base is Test {
     /// contract requires, plus `spreadBps` more.
     function quoteFor(address who, int256 size, uint256 spreadBps) internal returns (Exchange.TradeQuote memory q) {
         spreadBps += requiredSpread(who, size);
-        IMarkOracle.Mark memory mk = oracle.markOf(ID);
-        (uint128 l, uint128 sh,,,) = exchange.marketInfo(ID);
+        IMarkOracle.Mark memory mk = oracle.markOf(mkt);
+        (uint128 l, uint128 sh,,,) = exchange.marketInfo(mkt);
         int256 before_ = (int256(uint256(l)) - int256(uint256(sh))) * 1e12;
         int256 tradeE18 = int256(M.notional(M.abs(size), mk.priceE18) * 1e12) * (size > 0 ? int256(1) : int256(-1));
         uint256 fill = M.skewFill(mk.priceE18, before_, before_ + tradeE18, skewScale());
         uint256 exec = size > 0 ? fill * (10_000 + spreadBps) / 10_000 : fill * (10_000 - spreadBps) / 10_000;
-        uint64 lev = uint64(exchange.configOf(ID).profiles[uint8(mk.status)].maxLeverageE18);
+        uint64 lev = uint64(exchange.configOf(mkt).profiles[uint8(mk.status)].maxLeverageE18);
         q = Exchange.TradeQuote({
-            marketId: ID,
+            marketId: mkt,
             trader: who,
             sizeDeltaE18: size,
             execPriceE18: exec,
@@ -330,7 +332,7 @@ abstract contract Base is Test {
     /// Reduces `who`'s position by `bps`, with a quote signed for the current mark.
     function reduce(address who, uint16 bps) internal returns (Exchange.TradeQuote memory q) {
         nextBlock();
-        int256 size = exchange.positionOf(who, ID).size;
+        int256 size = exchange.positionOf(who, mkt).size;
         int256 delta = M.fractionClose(size, bps);
         q = quoteFor(who, delta, 0);
         bytes memory sig = quoteSig(q);
