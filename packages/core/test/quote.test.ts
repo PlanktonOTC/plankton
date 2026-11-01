@@ -81,6 +81,20 @@ describe('building a quote', () => {
     const r = ok(buildTradeQuote(market(), mark({ status: Status.Weekend }), req({ profile: { ...DEFAULT_PROFILES[Status.Weekend], leverage: { micro: 1.5, small: 2, smid: 2, index: 2 } }, sizeDeltaE18: 2n * E18, marginUsdg: usdg(120) })));
     expect(r.spreadBps).toBe(150);
   });
+
+  test('closes pay no session spread, as on-chain; only frozen closes pay the frozen spread', () => {
+    const weekend = { ...DEFAULT_PROFILES[Status.Weekend], leverage: { micro: 1.5, small: 2, smid: 2, index: 2 } };
+    const close = req({ profile: weekend, positionSizeE18: 5n * E18, sizeDeltaE18: -5n * E18, marginUsdg: 0n, openGuard: true });
+    expect(ok(buildTradeQuote(market(), mark({ status: Status.Weekend }), close)).spreadBps).toBe(0);
+    expect(ok(buildTradeQuote(market(), mark({ status: Status.Frozen }), close)).spreadBps).toBe(200);
+  });
+
+  test('the open guard takes the contract guard spread when it is larger, and limits the ticket', () => {
+    expect(ok(buildTradeQuote(market(), mark(), req({ openGuard: true, openGuardSpreadBps: 80 }))).spreadBps).toBe(80);
+    // $500 is fine normally but over a 0.25%-of-V ($250) guard ticket.
+    expect(code(buildTradeQuote(market(), mark(), req({ openGuard: true, openGuardPositionBpsOfV: 25 })))).toBe('position_too_large');
+    expect(code(buildTradeQuote(market(), mark(), req({ openGuard: false, openGuardPositionBpsOfV: 25 })))).toBe('ok');
+  });
 });
 
 describe('the mid-size tier', () => {
