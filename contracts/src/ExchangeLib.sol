@@ -113,21 +113,28 @@ library ExchangeLib {
         if (equity >= int256(M.notional(size, mk.priceE18) * d.cfg.maintenanceMarginBps / BPS)) revert NotLiquidatable();
 
         uint256 penalty = equity > 0 ? M.min(uint256(equity), margin * LIQ_PENALTY_BPS / BPS) : 0;
-        uint256 toTrader = equity > int256(penalty) ? uint256(equity) - penalty : 0;
 
         _removeFromBooks(s, d, trader, isLong, size, p.entry);
+        d.marginTotal = M.sub128(d.marginTotal, margin);
         delete s.positions[trader][marketId];
+        s.closedAt[trader][marketId] = uint64(block.timestamp);
         s.totalAbsNet = s.totalAbsNet - netBefore + _absNet(d);
 
         // The Exchange holds `margin` for this position. Pay the penalty and the trader's remainder; the rest settles with the Counter.
         uint256 toLiquidator = penalty / 2;
         if (toLiquidator > 0) s.usdg.safeTransfer(liquidator, toLiquidator);
         if (penalty - toLiquidator > 0) s.usdg.safeTransfer(address(s.backstop), penalty - toLiquidator);
-        s.collateral[trader] += toTrader;
-        int256 vaultDelta = int256(margin) - int256(penalty) - int256(toTrader);
-        if (vaultDelta > 0) s.usdg.safeTransfer(address(s.vault), uint256(vaultDelta));
-        else if (vaultDelta < 0) s.vault.payOut(address(this), uint256(-vaultDelta));
-        if (equity < 0) _bad(s, marketId, d, uint256(-equity));
+        if (pnl > 0) {
+            // A position drained by borrow can be liquidatable while in profit. That profit goes through the same
+            // hourly limit and payout desk as any other close, never straight out of the vault.
+            s.collateral[trader] += margin - penalty + _payProfit(s, trader, uint256(pnl), V);
+        } else {
+            uint256 toTrader = equity > int256(penalty) ? uint256(equity) - penalty : 0;
+            s.collateral[trader] += toTrader;
+            uint256 toVault = margin - penalty - toTrader;
+            if (toVault > 0) s.usdg.safeTransfer(address(s.vault), toVault);
+            if (equity < 0) _bad(s, marketId, d, uint256(-equity));
+        }
 
         emit TradeExecuted(trader, marketId, isLong ? -int256(size) : int256(size), mk.priceE18, penalty, pnl, 3);
         emit Liquidated(trader, marketId, mk.priceE18, penalty, liquidator);
