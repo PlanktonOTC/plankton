@@ -234,7 +234,9 @@ contract Exchange is IExchangeCounterView, EIP712Upgradeable, DelayedUpgrade {
         if (block.timestamp < o.validAfter || block.timestamp > o.expiry) revert OrderNotActive();
         // A take-profit or stop-loss belongs to the position it was placed on. Once that position has closed, it must
         // not fire on a later one in the same market.
-        if ((o.reduceOnly || o.sizeBps > 0) && o.validAfter <= s.closedAt[o.trader][o.marketId]) revert OrderNotActive();
+        if ((o.reduceOnly || o.sizeBps > 0) && o.validAfter <= s.closedAt[o.trader][o.marketId]) {
+            revert OrderNotActive();
+        }
         if (o.nonce < orderNonceFloor[o.trader] || usedOrderNonce[o.trader][o.nonce]) revert NonceUsed();
         if (q.marketId != o.marketId || q.trader != o.trader) revert OrderMismatch();
         usedOrderNonce[o.trader][o.nonce] = true;
@@ -450,7 +452,19 @@ contract Exchange is IExchangeCounterView, EIP712Upgradeable, DelayedUpgrade {
         usedQuoteNonce[trader][q.nonce] = true;
         ExchangeLib.applyTrade(
             s,
-            Trade(trader, q.marketId, q.sizeDeltaE18, q.execPriceE18, q.feeUsdg, margin, q.maxLeverageE18, q.markSequence, path, true, false)
+            Trade(
+                trader,
+                q.marketId,
+                q.sizeDeltaE18,
+                q.execPriceE18,
+                q.feeUsdg,
+                margin,
+                q.maxLeverageE18,
+                q.markSequence,
+                path,
+                true,
+                false
+            )
         );
     }
 

@@ -32,8 +32,12 @@ library ExchangeLib {
         int256 realizedPnlUsdg,
         uint8 path // 0 quote, 1 order, 2 closeAtMark, 3 liquidation
     );
-    event PositionUpdated(address indexed trader, bytes32 indexed marketId, int256 sizeE18, uint256 entryE18, uint256 marginUsdg);
-    event Liquidated(address indexed trader, bytes32 indexed marketId, uint256 markE18, uint256 penaltyUsdg, address liquidator);
+    event PositionUpdated(
+        address indexed trader, bytes32 indexed marketId, int256 sizeE18, uint256 entryE18, uint256 marginUsdg
+    );
+    event Liquidated(
+        address indexed trader, bytes32 indexed marketId, uint256 markE18, uint256 penaltyUsdg, address liquidator
+    );
     event BadDebt(bytes32 indexed marketId, uint256 amountUsdg);
     event BadDebtCovered(bytes32 indexed marketId, uint256 amountUsdg);
     event ProfitDeferred(address indexed trader, uint256 amountUsdg, uint64 claimableAt);
@@ -110,7 +114,9 @@ library ExchangeLib {
         int256 pnl = M.pnl(isLong, p.entry, mk.priceE18, size);
         uint256 margin = p.margin;
         int256 equity = int256(margin) + pnl;
-        if (equity >= int256(M.notional(size, mk.priceE18) * d.cfg.maintenanceMarginBps / BPS)) revert NotLiquidatable();
+        if (equity >= int256(M.notional(size, mk.priceE18) * d.cfg.maintenanceMarginBps / BPS)) {
+            revert NotLiquidatable();
+        }
 
         uint256 penalty = equity > 0 ? M.min(uint256(equity), margin * LIQ_PENALTY_BPS / BPS) : 0;
 
@@ -155,7 +161,11 @@ library ExchangeLib {
     // ================================================================== views
 
     /// Room left on each side, in USDG notional, from net skew and gross OI caps against the Counter's NAV.
-    function capacity(State storage s, bytes32 marketId) external view returns (uint256 longRoomUsdg, uint256 shortRoomUsdg) {
+    function capacity(State storage s, bytes32 marketId)
+        external
+        view
+        returns (uint256 longRoomUsdg, uint256 shortRoomUsdg)
+    {
         Market storage d = s.markets[marketId];
         if (s.vault.deleveraging()) return (0, 0);
         uint256 V = s.vault.navUsdg();
@@ -172,7 +182,9 @@ library ExchangeLib {
 
     /// Sum of all mark sequences: advances whenever any mark is published. The vault settles requests on it.
     function markEpoch(State storage s) external view returns (uint256 epoch) {
-        for (uint256 i; i < s.marketIds.length; ++i) epoch += s.oracle.markOf(s.marketIds[i]).sequence;
+        for (uint256 i; i < s.marketIds.length; ++i) {
+            epoch += s.oracle.markOf(s.marketIds[i]).sequence;
+        }
     }
 
     /// Trader profit (positive) or loss (negative) on all open positions at the last marks. The vault subtracts it from NAV.
@@ -195,14 +207,18 @@ library ExchangeLib {
             Market storage d = s.markets[s.marketIds[i]];
             if ((d.longSize | d.shortSize) == 0) continue;
             IMarkOracle.Mark memory mk = s.oracle.markOf(s.marketIds[i]);
-            if (mk.priceE18 == 0 || mk.breaker || block.timestamp > uint256(mk.updatedAt) + d.cfg.maxMarkAgeSec) return false;
+            if (mk.priceE18 == 0 || mk.breaker || block.timestamp > uint256(mk.updatedAt) + d.cfg.maxMarkAgeSec) {
+                return false;
+            }
         }
         return true;
     }
 
     /// Cash the Counter must keep against its net exposure; not available for withdrawals.
     function counterReserve(State storage s) external view returns (uint256 reserve) {
-        for (uint256 i; i < s.marketIds.length; ++i) reserve += _absNet(s.markets[s.marketIds[i]]);
+        for (uint256 i; i < s.marketIds.length; ++i) {
+            reserve += _absNet(s.markets[s.marketIds[i]]);
+        }
         reserve = reserve * RESERVE_BPS / BPS;
     }
 
@@ -273,10 +289,14 @@ library ExchangeLib {
         if (p.size == 0) delete s.positions[t.trader][t.id];
     }
 
-    function _reduce(State storage s, Market storage d, Position storage p, Trade memory t, uint256 closeSize, uint256 V)
-        private
-        returns (uint256 credit, int256 pnl)
-    {
+    function _reduce(
+        State storage s,
+        Market storage d,
+        Position storage p,
+        Trade memory t,
+        uint256 closeSize,
+        uint256 V
+    ) private returns (uint256 credit, int256 pnl) {
         if (p.openedBlock == block.number) revert SameBlockReduce();
         uint256 absOld = M.abs(p.size);
         bool isLong = p.size > 0;
@@ -305,7 +325,9 @@ library ExchangeLib {
         }
     }
 
-    function _increase(State storage s, Market storage d, Position storage p, Trade memory t, uint256 openSize) private {
+    function _increase(State storage s, Market storage d, Position storage p, Trade memory t, uint256 openSize)
+        private
+    {
         bool buy = t.delta > 0;
         int256 signed = buy ? int256(openSize) : -int256(openSize);
         if (p.size == 0) {
@@ -334,9 +356,14 @@ library ExchangeLib {
         s.walletNotional[t.trader] += notional;
     }
 
-    function _removeFromBooks(State storage s, Market storage d, address trader, bool isLong, uint256 size, uint256 entry)
-        private
-    {
+    function _removeFromBooks(
+        State storage s,
+        Market storage d,
+        address trader,
+        bool isLong,
+        uint256 size,
+        uint256 entry
+    ) private {
         uint256 notional = M.notional(size, entry);
         if (isLong) {
             d.longOI = M.sub128(d.longOI, notional);
@@ -353,11 +380,13 @@ library ExchangeLib {
 
     /// Spread a trade must pay on top of the skew price. Opens pay the session's spread (weekend band, extended hours)
     /// plus the open guard's; closes pay nothing extra except in frozen, halted or close-only markets.
-    function _sessionSpread(Market storage d, IMarkOracle.Mark memory mk, SessionProfile memory prof, bool reducingOnly, bool guard)
-        private
-        view
-        returns (uint256)
-    {
+    function _sessionSpread(
+        Market storage d,
+        IMarkOracle.Mark memory mk,
+        SessionProfile memory prof,
+        bool reducingOnly,
+        bool guard
+    ) private view returns (uint256) {
         if (reducingOnly) {
             bool frozen = mk.status == IMarkOracle.Status.Frozen || mk.status == IMarkOracle.Status.Halted
                 || d.cfg.state != MarketState.Active;
@@ -367,7 +396,11 @@ library ExchangeLib {
     }
 
     /// The first `openGuardSec` after the market entered Open (each morning, and Monday's reopen).
-    function _inOpenGuard(State storage s, Market storage d, bytes32 id, IMarkOracle.Mark memory mk) private view returns (bool) {
+    function _inOpenGuard(State storage s, Market storage d, bytes32 id, IMarkOracle.Mark memory mk)
+        private
+        view
+        returns (bool)
+    {
         if (d.cfg.openGuardSec == 0 || mk.status != IMarkOracle.Status.Open) return false;
         (,, uint64 since) = s.oracle.referencesOf(id);
         return block.timestamp < uint256(since) + d.cfg.openGuardSec;
@@ -389,15 +422,20 @@ library ExchangeLib {
         if (t.delta > 0 ? t.exec < fill : t.exec > fill) revert BetterThanSkew();
 
         uint256 notional = M.notional(absDelta, t.exec);
-        if (t.fee < notional * d.cfg.feeBps / BPS || t.fee > notional * (d.cfg.feeBps + d.cfg.maxExecDeviationBps) / BPS) {
+        if (
+            t.fee < notional * d.cfg.feeBps / BPS || t.fee > notional * (d.cfg.feeBps + d.cfg.maxExecDeviationBps) / BPS
+        ) {
             revert BadFee();
         }
     }
 
-    function _checkOpenPre(State storage s, Market storage d, IMarkOracle.Mark memory mk, SessionProfile memory prof, uint256 V)
-        private
-        view
-    {
+    function _checkOpenPre(
+        State storage s,
+        Market storage d,
+        IMarkOracle.Mark memory mk,
+        SessionProfile memory prof,
+        uint256 V
+    ) private view {
         if (d.cfg.state != MarketState.Active) revert NotActive();
         if (s.vault.deleveraging()) revert Deleveraging();
         if (mk.breaker) revert BreakerSet();
@@ -435,7 +473,9 @@ library ExchangeLib {
         uint256 netAfter = _absNet(d);
         if (netAfter > V * d.cfg.netSkewBpsOfV / BPS && netAfter >= netBefore) revert SkewCap();
         if (uint256(d.longOI) + d.shortOI > _grossCap(d, V)) revert GrossCap();
-        if (s.totalAbsNet - netBefore + netAfter > V * TOTAL_NET_BPS / BPS && netAfter >= netBefore) revert TotalNetCap();
+        if (s.totalAbsNet - netBefore + netAfter > V * TOTAL_NET_BPS / BPS && netAfter >= netBefore) {
+            revert TotalNetCap();
+        }
     }
 
     function _requireLiquidationWindow(State storage s, bytes32 marketId, Market storage d, IMarkOracle.Mark memory mk)
