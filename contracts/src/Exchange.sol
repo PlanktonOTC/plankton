@@ -100,6 +100,7 @@ contract Exchange is IExchangeCounterView, EIP712Upgradeable, DelayedUpgrade {
     event OrderCancelled(address indexed trader, uint64 nonce);
     event QuoteSignerChanged(address indexed signer, bool allowed, uint64 effectiveAt);
     event GuardianChanged(address indexed guardian);
+    event ReferrerSet(address indexed trader, address indexed referrer);
 
     error UnknownMarket();
     error NoMark();
@@ -123,6 +124,7 @@ contract Exchange is IExchangeCounterView, EIP712Upgradeable, DelayedUpgrade {
     error SignerLimit();
     error AlreadySigner();
     error ZeroAddress();
+    error AlreadySet();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -265,6 +267,14 @@ contract Exchange is IExchangeCounterView, EIP712Upgradeable, DelayedUpgrade {
     /// Invalidates every unused quote with a lower nonce.
     function cancelQuotesBefore(uint64 nonce) external {
         if (nonce > quoteNonceFloor[msg.sender]) quoteNonceFloor[msg.sender] = nonce;
+    }
+
+    /// Binds the caller's trading fees to a referrer, once. The fee router pays the referrer its rebate first.
+    function setReferrer(address referrer) external {
+        if (referrer == address(0) || referrer == msg.sender) revert ZeroAddress();
+        if (s.referrer[msg.sender] != address(0)) revert AlreadySet();
+        s.referrer[msg.sender] = referrer;
+        emit ReferrerSet(msg.sender, referrer);
     }
 
     // ------------------------------------------------------------------ risk
