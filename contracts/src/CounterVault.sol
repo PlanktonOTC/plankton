@@ -19,6 +19,9 @@ contract CounterVault is ICounterVault, ERC20Upgradeable, DelayedUpgrade {
     /// 10**3 virtual shares and 1 virtual asset: blocks the first-depositor inflation attack.
     uint8 private constant OFFSET = 3;
     uint256 public constant HARD_MAX_WAIT = 72 hours;
+    /// Smallest withdrawal request, unless it is the holder's whole balance. Also the size below which a remainder is
+    /// paid in full instead of pro-rata, so dust can never sit at the head of the queue and trip deleverage mode.
+    uint256 public constant MIN_WITHDRAW_USDG = 1e6;
     uint256 private constant E18 = 1e18;
 
     struct Request {
@@ -58,6 +61,7 @@ contract CounterVault is ICounterVault, ERC20Upgradeable, DelayedUpgrade {
     error ZeroAmount();
     error ZeroAddress();
     error InsufficientCash();
+    error TooSmall();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -146,6 +150,7 @@ contract CounterVault is ICounterVault, ERC20Upgradeable, DelayedUpgrade {
     function requestWithdraw(uint256 shares) external returns (uint256 id) {
         if (shares == 0) revert ZeroAmount();
         _requireLinked();
+        if (shares < balanceOf(msg.sender) && shares * navPerShareE18() / E18 < MIN_WITHDRAW_USDG) revert TooSmall();
         _transfer(msg.sender, address(this), shares);
         id = _newRequest(msg.sender, false, shares);
         _withdrawQueue.push(id);
@@ -231,20 +236,27 @@ contract CounterVault is ICounterVault, ERC20Upgradeable, DelayedUpgrade {
         if (n == 0) return;
 
         uint256 free = freeCash();
+        uint256 left = free;
         for (uint256 j; j < n; ++j) {
             Request storage r = requests[ids[j]];
             uint256 remaining = uint256(r.amount) - r.filled;
             uint256 shares;
             uint256 assets;
-            if (total <= free) {
+            if (total <= free || (want[j] <= MIN_WITHDRAW_USDG && want[j] <= left)) {
+                // Enough cash, or a dust remainder that pro-rata would round to nothing: pay it in full.
                 shares = remaining;
                 assets = want[j];
             } else {
                 // Not enough free cash: everyone in this round is filled in the same proportion.
                 shares = remaining * free / total;
                 assets = want[j] * free / total;
+                if (assets > left) {
+                    shares = shares * left / assets;
+                    assets = left;
+                }
             }
             if (shares == 0) continue;
+            left -= assets;
             r.filled += uint128(shares);
             if (r.filled == r.amount) r.done = true;
             _burn(address(this), shares);
