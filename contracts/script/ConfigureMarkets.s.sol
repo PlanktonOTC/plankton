@@ -73,7 +73,11 @@ contract ConfigureMarkets is Script {
     }
 
     /// Defaults from the spec (section 9, "calibrate on tape"), at the R0 leverage ceilings (micro 2x, small 3x).
-    function _marketConfig(bool micro, uint256 vUsdg, uint128 absOiCapUsdg) internal pure returns (MarketConfig memory c) {
+    function _marketConfig(bool micro, uint256 vUsdg, uint128 absOiCapUsdg)
+        internal
+        pure
+        returns (MarketConfig memory c)
+    {
         c.state = MarketState.Active;
         c.maintenanceMarginBps = micro ? 800 : 500;
         c.maxExecDeviationBps = 500;
@@ -132,7 +136,10 @@ contract ConfigureMarkets is Script {
         uint256 count;
         for (uint256 i; i < n; ++i) {
             string memory p = string.concat(".markets[", vm.toString(i), "]");
-            if (vm.keyExists(json, string.concat(p, ".enabled")) && !vm.parseJsonBool(json, string.concat(p, ".enabled"))) continue;
+            if (
+                vm.keyExists(json, string.concat(p, ".enabled"))
+                    && !vm.parseJsonBool(json, string.concat(p, ".enabled"))
+            ) continue;
             Entry memory e;
             e.symbol = vm.parseJsonString(json, string.concat(p, ".symbol"));
             e.micro = keccak256(bytes(vm.parseJsonString(json, string.concat(p, ".class")))) == keccak256("micro");
@@ -148,6 +155,8 @@ contract ConfigureMarkets is Script {
             tmp[count++] = e;
         }
         out = new Entry[](count);
-        for (uint256 i; i < count; ++i) out[i] = tmp[i];
+        for (uint256 i; i < count; ++i) {
+            out[i] = tmp[i];
+        }
     }
 }

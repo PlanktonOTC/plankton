@@ -11,7 +11,14 @@ import {Exchange} from "../src/Exchange.sol";
 import {FeeRouter} from "../src/FeeRouter.sol";
 import {PayoutDesk} from "../src/PayoutDesk.sol";
 import {BackstopFund, FirstLossTranche} from "../src/Reserves.sol";
-import {IBackstopFund, ICounterVault, IFirstLossTranche, IFeeRouter, IMarkOracle, IPayoutDesk} from "../src/interfaces/Interfaces.sol";
+import {
+    IBackstopFund,
+    ICounterVault,
+    IFirstLossTranche,
+    IFeeRouter,
+    IMarkOracle,
+    IPayoutDesk
+} from "../src/interfaces/Interfaces.sol";
 
 /// @notice Deploys and wires the whole system, then writes ../deployments/4663.json.
 ///
@@ -51,7 +58,9 @@ contract Deploy is Script {
         d.oracle = new MarkOracle(deployer, markSigners);
 
         CounterVault vaultImpl = new CounterVault();
-        d.vault = CounterVault(address(new ERC1967Proxy(address(vaultImpl), abi.encodeCall(CounterVault.initialize, (usdg, deployer)))));
+        d.vault = CounterVault(
+            address(new ERC1967Proxy(address(vaultImpl), abi.encodeCall(CounterVault.initialize, (usdg, deployer))))
+        );
 
         d.backstop = new BackstopFund(usdg, deployer);
         d.firstLoss = new FirstLossTranche(usdg, deployer);
@@ -78,7 +87,11 @@ contract Deploy is Script {
             payoutDesk: IPayoutDesk(address(d.payoutDesk))
         });
         d.exchange = Exchange(
-            address(new ERC1967Proxy(address(exchangeImpl), abi.encodeCall(Exchange.initialize, (deployer, deps, quoteSigners))))
+            address(
+                new ERC1967Proxy(
+                    address(exchangeImpl), abi.encodeCall(Exchange.initialize, (deployer, deps, quoteSigners))
+                )
+            )
         );
 
         // One-time wiring, now that every address exists.
