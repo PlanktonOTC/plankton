@@ -42,6 +42,15 @@ contract MockExchangeView {
     uint256 public epoch = 1;
     int256 public pnl;
     uint256 public reserve;
+    bool public fresh = true;
+
+    function setFresh(bool f) external {
+        fresh = f;
+    }
+
+    function navPricesFresh() external view returns (bool) {
+        return fresh;
+    }
 
     function bump() external {
         ++epoch;
