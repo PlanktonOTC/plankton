@@ -21,6 +21,7 @@ interface IMarkOracle {
         uint16 liqAgreementBps; // signed vs Chainlink agreement needed to liquidate
         uint8 reanchorConfirmations; // consistent marks that clear the breaker
         uint8 quorumOutsideBand; // signers needed for an out-of-band mark
+        uint16 heldBandBps; // Weekend/Frozen/Halted: max |signed - held reference| before a quorum is needed
     }
 
     struct Attestation {
@@ -54,6 +55,11 @@ interface IMarkOracle {
     event Reanchored(bytes32 indexed marketId, uint256 priceE18);
     event ConfigScheduled(bytes32 indexed marketId, OracleConfig config, uint64 effectiveAt);
     event SignerChanged(address indexed signer, bool allowed, uint64 effectiveAt);
+
+    /// Held references, set only by Chainlink-bounded (Open/Extended) marks. A single signer can never move them.
+    /// regularClose: the last Open mark (Friday's close over the weekend). lastBounded: the last Open or Extended mark.
+    /// openSince: when the market last entered Open from another status (start of the open guard).
+    function referencesOf(bytes32 marketId) external view returns (uint256 regularCloseE18, uint256 lastBoundedE18, uint64 openSince);
 }
 
 interface ICounterVault {
@@ -61,7 +67,7 @@ interface ICounterVault {
     /// USDG held by the vault that is not escrowed deposits.
     function cashUsdg() external view returns (uint256);
     function payOut(address to, uint256 amount) external;
-    /// True when a withdrawal has waited past the hard maximum: opens stop and caps halve.
+    /// True when a withdrawal has waited past the hard maximum: opens stop until the queue clears.
     function deleveraging() external view returns (bool);
 }
 
@@ -70,6 +76,8 @@ interface IExchangeCounterView {
     function markEpoch() external view returns (uint256);
     function traderUnrealizedPnlUsdg() external view returns (int256);
     function counterReserveUsdg() external view returns (uint256);
+    /// False while any market with open interest has no mark, a set breaker or a stale mark: the vault does not settle on it.
+    function navPricesFresh() external view returns (bool);
 }
 
 interface IPayoutDesk {
