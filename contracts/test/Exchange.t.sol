@@ -331,7 +331,7 @@ contract ExchangeTest is Base {
         vm.stopPrank();
     }
 
-    function test_aStaleMarkBlocksOpensButNotCloses() public {
+    function test_aStaleMarkBlocksQuotedTradesButCloseAtMarkStillExits() public {
         open(trader, 5e18, 200e6);
         skip(181); // older than maxMarkAgeSec
         Exchange.TradeQuote memory q = quoteFor(makeAddr("late"), 1e18, 0);
@@ -344,7 +344,16 @@ contract ExchangeTest is Base {
         exchange.execute(q, qs, 100e6);
         vm.stopPrank();
 
-        reduce(trader, 10_000);
+        // A quote priced off a stale mark cannot close either; the backend-free exit can.
+        nextBlock();
+        Exchange.TradeQuote memory closeQ = quoteFor(trader, -5e18, 0);
+        bytes memory closeSig = quoteSig(closeQ);
+        vm.prank(trader);
+        vm.expectRevert(ExchangeLib.StaleMark.selector);
+        exchange.execute(closeQ, closeSig, 0);
+
+        vm.prank(trader);
+        exchange.closeAtMark(ID, 10_000);
         assertEq(pos(trader).size, 0);
     }
 
