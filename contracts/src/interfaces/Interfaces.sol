@@ -20,7 +20,7 @@ interface IMarkOracle {
     }
 
     struct OracleConfig {
-        address chainlinkFeed;
+        address chainlinkFeed; // zero for a market Chainlink does not cover: every mark then needs a quorum
         uint16 bandBps; // max |signed - Chainlink| in Open/Extended before a quorum is needed
         uint16 jumpBps; // move vs the last mark that sets the breaker
         uint32 maxAgeSec; // attestation age

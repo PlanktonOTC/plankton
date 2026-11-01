@@ -376,7 +376,7 @@ contract Exchange is IExchangeCounterView, EIP712Upgradeable, DelayedUpgrade {
 
     /// Anyone can apply a due change. Reverts unless the oracle config exists and all session profiles are set: no silent defaults.
     function applyMarket(bytes32 marketId) external {
-        if (s.oracle.configOf(marketId).chainlinkFeed == address(0)) revert OracleNotConfigured();
+        if (s.oracle.configOf(marketId).maxAgeSec == 0) revert OracleNotConfigured();
         Market storage d = s.markets[marketId];
         if (!d.exists && s.marketIds.length >= MAX_MARKETS) revert TooManyMarkets();
         if (MarketConfigLib.applyPending(d, s.pending[marketId])) s.marketIds.push(marketId);

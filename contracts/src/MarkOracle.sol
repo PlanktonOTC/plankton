@@ -6,7 +6,8 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {IMarkOracle, IAggregatorV3} from "./interfaces/Interfaces.sol";
 
-/// @notice Signed price attestations, bounded on-chain by Chainlink.
+/// @notice Signed price attestations, bounded on-chain by Chainlink where a feed exists. A market Chainlink does not
+/// cover (chainlinkFeed = 0) has no fence, so every one of its marks needs a quorum of signers.
 /// A leaked signer key can move a mark only inside `bandBps` of a fresh Chainlink answer, or, off-session, inside
 /// `heldBandBps` of a reference only Chainlink-bounded marks set. Anything outside needs a quorum.
 /// The owner is an EOA: tightening is instant, loosening and new signers wait 24h.
@@ -86,7 +87,10 @@ contract MarkOracle is IMarkOracle, EIP712, Ownable2Step {
         // Does this mark need more than one signer?
         bool bounded = a.status == Status.Open || a.status == Status.Extended;
         bool needQuorum;
-        if (bounded) {
+        if (c.chainlinkFeed == address(0)) {
+            // No Chainlink feed (most sub-$2B names): there is no on-chain fence, so no single key can set the price.
+            needQuorum = true;
+        } else if (bounded) {
             (uint256 cl, uint64 clAt) = _chainlink(c.chainlinkFeed);
             bool fresh = clAt != 0 && block.timestamp <= uint256(clAt) + c.chainlinkMaxAgeSec;
             needQuorum = !fresh || _diffBps(a.markE18, cl) > c.bandBps;
@@ -180,9 +184,9 @@ contract MarkOracle is IMarkOracle, EIP712, Ownable2Step {
 
     function scheduleConfig(bytes32 marketId, OracleConfig calldata c) external onlyOwner {
         if (
-            c.chainlinkFeed == address(0) || c.bandBps == 0 || c.jumpBps == 0 || c.maxAgeSec == 0
-                || c.chainlinkMaxAgeSec == 0 || c.reanchorConfirmations == 0 || c.quorumOutsideBand == 0
-                || c.quorumOutsideBand > MAX_SIGNERS || c.heldBandBps == 0
+            c.bandBps == 0 || c.jumpBps == 0 || c.maxAgeSec == 0 || c.chainlinkMaxAgeSec == 0
+                || c.reanchorConfirmations == 0 || c.quorumOutsideBand == 0 || c.quorumOutsideBand > MAX_SIGNERS
+                || c.heldBandBps == 0 || (c.chainlinkFeed == address(0) && c.quorumOutsideBand < 2)
         ) revert InvalidConfig();
 
         if (!configured[marketId]) {

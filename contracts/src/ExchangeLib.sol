@@ -486,6 +486,8 @@ library ExchangeLib {
         if (block.timestamp > uint256(mk.updatedAt) + d.cfg.maxMarkAgeSec) revert LiquidationBlocked();
         if (mk.status == IMarkOracle.Status.Open || mk.status == IMarkOracle.Status.Extended) {
             IMarkOracle.OracleConfig memory oc = s.oracle.configOf(marketId);
+            // A market with no Chainlink feed has only quorum-signed marks; that quorum is its second source.
+            if (oc.chainlinkFeed == address(0)) return;
             (uint256 cl, uint64 clAt) = s.oracle.chainlinkPrice(marketId);
             if (clAt == 0 || block.timestamp > uint256(clAt) + oc.chainlinkMaxAgeSec) revert LiquidationBlocked();
             if (M.diffBps(mk.priceE18, cl) > oc.liqAgreementBps) revert LiquidationBlocked();
