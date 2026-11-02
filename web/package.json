@@ -10,10 +10,13 @@
     "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.105.1",
     "gsap": "^3.15.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "three": "^0.186.1"
+    "three": "^0.186.1",
+    "viem": "^2.57.13",
+    "wagmi": "^3.7.9"
   },
   "devDependencies": {
     "vite": "^7.2.2"

@@ -1,0 +1,63 @@
+/* Live-trading additions to the terminal. Same steel palette as dashboard.css; nothing here restyles an existing control. */
+
+/* company tile without a logo */
+.market-monogram{display:inline-grid;place-items:center;background:linear-gradient(145deg,#2a3236,#1b2124);border:1px solid #ffffff18;color:#d9e2e6}
+.market-monogram b{font-family:var(--font-mono,ui-monospace,monospace);font-weight:500;font-size:11px;letter-spacing:.06em}
+.market-change.flat{color:var(--term-muted,#8e979d)}
+
+/* connection strip */
+.term-preview-strip.term-status-good i{background:var(--term-green,#aed6be)}
+.term-preview-strip.term-status-warn{background:#a68f4d14;color:#cdbf98}
+.term-preview-strip.term-status-warn i{background:#d3b18d}
+.term-preview-strip.term-status-bad{background:#cc969714;color:#d6aaab}
+.term-preview-strip.term-status-bad i{background:var(--term-red,#cc9697)}
+.term-feed-state i.is-on{background:var(--term-green,#aed6be)}
+.term-feed-state i.is-off{background:var(--term-red,#cc9697)}
+
+/* wallet */
+.term-wallet-button{display:inline-flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums}
+.term-wallet-button.is-wrong{border-color:#d3b18d66;color:#d3b18d}
+.term-wallet-list{display:flex;flex-direction:column;gap:8px;margin:14px 0}
+.term-wallet-list button{display:flex;align-items:center;gap:12px;width:100%;padding:13px 14px;border:1px solid var(--term-line,#ffffff12);border-radius:6px;background:#ffffff05;color:var(--term-text,#e5e9eb);text-align:left}
+.term-wallet-list button span:nth-of-type(1){flex:1}
+.term-wallet-list button:hover:not(:disabled){background:#ffffff0c;border-color:#ffffff26}
+.term-wallet-list img{border-radius:6px}
+.term-wallet-glyph{display:grid;place-items:center;width:28px;height:28px;border:1px solid #ffffff1c;border-radius:6px;color:#9fb0b8}
+
+/* progress of a wallet action */
+.term-tx-progress{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:12px 0 4px;padding:10px 12px;border:1px solid #b0cad626;border-radius:6px;background:#26354230;font-size:11px;color:#bcd0da}
+.term-tx-progress i{width:6px;height:6px;border-radius:50%;background:#a4cdb8;animation:term-pulse 1.1s ease-in-out infinite}
+.term-tx-progress a{margin-left:auto;color:#d6e3e8;text-decoration:underline;text-underline-offset:3px}
+@keyframes term-pulse{0%,100%{opacity:.25}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.term-tx-progress i{animation:none}}
+
+/* chart */
+.term-chart-live{padding:0;min-height:0;display:flex;flex-direction:column}
+.term-chart-live .term-ohlc{padding:12px 16px 8px}
+.term-chart-live .term-ohlc em{margin-left:auto}
+.term-tv{position:relative;height:380px;background:#111416;border-top:1px solid var(--term-line,#ffffff12);border-bottom:1px solid var(--term-line,#ffffff12)}
+.term-tv-host{height:100%;width:100%}
+.term-tv-fallback{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#111416;color:#9ba8b1;font-size:12px;text-align:center;padding:24px}
+.term-tv-fallback strong{color:#d6e0e5;font-weight:500}
+.term-tv-fallback a{color:#bed0d7;text-decoration:underline;text-underline-offset:3px}
+.term-levels{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;padding:10px 16px;font-size:9px;letter-spacing:.08em;color:#7c8991}
+.term-levels span{display:inline-flex;align-items:center;gap:6px}
+.term-levels i{width:14px;height:0;border-top:2px dashed currentColor;display:inline-block}
+.term-levels b{font-weight:500;letter-spacing:0;font-size:11px;color:#dfe7ea;font-variant-numeric:tabular-nums;margin-left:3px}
+.term-levels .lvl-mark{color:#b5dac7}.term-levels .lvl-entry{color:#bdcbd4}.term-levels .lvl-tp{color:#aed6be}.term-levels .lvl-sl{color:#cc9697}.term-levels .lvl-liq{color:#d3b18d}
+.term-levels small{margin-left:auto;color:#687983;font-size:9px;letter-spacing:0}
+.term-state-badge{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-size:10px;letter-spacing:.06em;color:#aab6bd;border:1px solid #ffffff14;border-radius:4px;padding:5px 9px}
+.term-state-badge i{width:5px;height:5px;border-radius:50%;background:#a5abb1}
+.term-state-badge.state-open i,.term-state-badge.state-extended i{background:var(--term-green,#aed6be)}
+.term-state-badge.state-weekend i{background:#d3b18d}
+.term-state-badge.state-frozen i,.term-state-badge.state-halted i{background:var(--term-red,#cc9697)}
+.term-chart-tools{display:flex;align-items:center;gap:14px}
+
+/* ticket and dialogs */
+.term-checkbox.is-disabled{opacity:.5}
+.term-claims{margin-top:18px;padding-top:14px;border-top:1px solid var(--term-line,#ffffff12)}
+.term-claims h3{font-size:13px;margin-bottom:4px}
+.term-small-badge.is-off{color:#8e979d;border-color:#ffffff10}
+.term-center-empty{display:grid;place-items:center;min-height:360px}
+.term-modal-actions{display:flex;gap:10px;flex-wrap:wrap}
+.term-modal-actions>button{flex:1}

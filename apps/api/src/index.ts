@@ -2,10 +2,11 @@ import { randomBytes } from 'node:crypto';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import pino from 'pino';
-import { encodeFunctionData, parseAbi, recoverTypedDataAddress, verifyMessage, type Address, type Hex } from 'viem';
+import { encodeFunctionData, erc20Abi, parseAbi, recoverTypedDataAddress, verifyMessage, type Address, type Hex } from 'viem';
 import { z, ZodError } from 'zod';
 import { loadCalendar, loadDeployment, loadEnv, loadMarkets, need, requireDatabaseUrl, urlList } from '@plankton/config';
 import {
+  ROBINHOOD_CHAIN_ID,
   chainTimeSec,
   createChainClient,
   exchangeAbi,
@@ -21,14 +22,17 @@ import {
   readTrader,
   signature as signatureSchema,
   toJson,
+  vaultAbi,
   wire,
   type ChainClient,
   type Deployment,
+  type TraderSnapshot,
   type TradeQuoteMsg,
 } from '@plankton/chain';
 import { and, createDb, desc, eq, orders, positions, sql, trades, type Db } from '@plankton/db';
 import { closeSizeDeltaE18, stressNavUsdg } from '@plankton/core';
-import { quoteFromChain } from './quote.ts';
+import { marketLimits, quoteFromChain, type MarketLimits } from './quote.ts';
+import { collateralShortfall, liquidationPriceE18, positionAfterOpen, positionValue, solveOpenSize, targetNotional } from './views.ts';
 import { clientIp, corsOrigins, createRateLimiter, isInternal } from './limits.ts';
 
 const env = loadEnv();
@@ -160,19 +164,70 @@ app.get('/health', (c) => c.json({ ok: true, rung }));
 
 // ---------------------------------------------------------------- markets and status
 
-// Board: configured markets joined with the live mark. A market with no mark yet shows status null.
+/**
+ * The market's rules and on-chain mark right now, for the board and the ticket. Cached for a couple of seconds so a page
+ * polling every few seconds, times every open tab, does not become a flood of RPC calls. Null when the chain is not reachable
+ * or the contracts are not deployed: the board then still lists the market, without limits.
+ */
+type Trading = MarketLimits & { markE18: bigint; markStatus: number; markUpdatedAt: bigint; markConfidenceBps: number; markSequence: bigint };
+const TRADING_TTL_MS = 2_000;
+const tradingCache = new Map<string, { at: number; value: Trading | null }>();
+async function tradingFor(symbol: string): Promise<Trading | null> {
+  const hit = tradingCache.get(symbol);
+  if (hit && Date.now() - hit.at < TRADING_TTL_MS) return hit.value;
+  let value: Trading | null = null;
+  try {
+    const m = market(symbol);
+    const { client, dep } = chain();
+    const snap = await readMarket(client, dep, m.marketId);
+    value = {
+      ...marketLimits(snap, m.cfg.class, rung),
+      markE18: snap.mark.priceE18,
+      markStatus: snap.mark.status,
+      markUpdatedAt: BigInt(snap.mark.updatedAt),
+      markConfidenceBps: snap.mark.confidenceBps,
+      markSequence: snap.mark.sequence,
+    };
+  } catch (err) {
+    log.debug({ symbol, err: (err as Error).message }, 'market limits unavailable');
+  }
+  tradingCache.set(symbol, { at: Date.now(), value });
+  return value;
+}
+
+// Board: configured markets joined with the live mark (mark service) and the rules in force (chain). Each half degrades
+// on its own: a market with no mark yet has mark null, and a dead mark service shows as markFeedUp false.
 app.get('/v1/markets', async () => {
-  const marks = await fromMark<Array<{ symbol: string }>>('/marks');
-  const bySym = new Map(marks.map((m) => [m.symbol, m]));
+  const [marks, trading] = await Promise.all([
+    fromMark<Array<{ symbol: string }>>('/marks').catch(() => null),
+    Promise.all(markets.map((m) => tradingFor(m.symbol))),
+  ]);
+  const bySym = new Map((marks ?? []).map((m) => [m.symbol, m]));
   return json(
-    markets.map((m) => ({
+    markets.map((m, i) => ({
       symbol: m.symbol,
       class: m.class,
       stockToken: m.stockToken,
       chainlinkFeed: m.chainlinkFeed,
+      marketId: marketIdFor(m.symbol, m.stockToken as Address),
+      markFeedUp: marks !== null,
       mark: bySym.get(m.symbol) ?? null,
+      trading: trading[i] ?? null,
     })),
   );
+});
+
+// Everything a wallet needs to talk to the contracts. Addresses come from the deployment file, never hard-coded in the site.
+app.get('/v1/config', async () => {
+  const { client, dep } = chain();
+  return json({
+    chainId: ROBINHOOD_CHAIN_ID,
+    rung,
+    chainTimeSec: await chainTimeSec(client),
+    quoteTtlSec: QUOTE_TTL_SEC,
+    contracts: { exchange: dep.exchange, vault: dep.vault, usdg: dep.usdg, payoutDesk: dep.payoutDesk, oracle: dep.oracle },
+    markets: markets.map((m) => ({ symbol: m.symbol, class: m.class, marketId: marketIdFor(m.symbol, m.stockToken as Address), stockToken: m.stockToken })),
+  });
 });
 
 // "Why this mark": the latest value per source and how far apart they are.
@@ -243,6 +298,81 @@ async function issueQuote(symbol: string, trader: Address, sizeDeltaE18: bigint,
 app.post('/v1/quote/trade', async (c) => {
   const b = tradeBody.parse(await c.req.json().catch(() => null));
   return json(await issueQuote(b.market, b.trader, b.sizeDeltaE18, b.marginUsdg));
+});
+
+// ---------------------------------------------------------------- ticket preview (no signature, no signer budget)
+
+const EMPTY_POSITION = { size: 0n, entry: 0n, margin: 0n, openedAt: 0n, openedBlock: 0n, borrowSnap: 0n };
+const previewQuery = z
+  .object({
+    market: z.string(),
+    trader: address.optional(),
+    // Three ways to say what to trade. side + marginUsdg + leverage sizes the ticket for you; sizeBps closes part of the
+    // trader's position; sizeDeltaE18 is an explicit size.
+    side: z.enum(['long', 'short']).optional(),
+    marginUsdg: uintStr.optional(),
+    leverage: z.string().regex(/^\d{1,2}(\.\d{1,3})?$/).optional(),
+    sizeBps: z.coerce.number().int().min(1).max(10_000).optional(),
+    sizeDeltaE18: intStr.optional(),
+  })
+  .refine((q) => (q.side && q.marginUsdg !== undefined && q.leverage) || q.sizeBps !== undefined || q.sizeDeltaE18 !== undefined, {
+    message: 'give side + marginUsdg + leverage, or sizeBps, or sizeDeltaE18',
+  });
+
+/**
+ * What the ticket would cost right now, answered with the same rules the signed quote uses. It signs nothing, so it
+ * can be called as the trader types. A refusal comes back as { ok: false, code, message } with HTTP 200: it is an answer.
+ */
+app.get('/v1/quote/preview', async (c) => {
+  const q = previewQuery.parse(c.req.query());
+  const m = market(q.market);
+  const { client, dep } = chain();
+  const [snap, tr]: [Awaited<ReturnType<typeof readMarket>>, TraderSnapshot] = await Promise.all([
+    readMarket(client, dep, m.marketId),
+    q.trader ? readTrader(client, dep, m.marketId, q.trader) : Promise.resolve({ position: EMPTY_POSITION, collateralUsdg: 0n, walletNotionalUsdg: 0n }),
+  ]);
+  const markE18 = snap.mark.priceE18;
+  if (markE18 === 0n) return json({ ok: false, code: 'no_mark', message: 'this market has no price yet', markE18 });
+
+  const nowMs = Number(await chainTimeSec(client)) * 1000;
+  const marginUsdg = q.marginUsdg ?? 0n;
+  const run = (sizeDeltaE18: bigint) =>
+    quoteFromChain({ snap, trader: tr, cls: m.cfg.class, rung, sizeDeltaE18, marginUsdg, nowMs, calendar, windowTz: env.STOCK_TOKEN_WINDOW_TZ });
+
+  let sizeDeltaE18: bigint;
+  let outcome: ReturnType<typeof run>;
+  if (q.side && q.leverage && q.marginUsdg !== undefined) {
+    const solved = solveOpenSize((s) => { const r = run(s); return { result: r.result, execPriceE18: r.execPriceE18 }; }, q.side, targetNotional(q.marginUsdg, q.leverage), markE18);
+    sizeDeltaE18 = solved.sizeDeltaE18;
+    outcome = run(sizeDeltaE18);
+  } else if (q.sizeBps !== undefined) {
+    if (tr.position.size === 0n) return json({ ok: false, code: 'no_position', message: 'no open position to close', markE18 });
+    sizeDeltaE18 = closeSizeDeltaE18(tr.position.size, q.sizeBps);
+    outcome = run(sizeDeltaE18);
+  } else {
+    sizeDeltaE18 = q.sizeDeltaE18!;
+    outcome = run(sizeDeltaE18);
+  }
+
+  const { result } = outcome;
+  if (!result.ok) return json({ ok: false, code: result.code, message: result.message, sizeDeltaE18, markE18 });
+
+  const current = { sizeE18: tr.position.size, entryE18: tr.position.entry, marginUsdg: BigInt(tr.position.margin) };
+  const after = result.reducing ? null : positionAfterOpen(current, sizeDeltaE18, result.execPriceE18, marginUsdg);
+  return json({
+    ok: true,
+    sizeDeltaE18,
+    execPriceE18: result.execPriceE18,
+    feeUsdg: result.feeUsdg,
+    notionalUsdg: result.notionalUsdg,
+    maxLeverageE18: outcome.maxLeverageE18,
+    reducing: result.reducing,
+    spreadBps: result.spreadBps,
+    markE18,
+    liquidationE18: after ? liquidationPriceE18(after, snap.cfg.maintenanceMarginBps) : null,
+    collateralUsdg: tr.collateralUsdg,
+    shortfallUsdg: collateralShortfall(marginUsdg, result.feeUsdg, result.reducing, tr.collateralUsdg),
+  });
 });
 
 // Works in every market state. If no quote can be served, the response carries the closeAtMark call so the trader can still exit.
@@ -364,7 +494,79 @@ app.get('/v1/accounts/:addr', async (c) => {
     d.select().from(orders).where(and(eq(orders.trader, trader), eq(orders.status, 'open'))),
     d.select().from(trades).where(eq(trades.trader, trader)).orderBy(desc(trades.at)).limit(50),
   ]);
-  return json({ trader, positions: pos, openOrders: open, recentTrades: recent });
+  const symbolOf = (marketId: string) => byId.get(marketId.toLowerCase())?.symbol ?? null;
+  return json({
+    trader,
+    positions: pos.map((r) => ({ ...r, symbol: symbolOf(r.marketId) })),
+    openOrders: open.map((r) => ({ ...r, symbol: symbolOf(r.marketId) })),
+    recentTrades: recent.map((r) => ({ ...r, symbol: symbolOf(r.marketId) })),
+  });
+});
+
+// What the chain says about one wallet right now: the deposited collateral, each open position valued at the current
+// mark with its liquidation price, and the token balances the wallet screens need. Read straight from the contracts
+// (not the indexed copy), so it is correct the moment a transaction confirms.
+app.get('/v1/accounts/:addr/state', async (c) => {
+  const addr = c.req.param('addr');
+  if (!ADDRESS.test(addr)) throw new HttpError(400, 'invalid address');
+  const who = addr as Address;
+  const { client, dep } = chain();
+  const ids = markets.map((m) => marketIdFor(m.symbol, m.stockToken as Address));
+  const [head, held, limits] = await Promise.all([
+    client.multicall({
+      allowFailure: false,
+      contracts: [
+        { address: dep.exchange, abi: exchangeAbi, functionName: 'collateral', args: [who] },
+        { address: dep.exchange, abi: exchangeAbi, functionName: 'walletNotional', args: [who] },
+        { address: dep.usdg, abi: erc20Abi, functionName: 'balanceOf', args: [who] },
+        { address: dep.usdg, abi: usdgNonces, functionName: 'nonces', args: [who] },
+        { address: dep.usdg, abi: erc20Abi, functionName: 'allowance', args: [who, dep.exchange] },
+        { address: dep.usdg, abi: erc20Abi, functionName: 'allowance', args: [who, dep.vault] },
+        { address: dep.vault, abi: vaultAbi, functionName: 'balanceOf', args: [who] },
+        { address: dep.vault, abi: vaultAbi, functionName: 'navPerShareE18' },
+      ],
+    }),
+    client.multicall({
+      allowFailure: false,
+      contracts: ids.map((id) => ({ address: dep.exchange, abi: exchangeAbi, functionName: 'positionOf' as const, args: [who, id] as const })),
+    }),
+    Promise.all(markets.map((m) => tradingFor(m.symbol))),
+  ]);
+  const [collateral, walletNotional, usdgBalance, usdgNonce, allowExchange, allowVault, shares, navPerShare] = head;
+  const open = held.flatMap((p, i) => {
+    if (p.size === 0n) return [];
+    const m = markets[i]!;
+    const lim = limits[i];
+    const markE18 = lim?.markE18 ?? 0n;
+    const mm = lim?.maintenanceMarginBps ?? 500;
+    const view = { sizeE18: p.size, entryE18: p.entry, marginUsdg: BigInt(p.margin) };
+    return [
+      {
+        symbol: m.symbol,
+        marketId: ids[i]!,
+        sizeE18: p.size,
+        entryE18: p.entry,
+        marginUsdg: BigInt(p.margin),
+        openedAt: BigInt(p.openedAt),
+        markE18,
+        maintenanceMarginBps: mm,
+        liquidationE18: liquidationPriceE18(view, mm),
+        ...(markE18 > 0n ? positionValue(view, markE18, mm) : {}),
+      },
+    ];
+  });
+  return json({
+    trader: addr.toLowerCase(),
+    collateralUsdg: collateral,
+    walletNotionalUsdg: walletNotional,
+    usdgBalance,
+    usdgNonce,
+    usdgAllowanceExchange: allowExchange,
+    usdgAllowanceVault: allowVault,
+    vaultShares: shares,
+    vaultSharesValueUsdg: (shares * navPerShare) / 10n ** 18n,
+    positions: open,
+  });
 });
 
 // Profits above the hourly payout limit are paid late through the PayoutDesk. This lists a trader's IOUs, read from the
