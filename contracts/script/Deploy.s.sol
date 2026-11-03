@@ -50,11 +50,18 @@ contract Deploy is Script {
         address[] memory quoteSigners = vm.envAddress("QUOTE_SIGNERS", ",");
         require(markSigners.length >= 1 && markSigners.length <= 3, "1 to 3 mark signers");
         require(quoteSigners.length >= 1 && quoteSigners.length <= 3, "1 to 3 quote signers");
-        require(owner != address(0) && guardian != address(0) && treasury != address(0), "OWNER, GUARDIAN and TREASURY must be set");
+        require(
+            owner != address(0) && guardian != address(0) && treasury != address(0),
+            "OWNER, GUARDIAN and TREASURY must be set"
+        );
         require(block.chainid == 4663, "this script deploys to Robinhood Chain (4663) only");
         require(USDG.code.length > 0, "USDG is not deployed at the expected address on this chain");
-        for (uint256 i; i < markSigners.length; ++i) require(markSigners[i] != address(0), "zero mark signer");
-        for (uint256 i; i < quoteSigners.length; ++i) require(quoteSigners[i] != address(0), "zero quote signer");
+        for (uint256 i; i < markSigners.length; ++i) {
+            require(markSigners[i] != address(0), "zero mark signer");
+        }
+        for (uint256 i; i < quoteSigners.length; ++i) {
+            require(quoteSigners[i] != address(0), "zero quote signer");
+        }
         IERC20 usdg = IERC20(USDG);
 
         vm.startBroadcast();
