@@ -28,6 +28,8 @@ export interface PublisherDeps {
   privateKey: `0x${string}`;
   /** symbol -> marketId */
   markets: Map<string, Hex>;
+  /** Symbols with no Chainlink feed: every mark needs a quorum, so all signers are asked at once. */
+  quorumMarkets: Set<string>;
   signerUrls: string[];
   signerToken: string;
   /** When present, only the lease holder publishes (one active publisher plus a hot standby). */
@@ -163,12 +165,15 @@ export class Publisher implements MarkSink {
       expiry: nowSec + 120n,
     };
 
-    const sigs = [await this.sign(a, this.d.signerUrls[0]!)];
+    // A market with no Chainlink feed always needs a quorum: ask every signer at once and keep the first two answers,
+    // so the second signature costs no extra round trip and one signer can be down. Otherwise ask one, and a second
+    // only if the contract demands it (an out-of-band mark).
+    const sigs = this.d.quorumMarkets.has(symbol) ? await this.signQuorum(a) : [await this.sign(a, this.d.signerUrls[0]!)];
     // Once any signer has signed this sequence it will refuse it again, so move on even if the publish fails below.
     // Gaps in the sequence are harmless: the oracle only requires that it increases.
     this.sequence.set(marketId, sequence);
     let simulated = await this.simulate(a, sigs);
-    if (simulated === 'quorum' && this.d.signerUrls.length > 1) {
+    if (simulated === 'quorum' && sigs.length === 1 && this.d.signerUrls.length > 1) {
       sigs.push(await this.sign(a, this.d.signerUrls[1]!));
       simulated = await this.simulate(a, sigs);
     }
@@ -192,7 +197,8 @@ export class Publisher implements MarkSink {
 
     // Scheduled publishes do not block on the receipt; an on-demand one (`wait`) does, so the quote that follows sees it.
     const landed = this.d.client
-      .waitForTransactionReceipt({ hash, timeout: 60_000 })
+      // Robinhood Chain makes a block every ~0.1 s; viem's default 4 s poll would add seconds to every on-demand quote.
+      .waitForTransactionReceipt({ hash, timeout: 60_000, pollingInterval: 250 })
       .then((r) => {
         if (r.status === 'success') return true;
         this.sequence.delete(marketId);
@@ -205,6 +211,26 @@ export class Publisher implements MarkSink {
         return false;
       });
     if (wait) await landed;
+  }
+
+  /** All signers in parallel; the first two that sign win. Throws when fewer than two sign. */
+  private async signQuorum(a: AttestationMsg): Promise<Array<{ signature: Hex; signer: Address }>> {
+    const got: Array<{ signature: Hex; signer: Address }> = [];
+    const errors: string[] = [];
+    await new Promise<void>((resolve) => {
+      let pending = this.d.signerUrls.length;
+      for (const url of this.d.signerUrls) {
+        this.sign(a, url)
+          .then((s) => got.push(s))
+          .catch((err: Error) => errors.push(err.message))
+          .finally(() => {
+            pending -= 1;
+            if (got.length >= 2 || pending === 0) resolve();
+          });
+      }
+    });
+    if (got.length < 2) throw new Error(`quorum not reached (${got.length} signed): ${errors.join('; ')}`);
+    return got.slice(0, 2);
   }
 
   private async sign(a: AttestationMsg, url: string): Promise<{ signature: Hex; signer: Address }> {

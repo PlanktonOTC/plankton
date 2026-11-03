@@ -52,6 +52,7 @@ try {
         dep,
         privateKey: env.PUBLISHER_PRIVATE_KEY as `0x${string}`,
         markets: new Map(markets.map((m) => [m.symbol, marketIdFor(m.symbol, m.stockToken as Address)])),
+        quorumMarkets: new Set(markets.filter((m) => !m.chainlinkFeed).map((m) => m.symbol)),
         signerUrls,
         signerToken: env.SIGNER_AUTH_TOKEN,
         db: env.DATABASE_URL ? createDb(env.DATABASE_URL, { max: 2 }).db : undefined,
