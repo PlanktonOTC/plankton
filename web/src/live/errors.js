@@ -91,7 +91,10 @@ export function friendlyError(err) {
   const name = revertName(err);
   if (name && REVERTS[name]) return REVERTS[name];
   if (/insufficient funds/i.test(String(err.message))) return 'Your wallet does not have enough gas (ETH) to send this transaction.';
-  const short = String(err.shortMessage ?? err.message ?? '').split('\n')[0];
+  // The local test chain copies state from a public RPC that keeps only about an hour of history; after that, reads fail like this.
+  if (/historical state|failed to get storage|state is not available/i.test(String(err.message))) return 'The test chain has lost the copy of live state it needs (it only lasts about an hour). Rebuild it with scripts/fork-up.ps1.';
+  // viem puts the reason on the line after "reverted with the following reason:", so keep two lines, not one.
+  const short = String(err.shortMessage ?? err.message ?? '').split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 2).join(' ');
   return short.length > 160 ? `${short.slice(0, 157)}…` : short || 'Something went wrong. Please try again.';
 }
 

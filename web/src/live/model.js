@@ -44,7 +44,11 @@ export function marketView(m) {
     if (t.deleveraging) blockers.push('The Counter is deleveraging: new positions are stopped.');
     if (!chainPrice) blockers.push('This market has no price yet.');
   }
-  if (!TRADABLE_STATES.has(status) && t) blockers.push(STATUS_NOTE[status] ?? 'New positions are stopped in the current market state.');
+  // When the price service has stopped the market, say why first: it is the real reason the chain-side limits say opens are not allowed.
+  if (!TRADABLE_STATES.has(status) && t) blockers.unshift(`${STATUS_NOTE[status] ?? 'New positions are stopped in the current market state.'}${feed?.reason ? ` Reason: ${feed.reason}.` : ''}`);
+  // A market priced from one source needs a run of confirming checks before its price can open a position.
+  const warming = /^warming up/.test(feed?.reason ?? '');
+  if (warming && t) blockers.unshift(`The price is still warming up (${feed.reason.replace('warming up ', '')} checks). New positions open once it is confirmed; this takes about a minute.`);
   // Listing-rule findings are information, not a stop: whether they block opens is decided by the price service and the contracts.
   const warnings = feed ? [...(feed.eligible === false ? feed.eligibilityReasons ?? [] : []), ...(feed.eligibilityWarnings ?? [])] : [];
   return {
@@ -83,7 +87,8 @@ export function marketView(m) {
       nav: usdgNum(t.navUsdg),
       state: t.state,
     },
-    canOpen: Boolean(t && t.state === 1 && t.opensAllowed && !t.deleveraging && chainPrice > 0 && TRADABLE_STATES.has(status)),
+    warming,
+    canOpen: Boolean(!warming && t && t.state === 1 && t.opensAllowed && !t.deleveraging && chainPrice > 0 && TRADABLE_STATES.has(status)),
     blockers: [...new Set(blockers)],
   };
 }

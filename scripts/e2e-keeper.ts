@@ -72,8 +72,13 @@ async function sizing() {
   ]);
   if (nav < 1_000_000_000n) throw new Error('the Counter is empty: run scripts/e2e-fork.ts first');
   const prof = cfg.profiles[mark.status]!;
-  const capUsd = (Number(nav) / 1e6) * (Math.min(Number(prof.maxPositionBpsOfV), cfg.positionBpsOfV) / 10_000);
-  const notional = capUsd * 0.6;
+  // The single-position cap in force right now, from the API: it already accounts for the Counter's current rung (B0, R0, ...).
+  const board = (await api('GET', '/v1/markets')).json as unknown as Array<{ symbol: string; trading: { positionCapUsdg: string } | null }>;
+  const row = board.find((m) => m.symbol === SYMBOL);
+  if (!row?.trading) throw new Error(`the API has no limits for ${SYMBOL}`);
+  const capUsd = Number(row.trading.positionCapUsdg) / 1e6;
+  // 40%, not more: the open guard (the first minutes after a market opens) halves the ticket size.
+  const notional = capUsd * 0.4;
   const price = Number(mark.priceE18) / 1e18;
   const lev = (Number(prof.maxLeverageE18) / 1e18) * 0.85;
   return { mark, cfg, sizeE18: BigInt(Math.floor((notional / price) * 1e6)) * 10n ** 12n, marginUsdg: BigInt(Math.ceil((notional / lev) * 1e6)) };
@@ -106,7 +111,7 @@ async function signedOrder(nonce: bigint, trigger: bigint, above: boolean) {
     reduceOnly: true,
     maxSlippageBps: 300,
     marginUsdg: 0n,
-    validAfter: now - 30n,
+    validAfter: now, // must come AFTER the last close: a stop-loss belongs to the position it was set on
     expiry: now + 3_600n,
     nonce,
   } as const;

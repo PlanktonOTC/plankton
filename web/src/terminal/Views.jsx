@@ -98,6 +98,7 @@ export function TapeView({ markets, alerts, removeAlert, favorites, toggleFavori
     const list = [];
     const base = { symbol: m.symbol, name: m.name };
     if (!m.feedUp) list.push({ ...base, type: 'Feed', title: 'Price service unreachable', body: 'The live price feed is not answering, so this market may not accept new positions. Exits stay available at the on-chain mark.' });
+    if (m.warming) list.push({ ...base, type: 'Session', title: 'Price warming up', body: 'A market priced from one source needs a run of confirming checks before new positions can open. This takes about a minute.' });
     if (m.status === 'halted') list.push({ ...base, type: 'Halt', title: 'Trading halted', body: 'The exchange halted this stock. New positions and liquidations are stopped; you can still close.' });
     if (m.status === 'frozen') list.push({ ...base, type: 'Halt', title: 'Market frozen', body: m.freezeReasons.length ? `Reason: ${m.freezeReasons.join(', ')}. New positions are stopped.` : 'Price sources are stale or a corporate action is pending. New positions are stopped.' });
     if (m.status === 'weekend' || m.status === 'extended') list.push({ ...base, type: 'Session', title: m.status === 'weekend' ? 'Weekend session' : 'Extended hours', body: 'The price is held near the last regular close; leverage, size and spreads follow the session limits.' });

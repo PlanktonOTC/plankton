@@ -54,10 +54,14 @@ export const orderTypedData = (chainId, exchange, order) => ({
 /** The text a trader signs to cancel an order off-chain. The API checks it with verifyMessage. */
 export const cancelMessage = (nonce) => `plankton:cancel-order:${nonce}`;
 
-/** A random uint64, like the API's quote nonces. Collisions are the only failure, and 2^64 makes them negligible. */
+/**
+ * A random order id. The contract accepts any uint64, but the API stores orders in a Postgres bigint, which stops at 2^63 - 1,
+ * so the top bit is cleared. 63 random bits still make a collision negligible.
+ */
+export const MAX_ORDER_NONCE = (1n << 63n) - 1n;
 export function newNonce(cryptoImpl = globalThis.crypto) {
   const bytes = cryptoImpl.getRandomValues(new Uint8Array(8));
-  return bytes.reduce((acc, b) => (acc << 8n) | BigInt(b), 0n);
+  return bytes.reduce((acc, b) => (acc << 8n) | BigInt(b), 0n) & MAX_ORDER_NONCE;
 }
 
 /** Whether the mark must rise to (true) or fall to (false) the trigger, for an entry order by the side it opens. */

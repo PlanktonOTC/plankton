@@ -178,7 +178,7 @@ export default function Ticket({ market, account, orders }) {
     label: !t.wallet.isConnected ? 'Connect wallet' : wrongNet ? 'Switch network' : `Review ${side}`,
     arrow: t.wallet.isConnected && !wrongNet,
     disabled: t.wallet.isConnected && !wrongNet && (Boolean(primaryError) || waitingForPreview),
-    error: t.wallet.isConnected && !wrongNet && marginValid ? primaryError : null,
+    error: t.wallet.isConnected && !wrongNet && (marginValid || margin !== '') ? primaryError : null,
     note: t.wallet.isConnected ? 'You approve every transaction in your wallet. Review the estimate before confirming.' : 'Connect a wallet to trade. Nothing is sent until you confirm in your wallet.',
   };
   const previewFee = shown?.fee ?? 0;

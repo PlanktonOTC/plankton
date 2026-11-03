@@ -44,9 +44,12 @@ function TerminalApp() {
   // ---- derived data -------------------------------------------------------------------------------------------------
   const markets = useMemo(() => (marketsQuery.data ?? []).map(marketView), [marketsQuery.data]);
   const market = markets.find((m) => m.symbol === selected) ?? markets[0] ?? null;
-  const orders = useMemo(() => (historyQuery.data?.openOrders ?? []).map(orderView), [historyQuery.data]);
+  const queuedOrders = useMemo(() => (historyQuery.data?.openOrders ?? []).map(orderView), [historyQuery.data]);
   const trades = useMemo(() => (historyQuery.data?.recentTrades ?? []).map(tradeView), [historyQuery.data]);
-  const account = useMemo(() => accountView(wallet.isConnected ? stateQuery.data : null, orders), [wallet.isConnected, stateQuery.data, orders]);
+  const holdings = useMemo(() => accountView(wallet.isConnected ? stateQuery.data : null, queuedOrders), [wallet.isConnected, stateQuery.data, queuedOrders]);
+  // A take-profit or stop-loss belongs to the position it was set on and can never fire once that is closed, so it is listed only while the position exists.
+  const orders = useMemo(() => queuedOrders.filter((o) => !o.protective || holdings.positions.some((p) => p.symbol === o.symbol)), [queuedOrders, holdings]);
+  const account = holdings;
   const historyError = historyQuery.isError ? (historyQuery.error?.status === 503 ? 'The order database is not configured on this service.' : friendlyError(historyQuery.error)) : '';
   const selectedPosition = account.positions.find((p) => p.symbol === market?.symbol);
 
@@ -191,7 +194,7 @@ function TerminalApp() {
                         {market.change !== null ? <span className={market.change >= 0 ? 'term-positive' : 'term-negative'}>{market.change >= 0 ? '+' : ''}{market.change.toFixed(2)}% vs close <Arrow down={market.change < 0} /></span> : <span className="term-muted">{market.statusLabel}</span>}
                       </div>
                       <div className="term-market-stat"><span>State</span><strong>{market.statusLabel}</strong></div>
-                      <div className="term-market-stat"><span>Max leverage</span><strong>{market.limits ? `${market.limits.maxLeverage}×` : '—'}</strong></div>
+                      <div className="term-market-stat"><span>Max leverage</span><strong>{market.limits && market.limits.maxLeverage > 0 ? `${market.limits.maxLeverage}×` : '—'}</strong></div>
                       <div className="term-market-stat"><span>Open interest</span><strong>{market.limits ? compact(market.limits.longOi + market.limits.shortOi) : '—'}</strong></div>
                     </div>
                     <div className="term-chart-tools">

@@ -228,3 +228,11 @@ test('relativeTime reads naturally in both directions', () => {
   assert.equal(relativeTime(now + 3 * 3_600_000, now), 'in 3h');
   assert.equal(relativeTime(now + 7 * 86_400_000, now), 'in 7d');
 });
+
+test('a price that is still warming up cannot open a position, and says so', () => {
+  const m = marketView(apiMarket({ mark: { ...apiMarket().mark, reason: 'warming up 3/20', confidenceBps: 9999 } }));
+  assert.equal(m.warming, true);
+  assert.equal(m.canOpen, false);
+  assert.match(m.blockers[0], /warming up \(3\/20/);
+  assert.equal(marketView(apiMarket()).warming, false);
+});

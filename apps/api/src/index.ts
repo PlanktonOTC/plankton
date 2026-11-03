@@ -205,7 +205,10 @@ async function liveMarks(): Promise<Map<string, LiveMark> | null> {
 function withLiveMark(snap: MarketSnapshot, live: LiveMark | undefined, nowSec: bigint): MarketSnapshot {
   const status = live?.status ? STATUS_INDEX[live.status] : undefined;
   if (!live?.priceE18 || !status) return snap;
-  return { ...snap, mark: { ...snap.mark, priceE18: BigInt(live.priceE18), status, confidenceBps: live.confidenceBps ?? snap.mark.confidenceBps, updatedAt: nowSec } };
+  // The contract starts its open guard (wider spread, smaller tickets) when a publish moves a market INTO Open from another state. If
+  // this market is about to do that, the quote will carry the guard, so the preview must too.
+  const entersOpen = status === STATUS_INDEX.open! && snap.mark.status !== STATUS_INDEX.open;
+  return { ...snap, openSince: entersOpen ? nowSec : snap.openSince, mark: { ...snap.mark, priceE18: BigInt(live.priceE18), status, confidenceBps: live.confidenceBps ?? snap.mark.confidenceBps, updatedAt: nowSec } };
 }
 
 /**
@@ -464,6 +467,8 @@ app.get('/v1/tx/claim', (c) => {
 app.post('/v1/orders', async (c) => {
   const b = orderBody.parse(await c.req.json().catch(() => null));
   const { signature, ...order } = b;
+  // Orders are stored in a Postgres bigint (signed 64-bit). The contract accepts any uint64 nonce, but one above this could not be saved.
+  if (order.nonce > 9_223_372_036_854_775_807n) throw new HttpError(400, 'order nonce must be below 2^63');
   const { dep, client } = chain();
   const m = byId.get(order.marketId.toLowerCase());
   if (!m) throw new HttpError(404, 'unknown market');

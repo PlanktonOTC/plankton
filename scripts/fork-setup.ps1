@@ -23,7 +23,7 @@ if ($Stop) {
 # --- 1. the fork (the Robinhood RPC lookup sometimes fails once on this machine: retry)
 $ok = $false
 for ($i = 1; $i -le 6 -and -not $ok; $i++) {
-  $p = Start-Process anvil -ArgumentList '--fork-url', 'https://rpc.mainnet.chain.robinhood.com', '--port', '8545', '--accounts', '10' -PassThru -NoNewWindow `
+  $p = Start-Process anvil -ArgumentList '--fork-url', 'https://rpc.mainnet.chain.robinhood.com', '--port', '8545', '--accounts', '10', '--hardfork', 'cancun' -PassThru -NoNewWindow `
     -RedirectStandardOutput (Join-Path $env:TEMP 'anvil.log') -RedirectStandardError (Join-Path $env:TEMP 'anvil.err')
   Start-Sleep -Seconds 8
   if (& cast chain-id --rpc-url $rpc 2>$null) { $ok = $true; $p.Id | Out-File $pidFile } else { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 4 }
@@ -41,6 +41,14 @@ foreach ($a in '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', '0x976EA74026E72655
   & cast send $usdg 'transfer(address,uint256)' $a 200000000000 --from $holder --unlocked --rpc-url $rpc 2>&1 | Out-Null
 }
 'funded 3 accounts with 200,000 USDG each'
+
+# anvil's public test keys are known to everyone, and on the real chain bots have given them EIP-7702 smart-account code. The
+# exchange treats an account with code as a smart wallet and asks that code to approve order signatures, so a plain test key
+# would be refused (BadSigner). Clearing the code on this PRIVATE fork makes them ordinary wallets again, like a real user's.
+foreach ($a in '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC', '0x90F79bf6EB2c4f870365E785982E1f101E93b906', '0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65', '0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc', '0x976EA74026E726554dB657fA54763abd0C3a0aa9', '0x14dC79964da2C08b23698B3D3cc7Ca32193d9955', '0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f', '0xa0Ee7A142d267C1f36714E4a8F75612F20a79720') {
+  & cast rpc anvil_setCode $a 0x --rpc-url $rpc | Out-Null
+}
+'cleared smart-account code from the 10 test accounts'
 
 # --- 3. deploy and register markets
 $deployerKey = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'

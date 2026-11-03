@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { recoverTypedDataAddress, recoverMessageAddress } from 'viem';
+import { recoverTypedDataAddress, recoverMessageAddress, decodeErrorResult, toFunctionSelector } from 'viem';
+import { exchangeAbi, vaultAbi } from '../src/live/abis.js';
 import { privateKeyToAccount } from 'viem/accounts';
 import { big, parseUsdg, parseE18, formatUnits, formatUsdg, formatE18, money, signed, percentChange, shortAddress } from '../src/live/units.js';
 import { ApiError, request, query } from '../src/live/api.js';
@@ -150,11 +151,14 @@ test('cancel message is signable and recoverable', async () => {
   assert.equal(await recoverMessageAddress({ message: text, signature: await account.signMessage({ message: text }) }), account.address);
 });
 
-test('newNonce is a uint64 and differs between calls', () => {
+test('newNonce fits the database column (below 2^63) and differs between calls', () => {
   const a = newNonce();
   const b = newNonce();
-  assert.ok(a >= 0n && a < 2n ** 64n);
+  assert.ok(a >= 0n && a <= 2n ** 63n - 1n);
   assert.notEqual(a, b);
+  // a source that returns all ones must still be clamped
+  const worst = newNonce({ getRandomValues: (arr) => arr.fill(255) });
+  assert.equal(worst, 2n ** 63n - 1n);
 });
 
 test('protectionProblem mirrors the exchange rules', () => {
@@ -386,4 +390,24 @@ test('toQuoteArg turns every wire string into the bigint the contract struct nee
   const q = toQuoteArg(wireQuote());
   for (const k of ['sizeDeltaE18', 'execPriceE18', 'feeUsdg', 'maxLeverageE18', 'markSequence', 'nonce', 'expiry']) assert.equal(typeof q[k], 'bigint', k);
   assert.equal(q.marketId, MARKET);
+});
+
+// ---------------------------------------------------------------- contract errors
+
+test('the site can name the contract errors a trader can hit', () => {
+  for (const [abi, name] of [[exchangeAbi, 'QuoteExpired'], [exchangeAbi, 'Slippage'], [exchangeAbi, 'InsufficientCollateral'], [exchangeAbi, 'SameBlockReduce'], [vaultAbi, 'TooSmall']]) {
+    assert.equal(decodeErrorResult({ abi, data: toFunctionSelector(`${name}()`) }).errorName, name);
+  }
+});
+
+test('a decoded revert reaches the trader as a plain sentence', () => {
+  const err = Object.assign(new Error('The contract function "permitAndExecute" reverted with the following reason:\nQuoteExpired()'), { cause: { data: { errorName: 'QuoteExpired' } } });
+  assert.match(friendlyError(err), /quote expired/i);
+  const unknown = new Error('The contract function "x" reverted with the following reason:\nSomethingNew()');
+  assert.match(friendlyError(unknown), /SomethingNew/);
+});
+
+test('an expired local test chain is explained, not shown as node text', () => {
+  const err = new Error('The contract function "permitAndExecute" reverted with the following reason: failed to apply blockhash contract call: database error: failed to get storage for 0x5fc5');
+  assert.match(friendlyError(err), /fork-up.ps1/);
 });
