@@ -3,7 +3,11 @@ import { KIND_LABEL } from './orders.js';
 
 // Pure translation from API responses to what the screens draw. No React, no network: easy to test, hard to get wrong.
 
-const NAMES = { USAR: 'USA Rare Earth', CLSK: 'CleanSpark', RGTI: 'Rigetti Computing' };
+const NAMES = {
+  USAR: 'USA Rare Earth', CLSK: 'CleanSpark', RGTI: 'Rigetti Computing', WYFI: 'WhiteFiber', NNE: 'NANO Nuclear Energy', RCAT: 'Red Cat Holdings',
+  TE: 'T1 Energy', POET: 'POET Technologies', FLNC: 'Fluence Energy', QUBT: 'Quantum Computing', DJT: 'Trump Media & Technology Group',
+  RUN: 'Sunrun', SLS: 'SELLAS Life Sciences',
+};
 export const companyName = (symbol) => NAMES[symbol] ?? symbol;
 
 export const STATUS_LABEL = { open: 'Open', extended: 'Extended hours', weekend: 'Weekend', frozen: 'Frozen', halted: 'Halted', unset: 'No price yet' };
@@ -38,7 +42,7 @@ export function marketView(m) {
     if (t.state === 3) blockers.push('This market is paused.');
     if (!t.opensAllowed) blockers.push('New positions are not allowed in the current market state.');
     if (t.deleveraging) blockers.push('The Counter is deleveraging: new positions are stopped.');
-    if (!chainPrice) blockers.push('This market has no on-chain price yet.');
+    if (!chainPrice) blockers.push('This market has no price yet.');
   }
   if (!TRADABLE_STATES.has(status) && t) blockers.push(STATUS_NOTE[status] ?? 'New positions are stopped in the current market state.');
   // Listing-rule findings are information, not a stop: whether they block opens is decided by the price service and the contracts.

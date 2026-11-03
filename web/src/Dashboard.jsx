@@ -115,7 +115,7 @@ function TerminalApp() {
     : wallet.wrongNetwork ? { tone: 'warn', text: 'Your wallet is on another network. Switch to Robinhood Chain to trade.' }
     : feedDown ? { tone: 'warn', text: 'The live price feed is not answering. New positions are paused; exits stay available at the on-chain mark.' }
     : !markets.length && marketsQuery.isLoading ? { tone: 'muted', text: 'Connecting to the exchange…' }
-    : { tone: 'good', text: `Robinhood Chain · ${markets.length} market${markets.length === 1 ? '' : 's'} · prices from two independent sources. Synthetic perpetuals: no shares are delivered.` };
+    : { tone: 'good', text: `Robinhood Chain · ${markets.length} market${markets.length === 1 ? '' : 's'} · marks are signed by independent signers and checked against Chainlink where a feed exists. Synthetic perpetuals: no shares are delivered.` };
   const health = [
     ['PlanktonOTC service', !apiDown, 'Unreachable'],
     ['Price feeds', markets.length > 0 && !feedDown, 'Not answering'],
@@ -173,7 +173,7 @@ function TerminalApp() {
                 <div className="term-market-foot">
                   <span className="term-overline">SOURCE STATUS</span>
                   <div className="term-feed-state"><i className={feedDown || apiDown ? 'is-off' : 'is-on'} />{apiDown ? 'Service unreachable' : feedDown ? 'Feeds not answering' : 'Feeds connected'}</div>
-                  <p>Marks need two independent sources to agree before a new position can open.</p>
+                  <p>Every mark is signed by independent signers. Where Chainlink has a feed it must agree with Robinhood's quote before a new position can open.</p>
                   <button className="term-text-button" disabled={!market} onClick={() => setDialog({ type: 'sources', symbol: market?.symbol })}>Inspect pricing sources ↗</button>
                   <a href="/#roadmap">Explore the roadmap <Arrow /></a>
                 </div>
@@ -201,7 +201,7 @@ function TerminalApp() {
                     </div>
                     <Chart market={market} position={selectedPosition} orders={orders} />
                     <div className="term-source-bar">
-                      <span><i className={market.status === 'open' || market.status === 'extended' ? 'good' : 'muted'} />{market.status === 'open' || market.status === 'extended' ? 'Two-source mark' : `${market.statusLabel} mark`}{market.dispersionBps !== null ? ` · ${market.dispersionBps} bps apart` : ''}</span>
+                      <span><i className={market.status === 'open' || market.status === 'extended' ? 'good' : 'muted'} />{market.status === 'open' || market.status === 'extended' ? (market.sources.length > 1 ? 'Two-source mark' : 'Robinhood-quote mark') : `${market.statusLabel} mark`}{market.dispersionBps !== null && market.sources.length > 1 ? ` · ${market.dispersionBps} bps apart` : ''}</span>
                       <span>Spread <b>{market.limits ? `${market.limits.openSpreadBps} bps` : '—'}</b></span>
                       <span>{market.canOpen ? 'Max position' : 'New opens'} <b>{market.canOpen ? `${money(market.limits.positionCap, 0)} USDG` : 'Unavailable'}</b></span>
                       <button onClick={() => setDialog({ type: 'sources', symbol: market.symbol })}>Why this mark? ↗</button>

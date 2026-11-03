@@ -33,6 +33,8 @@ const schema = z.object({
   KEEPER_PORT: z.coerce.number().default(8791),
   MARK_PORT: z.coerce.number().default(8788),
   MARK_SERVICE_URL: z.string().default('http://127.0.0.1:8788'),
+  /** Set by hosts such as Render to say which port to listen on. When present it wins over the service-specific port below. */
+  PORT: z.coerce.number().int().positive().optional(),
   API_PORT: z.coerce.number().default(8787),
   /** Comma-separated browser origins allowed to call the API (for example https://app.example.com). Empty: none in production, any in development. */
   CORS_ORIGINS: z.string().optional(),

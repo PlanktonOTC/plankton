@@ -50,7 +50,7 @@ test('close-only, paused, deleveraging, opens-not-allowed and no price each stop
     [{ state: 3 }, /paused/],
     [{ deleveraging: true }, /deleveraging/i],
     [{ opensAllowed: false }, /not allowed/],
-    [{ markE18: '0' }, /no on-chain price/],
+    [{ markE18: '0' }, /no price/],
   ];
   for (const [patch, re] of cases) {
     const m = marketView(apiMarket({ mark: null, trading: { ...t, ...patch } }));

@@ -110,3 +110,19 @@ describe('holiday calendar', () => {
     expect(calendar.get('2026-11-26')!.holiday).toBe(true);
   });
 });
+
+describe('hosted port', () => {
+  test('PORT is optional, so local runs keep using the per-service ports', () => {
+    expect(loadEnv({}).PORT).toBeUndefined();
+    expect(loadEnv({ API_PORT: '9000' }).API_PORT).toBe(9000);
+  });
+
+  test('a host-assigned PORT is read as a number', () => {
+    expect(loadEnv({ PORT: '10000' }).PORT).toBe(10000);
+  });
+
+  test('a PORT that is not a valid port number is refused', () => {
+    expect(() => loadEnv({ PORT: 'abc' })).toThrow(/PORT/);
+    expect(() => loadEnv({ PORT: '0' })).toThrow(/PORT/);
+  });
+});

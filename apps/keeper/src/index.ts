@@ -269,5 +269,5 @@ every('quote-probe', 60_000, probeQuoteService);
 
 const app = new Hono();
 app.get('/health', () => new Response(JSON.stringify({ ok: true, keeper: account.address, ...health }), { headers: { 'content-type': 'application/json' } }));
-const server = Bun.serve({ port: env.KEEPER_PORT, fetch: app.fetch });
+const server = Bun.serve({ port: env.PORT ?? env.KEEPER_PORT, fetch: app.fetch });
 log.info({ keeper: account.address, port: server.port, markets: markets.length }, 'keeper started');

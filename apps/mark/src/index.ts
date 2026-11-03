@@ -154,5 +154,5 @@ app.get('/sources/:symbol', (c) => {
   return s ? json(s) : json({ error: 'unknown market' }, 404);
 });
 
-const server = Bun.serve({ port: env.MARK_PORT, fetch: app.fetch });
+const server = Bun.serve({ port: env.PORT ?? env.MARK_PORT, fetch: app.fetch });
 log.info({ port: server.port, markets: markets.map((m) => m.symbol), rung }, 'mark service started');

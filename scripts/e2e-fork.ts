@@ -53,6 +53,9 @@ async function main() {
   await send(lp, { address: dep.usdg, abi: erc20Abi, functionName: 'approve', args: [dep.vault, 100_000_000_000n] });
   await send(lp, { address: dep.vault, abi: vaultAbi, functionName: 'requestDeposit', args: [100_000_000_000n] });
   ok('deposit requested (held in escrow until the next mark)');
+  // Marks go on-chain only when someone is about to trade, so ask the mark service for one (the same call the API makes before a quote).
+  const pub = await fetch(`http://127.0.0.1:8788/publish/${SYMBOL}`, { method: 'POST', headers: { authorization: 'Bearer local-fork-token-0123456789' } });
+  if (!pub.ok) throw new Error(`mark service would not publish a ${SYMBOL} mark (HTTP ${pub.status}): is it warmed up and is the publisher funded?`);
   for (let i = 0; i < 40; i++) {
     const epoch = await client.readContract({ address: dep.exchange, abi: exchangeAbi, functionName: 'markEpoch' });
     if (epoch > epochBefore) break;

@@ -26,6 +26,7 @@ import {
   wire,
   type ChainClient,
   type Deployment,
+  type MarketSnapshot,
   type TraderSnapshot,
   type TradeQuoteMsg,
 } from '@plankton/chain';
@@ -183,6 +184,30 @@ app.get('/health', (c) => c.json({ ok: true, rung }));
 
 // ---------------------------------------------------------------- markets and status
 
+// Marks go on-chain only when someone is about to trade (ensureFreshMark), so an idle market's on-chain mark is old or
+// empty. The board and the ticket preview therefore show the live price from the mark service: the price a real quote
+// publishes a moment later. If the mark service is down they fall back to whatever is on-chain.
+interface LiveMark { symbol: string; status: string | null; priceE18: string | null; confidenceBps: number | null }
+const STATUS_INDEX: Record<string, number> = { open: 1, extended: 2, weekend: 3, frozen: 4, halted: 5 };
+let liveCache: { at: number; bySymbol: Map<string, LiveMark> | null } | null = null;
+async function liveMarks(): Promise<Map<string, LiveMark> | null> {
+  if (liveCache && Date.now() - liveCache.at < 1_500) return liveCache.bySymbol;
+  let bySymbol: Map<string, LiveMark> | null = null;
+  try {
+    bySymbol = new Map((await fromMark<LiveMark[]>('/marks')).map((m) => [m.symbol, m]));
+  } catch {
+    /* mark service unreachable: callers use the on-chain mark */
+  }
+  liveCache = { at: Date.now(), bySymbol };
+  return bySymbol;
+}
+
+function withLiveMark(snap: MarketSnapshot, live: LiveMark | undefined, nowSec: bigint): MarketSnapshot {
+  const status = live?.status ? STATUS_INDEX[live.status] : undefined;
+  if (!live?.priceE18 || !status) return snap;
+  return { ...snap, mark: { ...snap.mark, priceE18: BigInt(live.priceE18), status, confidenceBps: live.confidenceBps ?? snap.mark.confidenceBps, updatedAt: nowSec } };
+}
+
 /**
  * The market's rules and on-chain mark right now, for the board and the ticket. Cached for a couple of seconds so a page
  * polling every few seconds, times every open tab, does not become a flood of RPC calls. Null when the chain is not reachable
@@ -198,7 +223,7 @@ async function tradingFor(symbol: string): Promise<Trading | null> {
   try {
     const m = market(symbol);
     const { client, dep } = chain();
-    const snap = await readMarket(client, dep, m.marketId);
+    const snap = withLiveMark(await readMarket(client, dep, m.marketId), (await liveMarks())?.get(symbol), BigInt(Math.floor(Date.now() / 1000)));
     value = {
       ...marketLimits(snap, m.cfg.class, rung),
       markE18: snap.mark.priceE18,
@@ -347,14 +372,18 @@ app.get('/v1/quote/preview', async (c) => {
   const q = previewQuery.parse(c.req.query());
   const m = market(q.market);
   const { client, dep } = chain();
-  const [snap, tr]: [Awaited<ReturnType<typeof readMarket>>, TraderSnapshot] = await Promise.all([
+  const [rawSnap, tr, nowSec, live]: [MarketSnapshot, TraderSnapshot, bigint, Map<string, LiveMark> | null] = await Promise.all([
     readMarket(client, dep, m.marketId),
     q.trader ? readTrader(client, dep, m.marketId, q.trader) : Promise.resolve({ position: EMPTY_POSITION, collateralUsdg: 0n, walletNotionalUsdg: 0n }),
+    chainTimeSec(client),
+    liveMarks(),
   ]);
+  // Price the ticket against the live mark: a real quote publishes it on-chain first (see ensureFreshMark).
+  const snap = withLiveMark(rawSnap, live?.get(m.cfg.symbol), nowSec);
   const markE18 = snap.mark.priceE18;
   if (markE18 === 0n) return json({ ok: false, code: 'no_mark', message: 'this market has no price yet', markE18 });
 
-  const nowMs = Number(await chainTimeSec(client)) * 1000;
+  const nowMs = Number(nowSec) * 1000;
   const marginUsdg = q.marginUsdg ?? 0n;
   const run = (sizeDeltaE18: bigint) =>
     quoteFromChain({ snap, trader: tr, cls: m.cfg.class, rung, sizeDeltaE18, marginUsdg, nowMs, calendar, windowTz: env.STOCK_TOKEN_WINDOW_TZ });
@@ -664,7 +693,7 @@ app.onError((err, c) => {
 });
 
 const server = Bun.serve({
-  port: env.API_PORT,
+  port: env.PORT ?? env.API_PORT,
   maxRequestBodySize: 64 * 1024, // the largest legitimate body is a signed order, well under 2 KB
   fetch: (req, srv) => app.fetch(req, { ip: srv.requestIP(req)?.address }),
 });

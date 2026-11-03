@@ -182,5 +182,5 @@ app.post('/sign/mark', async (c) => {
   return json({ signature, signer: account.address });
 });
 
-const server = Bun.serve({ port: env.SIGNER_PORT, fetch: app.fetch, ...(tls ? { tls } : {}) });
+const server = Bun.serve({ port: env.PORT ?? env.SIGNER_PORT, fetch: app.fetch, ...(tls ? { tls } : {}) });
 log.info({ role, address: account.address, port: server.port, mtls: Boolean(tls) }, 'signer started');

@@ -292,7 +292,7 @@ export function SourcesDialog({ market }) {
   const labels = { chainlink: 'Chainlink equity feed', rh_quote: 'Robinhood Stock Token quote', pyth: 'Pyth', uni_v3: 'Uniswap v3 pool', uni_v4: 'Uniswap v4 pool' };
   return (
     <Modal title="Why this mark?" onClose={() => t.setDialog(null)}>
-      <p className="term-modal-intro">New positions need two independent sources that agree. If they disagree or one goes stale, opens stop and exits stay available.</p>
+      <p className="term-modal-intro">Every mark is signed by independent signers. Where Chainlink has a feed for the stock, it must agree with Robinhood's quote before a new position can open; stocks without a feed are priced from Robinhood's quote alone. If sources disagree or go stale, opens stop and exits stay available.</p>
       <div className="term-detail"><span>Market state</span><b>{market.statusLabel}</b></div>
       <div className="term-detail"><span>Mark</span><b>{market.price ? money(market.price, priceDigits(market.price)) : '—'} USDG</b></div>
       <div className="term-detail"><span>Source agreement</span><b>{market.dispersionBps === null ? '—' : `${market.dispersionBps} bps apart`}</b></div>
