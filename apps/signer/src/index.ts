@@ -51,13 +51,29 @@ const singleSource = new Map(
     .markets.filter((m) => !m.chainlinkFeed)
     .map((m) => [marketIdFor(m.symbol, m.stockToken as `0x${string}`).toLowerCase(), m]),
 );
-let rhCache: { at: number; read: Promise<[Awaited<ReturnType<typeof fetchRhPrices>>, Awaited<ReturnType<typeof fetchRhAssets>>]> } | null = null;
-const rhNow = () => {
-  if (!rhCache || Date.now() - rhCache.at > 10_000) {
-    rhCache = { at: Date.now(), read: Promise.all([fetchRhPrices(env.RH_API_BASE), fetchRhAssets(env.RH_API_BASE)]) };
+// Robinhood is read in the background (prices every 10 s, the asset list every 5 min), never while a request waits:
+// its API can take seconds to answer, and a mark signed on a quote older than a minute is refused below anyway.
+let rhQuotes: { at: number; quotes: Awaited<ReturnType<typeof fetchRhPrices>> } | null = null;
+let rhAssets: { at: number; assets: Awaited<ReturnType<typeof fetchRhAssets>> } | null = null;
+async function refreshRobinhood(): Promise<void> {
+  try {
+    if (!rhAssets || Date.now() - rhAssets.at > 300_000) rhAssets = { at: Date.now(), assets: await fetchRhAssets(env.RH_API_BASE) };
+    rhQuotes = { at: Date.now(), quotes: await fetchRhPrices(env.RH_API_BASE) };
+  } catch (err) {
+    log.warn({ err: (err as Error).message }, 'robinhood refresh failed');
   }
-  return rhCache.read;
-};
+}
+if (role === 'mark' && singleSource.size > 0) {
+  let running = false;
+  const loop = async () => {
+    if (running) return;
+    running = true;
+    await refreshRobinhood();
+    running = false;
+  };
+  void loop();
+  setInterval(loop, 10_000);
+}
 
 // Deadlines are judged against chain time, because that is what the contracts compare them to.
 const nowSec = async () => Number(await chainTimeSec(client));
@@ -149,8 +165,8 @@ app.post('/sign/mark', async (c) => {
     if (clAt !== 0n && diffBps(a.markE18, cl) > BigInt(env.SIGNER_MARK_MAX_DEV_BPS)) return reject('mark too far from Chainlink');
     const m = singleSource.get(a.marketId.toLowerCase());
     if (m) {
-      const [quotes, assets] = await rhNow().catch(() => [[], []] as [never[], never[]]);
-      const own = rhReading(m.symbol, m.stockToken, ROBINHOOD_CHAIN_ID, quotes, assets).observation;
+      if (!rhQuotes || !rhAssets || Date.now() - rhQuotes.at > 60_000) return reject('no fresh Robinhood read of my own to check this mark against');
+      const own = rhReading(m.symbol, m.stockToken, ROBINHOOD_CHAIN_ID, rhQuotes.quotes, rhAssets.assets).observation;
       if (!own) return reject('no Robinhood quote of my own to check this mark against');
       if (diffBps(a.markE18, own.priceE18) > BigInt(env.SIGNER_SINGLE_SOURCE_MAX_DEV_BPS)) return reject('mark too far from my Robinhood read');
     }
