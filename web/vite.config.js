@@ -1,7 +1,7 @@
 import { defineConfig, loadEnv } from 'vite';
 
 // The site talks to the PlanktonOTC API. In development '/api' is forwarded to the local API (default port 8787, see
-// docs/local-fork.md) so the browser sees one origin and needs no CORS setup. A production build reads VITE_API_URL instead.
+// docs/local-fork.md) so the browser sees one origin and needs no CORS setup. In production web/server.mjs does the same.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   return {

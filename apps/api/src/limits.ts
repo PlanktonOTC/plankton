@@ -23,9 +23,14 @@ export function createRateLimiter(windowMs = 60_000, maxKeys = 100_000) {
 
 /**
  * The caller's address. Forwarding headers can be forged by anyone who reaches the API directly, so they are used only
- * when TRUST_PROXY is on (the API sits behind a proxy that sets them).
+ * when TRUST_PROXY is on (the API sits behind a proxy that sets them). The website's own server forwards every visitor's
+ * calls from one address, so it names the visitor in x-visitor-ip, believed only alongside the shared WEB_PROXY_TOKEN.
  */
-export function clientIp(headers: Headers, socketIp: string | undefined, trustProxy: boolean): string {
+export function clientIp(headers: Headers, socketIp: string | undefined, trustProxy: boolean, webProxyToken?: string): string {
+  if (webProxyToken && tokenMatches(headers.get('x-web-proxy-token'), webProxyToken)) {
+    const visitor = headers.get('x-visitor-ip')?.trim();
+    if (visitor) return visitor;
+  }
   if (trustProxy) {
     const real = headers.get('x-real-ip')?.trim();
     if (real) return real;
@@ -38,9 +43,13 @@ export function clientIp(headers: Headers, socketIp: string | undefined, trustPr
 /** Constant-time check of the internal token header. */
 export function isInternal(headers: Headers, token: string | undefined): boolean {
   if (!token) return false;
-  const given = Buffer.from(headers.get('x-internal-token') ?? '');
-  const want = Buffer.from(token);
-  return given.length === want.length && timingSafeEqual(given, want);
+  return tokenMatches(headers.get('x-internal-token'), token);
+}
+
+function tokenMatches(given: string | null, token: string): boolean {
+  const a = Buffer.from(given ?? '');
+  const b = Buffer.from(token);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 /** Origins to allow, from a comma-separated list. In development an empty list means any origin. */

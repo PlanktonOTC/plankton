@@ -25,6 +25,9 @@ envVarGroups:
         generateValue: true
       - key: INTERNAL_API_TOKEN
         generateValue: true
+      # The website's server sends it with every /api call so the API rate-limits each visitor, not the site's one address.
+      - key: WEB_PROXY_TOKEN
+        generateValue: true
 
 services:
   # ------------------------------------------------------------------ public API (what the website calls)
@@ -48,9 +51,6 @@ services:
       # Render sits in front of the API and sets x-forwarded-for, which the rate limiter needs to tell visitors apart.
       - key: TRUST_PROXY
         value: "true"
-      # The website's address (https://plankton-web.onrender.com or your own domain). Set it after the site exists.
-      - key: CORS_ORIGINS
-        sync: false
 
   # ------------------------------------------------------------------ price service and its publisher
   - type: pserv
@@ -145,26 +145,28 @@ services:
       - fromGroup: plankton-shared
       - fromGroup: plankton-secrets
 
-  # ------------------------------------------------------------------ the website (static files, free)
+  # ------------------------------------------------------------------ the website
+  # web/server.mjs serves the built site and makes every /api call from the server, so the browser only talks to this
+  # origin and needs no CORS. It also sends pages for /trade and /docs (paths that are not files load index.html).
   - type: web
     name: plankton-web
-    runtime: static
+    runtime: node
+    plan: starter
     buildCommand: bun install --frozen-lockfile && bun run build:web
-    staticPublishPath: web/dist
+    startCommand: bun run start:web
+    healthCheckPath: /healthz
     envVars:
-      - key: BUN_VERSION
-        value: 1.4.2
+      - fromGroup: plankton-shared
+      - key: PORT
+        value: "10000"
+      - key: TRUST_PROXY
+        value: "true"
+      # The API's public address (no trailing slash).
+      - key: API_ORIGIN
+        value: https://plankton-gkmt.onrender.com
       - key: NODE_VERSION
         value: 22.12.0
       - key: VITE_CHAIN_ID
         value: "4663"
       - key: VITE_RPC_URL
         value: https://rpc.mainnet.chain.robinhood.com
-      # The public address of plankton-api, e.g. https://plankton-api.onrender.com
-      - key: VITE_API_URL
-        sync: false
-    routes:
-      # /trade and /docs are pages inside one app: any path that is not a file must load index.html.
-      - type: rewrite
-        source: /*
-        destination: /index.html

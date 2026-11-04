@@ -171,7 +171,7 @@ app.use('*', async (c, next) => {
   // Quotes spend a signer's notional budget and orders write to the database, so they get a third of the general allowance.
   const heavy = c.req.method !== 'GET' && c.req.method !== 'OPTIONS';
   const limit = heavy ? Math.max(1, Math.floor(env.API_RATE_LIMIT_PER_MIN / 3)) : env.API_RATE_LIMIT_PER_MIN;
-  const ip = clientIp(c.req.raw.headers, c.env?.ip, env.TRUST_PROXY === 'true');
+  const ip = clientIp(c.req.raw.headers, c.env?.ip, env.TRUST_PROXY === 'true', env.WEB_PROXY_TOKEN);
   const r = rateCheck(`${heavy ? 'w' : 'r'}:${ip}`, limit);
   if (!r.ok) {
     c.header('retry-after', String(r.retryAfterSec));

@@ -35,6 +35,15 @@ describe('client address', () => {
     expect(clientIp(new Headers({ 'x-forwarded-for': '9.9.9.9, 10.0.0.1' }), '1.2.3.4', true)).toBe('9.9.9.9');
     expect(clientIp(new Headers(), undefined, false)).toBe('unknown');
   });
+  test("the website's server names each visitor, believed only with the shared token", () => {
+    const token = 'w'.repeat(40);
+    const fromSite = new Headers({ 'x-visitor-ip': '7.7.7.7', 'x-web-proxy-token': token, 'x-real-ip': '8.8.8.8' });
+    expect(clientIp(fromSite, '1.2.3.4', true, token)).toBe('7.7.7.7');
+    expect(clientIp(fromSite, '1.2.3.4', false, token)).toBe('7.7.7.7');
+    const forged = new Headers({ 'x-visitor-ip': '7.7.7.7', 'x-web-proxy-token': 'x'.repeat(40) });
+    expect(clientIp(forged, '1.2.3.4', false, token)).toBe('1.2.3.4');
+    expect(clientIp(new Headers({ 'x-visitor-ip': '7.7.7.7' }), '1.2.3.4', false, undefined)).toBe('1.2.3.4');
+  });
 });
 
 describe('internal token and CORS', () => {

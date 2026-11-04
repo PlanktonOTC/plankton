@@ -2,7 +2,7 @@
 // running against the local fork described in docs/local-fork.md.
 const raw = (typeof import.meta !== 'undefined' && import.meta.env) || {};
 
-/** Where the PlanktonOTC API lives. '/api' is proxied to the local API by the dev server (see vite.config.js). */
+/** Where the browser sends API calls: '/api', forwarded server-side by the dev server (vite.config.js) or web/server.mjs. */
 export const API_URL = String(raw.VITE_API_URL ?? '/api').replace(/\/$/, '');
 export const CHAIN_ID = Number(raw.VITE_CHAIN_ID ?? 4663);
 /** Used for reading the chain from the browser (receipts) and when a wallet is asked to add the network. */

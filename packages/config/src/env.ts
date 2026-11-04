@@ -44,6 +44,8 @@ const schema = z.object({
   TRUST_PROXY: z.enum(['true', 'false']).default('false'),
   /** Lets the keeper's own calls skip the rate limit. Send it as the x-internal-token header. */
   INTERNAL_API_TOKEN: z.string().min(16).optional(),
+  /** Shared with the website's server (web/server.mjs), which forwards each visitor's address in x-visitor-ip. */
+  WEB_PROXY_TOKEN: z.string().min(32).optional(),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
 });
 

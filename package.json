@@ -13,6 +13,7 @@
     "db:migrate": "bun run packages/db/src/migrate.ts",
     "dev:web": "bun run --cwd web dev",
     "build:web": "bun run --cwd web build",
+    "start:web": "bun run --cwd web start",
     "test:web": "bun run --cwd web test",
     "dev:api": "bun run apps/api/src/index.ts",
     "dev:signer": "bun run apps/signer/src/index.ts",
