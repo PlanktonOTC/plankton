@@ -1,0 +1,171 @@
+# Render Blueprint for PlanktonOTC, STAGE 2: every service. Use it when the contracts are deployed: copy this file over render.yaml
+# (or point Render at it), commit, and apply it. Stage 1 (render.yaml) runs only the website and the API.
+#
+# BEFORE you apply it (full walkthrough in the chat that produced this file):
+#   1. The contracts must already be deployed to the real chain and deployments/4663.json must hold their addresses.
+#   2. Have your existing Postgres connection URL ready (Railway or any other host; no new database is needed).
+#   3. In Render > Env Groups, create a group named  plankton-secrets  holding exactly two values:
+#        RPC_URLS      the chain RPC address(es), comma-separated, best one first
+#        DATABASE_URL  your Postgres connection URL from step 2
+#   4. Have five SEPARATE funded wallets ready (their private keys are asked for when you apply this file).
+#
+# Every service listens on port 10000 (Render's default PORT), so the private addresses below are http://<name>:10000.
+# All services use the Starter instance size. Resize any of them in the Render dashboard if its CPU stays high.
+
+envVarGroups:
+  - name: plankton-shared
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: BUN_VERSION
+        value: 1.4.2
+      - key: LOG_LEVEL
+        value: info
+      # Generated once by Render and shared by every service that needs it.
+      - key: SIGNER_AUTH_TOKEN
+        generateValue: true
+      - key: INTERNAL_API_TOKEN
+        generateValue: true
+
+services:
+  # ------------------------------------------------------------------ public API (what the website calls)
+  - type: web
+    name: plankton-api
+    runtime: node
+    plan: starter
+    buildCommand: bun install --frozen-lockfile
+    preDeployCommand: bun run db:migrate
+    startCommand: bun run apps/api/src/index.ts
+    healthCheckPath: /health
+    envVars:
+      - fromGroup: plankton-shared
+      - fromGroup: plankton-secrets
+      - key: PORT
+        value: "10000"
+      - key: QUOTE_SIGNER_URLS
+        value: http://plankton-signer-quote:10000
+      - key: MARK_SERVICE_URL
+        value: http://plankton-mark:10000
+      # Render sits in front of the API and sets x-forwarded-for, which the rate limiter needs to tell visitors apart.
+      - key: TRUST_PROXY
+        value: "true"
+      # The website's address (https://plankton-web.onrender.com or your own domain). Set it after the site exists.
+      - key: CORS_ORIGINS
+        sync: false
+
+  # ------------------------------------------------------------------ price service and its publisher
+  - type: pserv
+    name: plankton-mark
+    runtime: node
+    plan: starter
+    buildCommand: bun install --frozen-lockfile
+    startCommand: bun run apps/mark/src/index.ts
+    envVars:
+      - fromGroup: plankton-shared
+      - fromGroup: plankton-secrets
+      - key: PORT
+        value: "10000"
+      - key: MARK_SIGNER_URLS
+        value: http://plankton-signer-mark-1:10000,http://plankton-signer-mark-2:10000
+      # The wallet that sends price updates on-chain. Needs a little ETH for gas.
+      - key: PUBLISHER_PRIVATE_KEY
+        sync: false
+
+  # ------------------------------------------------------------------ signers: each holds ONE key and signs one kind of message
+  - type: pserv
+    name: plankton-signer-quote
+    runtime: node
+    plan: starter
+    buildCommand: bun install --frozen-lockfile
+    startCommand: bun run apps/signer/src/index.ts
+    envVars:
+      - fromGroup: plankton-shared
+      - fromGroup: plankton-secrets
+      - key: PORT
+        value: "10000"
+      - key: SIGNER_ROLE
+        value: quote
+      - key: SIGNER_PRIVATE_KEY
+        sync: false
+
+  - type: pserv
+    name: plankton-signer-mark-1
+    runtime: node
+    plan: starter
+    buildCommand: bun install --frozen-lockfile
+    startCommand: bun run apps/signer/src/index.ts
+    envVars:
+      - fromGroup: plankton-shared
+      - fromGroup: plankton-secrets
+      - key: PORT
+        value: "10000"
+      - key: SIGNER_ROLE
+        value: mark
+      - key: SIGNER_PRIVATE_KEY
+        sync: false
+
+  - type: pserv
+    name: plankton-signer-mark-2
+    runtime: node
+    plan: starter
+    buildCommand: bun install --frozen-lockfile
+    startCommand: bun run apps/signer/src/index.ts
+    envVars:
+      - fromGroup: plankton-shared
+      - fromGroup: plankton-secrets
+      - key: PORT
+        value: "10000"
+      - key: SIGNER_ROLE
+        value: mark
+      - key: SIGNER_PRIVATE_KEY
+        sync: false
+
+  # ------------------------------------------------------------------ workers (no web address, always running)
+  - type: worker
+    name: plankton-keeper
+    runtime: node
+    plan: starter
+    buildCommand: bun install --frozen-lockfile
+    startCommand: bun run apps/keeper/src/index.ts
+    envVars:
+      - fromGroup: plankton-shared
+      - fromGroup: plankton-secrets
+      - key: API_URL
+        value: http://plankton-api:10000
+      # Executes stop-loss and limit orders, liquidations and Counter settlement. Needs a little ETH for gas.
+      - key: KEEPER_PRIVATE_KEY
+        sync: false
+
+  - type: worker
+    name: plankton-indexer
+    runtime: node
+    plan: starter
+    buildCommand: bun install --frozen-lockfile
+    startCommand: bun run apps/indexer/src/index.ts
+    envVars:
+      - fromGroup: plankton-shared
+      - fromGroup: plankton-secrets
+
+  # ------------------------------------------------------------------ the website (static files, free)
+  - type: web
+    name: plankton-web
+    runtime: static
+    buildCommand: bun install --frozen-lockfile && bun run build:web
+    staticPublishPath: web/dist
+    envVars:
+      - key: BUN_VERSION
+        value: 1.4.2
+      - key: NODE_VERSION
+        value: 22.12.0
+      - key: VITE_CHAIN_ID
+        value: "4663"
+      - key: VITE_RPC_URL
+        value: https://rpc.mainnet.chain.robinhood.com
+      # The public address of plankton-api, e.g. https://plankton-api.onrender.com
+      - key: VITE_API_URL
+        sync: false
+    routes:
+      # /trade and /docs are pages inside one app: any path that is not a file must load index.html.
+      - type: rewrite
+        source: /*
+        destination: /index.html
