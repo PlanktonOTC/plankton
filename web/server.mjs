@@ -9,6 +9,7 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DEFAULT_API_ORIGIN, MAX_BODY, METHODS, SECURITY_HEADERS, forward } from './proxy-core.mjs';
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -26,17 +27,6 @@ const TYPES = {
   '.txt': 'text/plain; charset=utf-8',
   '.xml': 'application/xml',
 };
-const SECURITY_HEADERS = {
-  'x-content-type-options': 'nosniff',
-  'referrer-policy': 'strict-origin-when-cross-origin',
-  'x-frame-options': 'DENY',
-};
-// Only these travel between the browser and the API. Cookies, auth and forwarding headers from the browser never do.
-const REQUEST_HEADERS = ['content-type', 'accept', 'accept-language'];
-const RESPONSE_HEADERS = ['content-type', 'cache-control', 'retry-after', 'etag'];
-const METHODS = new Set(['GET', 'HEAD', 'POST', 'DELETE']);
-const MAX_BODY = 64 * 1024; // the API's own limit; its largest legitimate body is a signed order
-const API_TIMEOUT_MS = 60_000; // a quote can wait a few seconds for a fresh mark to go on-chain
 
 /** The visitor's address: from the proxy's x-forwarded-for when trusted, else the socket. */
 export function visitorIp(req, trustProxy) {
@@ -70,11 +60,6 @@ function sendJson(res, status, body) {
 
 async function proxy(req, res, url, cfg) {
   if (!METHODS.has(req.method)) return sendJson(res, 405, { error: 'method not allowed' });
-  const headers = {};
-  for (const h of REQUEST_HEADERS) if (req.headers[h]) headers[h] = req.headers[h];
-  headers['x-visitor-ip'] = visitorIp(req, cfg.trustProxy);
-  if (cfg.proxyToken) headers['x-web-proxy-token'] = cfg.proxyToken;
-
   let body;
   if (req.method === 'POST' || req.method === 'DELETE') {
     try {
@@ -83,30 +68,19 @@ async function proxy(req, res, url, cfg) {
       return sendJson(res, err.status ?? 400, { error: err.status === 413 ? 'request too large' : 'bad request' });
     }
   }
-
-  let upstream;
-  try {
-    upstream = await cfg.fetch(`${cfg.apiOrigin}${url.pathname.slice('/api'.length) || '/'}${url.search}`, {
-      method: req.method,
-      headers,
-      body: body?.length ? body : undefined,
-      redirect: 'manual',
-      signal: AbortSignal.timeout(API_TIMEOUT_MS),
-    });
-  } catch (err) {
-    const timedOut = err?.name === 'TimeoutError';
-    return sendJson(res, timedOut ? 504 : 502, { error: timedOut ? 'the PlanktonOTC service took too long to answer' : 'cannot reach the PlanktonOTC service' });
-  }
-
-  const out = { ...SECURITY_HEADERS };
-  for (const h of RESPONSE_HEADERS) {
-    const v = upstream.headers.get(h);
-    if (v) out[h] = v;
-  }
-  out['cache-control'] ??= 'no-store';
-  const data = Buffer.from(await upstream.arrayBuffer());
-  out['content-length'] = data.length;
-  res.writeHead(upstream.status, out);
+  const headers = new Headers();
+  for (const [k, v] of Object.entries(req.headers)) if (typeof v === 'string') headers.set(k, v);
+  const request = new Request(`http://localhost${req.url}`, { method: req.method, headers, body: body?.length ? body : undefined });
+  const response = await forward(request, {
+    apiOrigin: cfg.apiOrigin,
+    path: url.pathname.slice('/api'.length) || '/',
+    search: url.search,
+    visitorIp: visitorIp(req, cfg.trustProxy),
+    proxyToken: cfg.proxyToken,
+    fetchImpl: cfg.fetch,
+  });
+  const data = Buffer.from(await response.arrayBuffer());
+  res.writeHead(response.status, { ...Object.fromEntries(response.headers), 'content-length': data.length });
   res.end(req.method === 'HEAD' ? undefined : data);
 }
 
@@ -157,7 +131,7 @@ async function serveFile(req, res, url, root) {
 
 export function createServer({
   root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'dist'),
-  apiOrigin = 'https://plankton-gkmt.onrender.com',
+  apiOrigin = DEFAULT_API_ORIGIN,
   proxyToken,
   trustProxy = false,
   fetch = globalThis.fetch,
@@ -184,5 +158,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     apiOrigin: env.API_ORIGIN || undefined,
     proxyToken: env.WEB_PROXY_TOKEN || undefined,
     trustProxy: env.TRUST_PROXY === 'true',
-  }).listen(port, env.HOST || '0.0.0.0', () => console.log(`PlanktonOTC site on :${port}, API at ${env.API_ORIGIN || 'https://plankton-gkmt.onrender.com'}`));
+  }).listen(port, env.HOST || '0.0.0.0', () => console.log(`PlanktonOTC site on :${port}, API at ${env.API_ORIGIN || DEFAULT_API_ORIGIN}`));
 }
