@@ -9,10 +9,9 @@ import {MarketConfig, MarketState, SessionProfile} from "../src/ExchangeTypes.so
 
 /// @notice Registers every enabled market from ../config/markets.json on the oracle and the Exchange.
 ///
-/// Two steps, because a new market waits 24 hours before it can be applied:
+/// New markets are live as soon as this lands; on markets already listed, tightenings apply at once and loosenings wait 24h
+/// (then anyone can call Exchange.applyMarket):
 ///   forge script script/ConfigureMarkets.s.sol --sig "schedule()"   --rpc-url <rpc> --broadcast --private-key <owner key>
-///   (24 hours later)
-///   forge script script/ConfigureMarkets.s.sol --sig "applyAll()"   --rpc-url <rpc> --broadcast --private-key <anyone>
 ///
 /// The sender of schedule() must be the contracts' owner. Optional env: INITIAL_V_USDG (default 50000e6, the R0 Counter size;
 /// 100e6 for the B0 beta)
@@ -38,19 +37,7 @@ contract ConfigureMarkets is Script {
             Entry memory e = entries[i];
             oracle.scheduleConfig(e.id, _oracleConfig(e));
             exchange.scheduleMarket(e.id, _marketConfig(e.micro, v, e.absOiCapUsdg, _isBeta()));
-            console2.log("scheduled", e.symbol);
-        }
-        vm.stopBroadcast();
-        console2.log("Run applyAll() after 24 hours.");
-    }
-
-    function applyAll() external {
-        (, Exchange exchange) = _contracts();
-        Entry[] memory entries = _entries();
-        vm.startBroadcast();
-        for (uint256 i; i < entries.length; ++i) {
-            exchange.applyMarket(entries[i].id);
-            console2.log("applied", entries[i].symbol);
+            console2.log("listed", e.symbol);
         }
         vm.stopBroadcast();
     }

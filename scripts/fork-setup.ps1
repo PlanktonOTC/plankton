@@ -61,8 +61,7 @@ $env:QUOTE_SIGNERS = '0x90F79bf6EB2c4f870365E785982E1f101E93b906'
 $r = & forge script script/Deploy.s.sol --rpc-url $rpc --broadcast --private-key $deployerKey 2>&1 | Out-String
 if ($r -notmatch 'ONCHAIN EXECUTION COMPLETE') { Pop-Location; throw "deploy failed:`n$r" }
 'contracts deployed'
-foreach ($sig in 'schedule()', 'applyAll()') {
-  if ($sig -eq 'applyAll()') { & cast rpc evm_increaseTime 90000 --rpc-url $rpc | Out-Null; & cast rpc evm_mine --rpc-url $rpc | Out-Null }
+foreach ($sig in @('schedule()')) {
   $r = & forge script script/ConfigureMarkets.s.sol --sig $sig --rpc-url $rpc --broadcast --private-key $deployerKey 2>&1 | Out-String
   if ($r -notmatch 'ONCHAIN EXECUTION COMPLETE') { Pop-Location; throw "$sig failed:`n$r" }
 }

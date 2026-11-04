@@ -806,21 +806,39 @@ contract ExchangeTest is Base {
 
     // ================================================================== market config
 
-    function test_aNewMarketWaitsTwentyFourHours() public {
+    function test_aNewMarketIsListedInTheOwnersTransaction() public {
         bytes32 id2 = keccak256("second");
-        vm.prank(owner);
-        exchange.scheduleMarket(id2, marketConfig());
         // The oracle must know it first.
+        vm.prank(owner);
         vm.expectRevert(Exchange.OracleNotConfigured.selector);
+        exchange.scheduleMarket(id2, marketConfig());
+
+        vm.startPrank(owner);
+        oracle.scheduleConfig(id2, oracleConfig());
+        exchange.scheduleMarket(id2, marketConfig());
+        vm.stopPrank();
+        assertEq(exchange.marketCount(), 2, "listed at once");
+        assertEq(uint8(exchange.configOf(id2).state), uint8(MarketState.Active));
+        assertEq(exchange.pendingOf(id2).eta, 0, "nothing queued");
+        vm.expectRevert(MarketConfigLib.NothingPending.selector);
         exchange.applyMarket(id2);
 
-        vm.prank(owner);
+        // Only the owner lists.
+        vm.prank(makeAddr("random"));
+        vm.expectRevert();
+        exchange.scheduleMarket(keccak256("third"), marketConfig());
+    }
+
+    function test_aNewListingTradesStraightAway() public {
+        bytes32 id2 = keccak256(abi.encode("plankton.mkt.v1", "NEW", address(0xBEEF)));
+        vm.startPrank(owner);
         oracle.scheduleConfig(id2, oracleConfig());
-        vm.expectRevert(MarketConfigLib.TooEarly.selector);
-        exchange.applyMarket(id2);
-        skip(24 hours);
-        exchange.applyMarket(id2);
-        assertEq(exchange.marketCount(), 2);
+        exchange.scheduleMarket(id2, marketConfig());
+        vm.stopPrank();
+        mkt = id2;
+        publish(PRICE, IMarkOracle.Status.Open, 10, true);
+        open(trader, 1e18, 100e6);
+        assertEq(pos(trader).size, 1e18);
     }
 
     function test_looseningAMarketWaitsButTighteningIsImmediate() public {
@@ -868,7 +886,7 @@ contract ExchangeTest is Base {
         c.profiles[1].maxLeverageE18 = 0; // opens allowed but no leverage given
         vm.prank(owner);
         vm.expectRevert(MarketConfigLib.InvalidMarketConfig.selector);
-        exchange.scheduleMarket(keccak256("x"), c);
+        exchange.scheduleMarket(ID, c);
     }
 
     function test_atMostSixtyFourMarkets() public {
@@ -878,17 +896,12 @@ contract ExchangeTest is Base {
             oracle.scheduleConfig(id2, oracleConfig());
             exchange.scheduleMarket(id2, marketConfig());
         }
+        assertEq(exchange.marketCount(), 64);
         bytes32 extra = keccak256("extra");
         oracle.scheduleConfig(extra, oracleConfig());
+        vm.expectRevert(Exchange.TooManyMarkets.selector);
         exchange.scheduleMarket(extra, marketConfig());
         vm.stopPrank();
-        skip(24 hours);
-        for (uint256 i = 1; i < 64; ++i) {
-            exchange.applyMarket(keccak256(abi.encode("m", i)));
-        }
-        assertEq(exchange.marketCount(), 64);
-        vm.expectRevert(Exchange.TooManyMarkets.selector);
-        exchange.applyMarket(extra);
     }
 
     function test_quoteSignersFollowTheSameDelayRules() public {

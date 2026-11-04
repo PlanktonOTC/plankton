@@ -51,6 +51,6 @@ bun run dev:web
 
 ## Contracts
 
-`bun run abi` regenerates `packages/chain/src/abis.ts` after `forge build`, so the backend can never drift from the contracts. Deployed addresses live in `deployments/4663.json`; `contracts/script/ConfigureMarkets.s.sol` registers the markets in `config/markets.json` (new markets and anything that loosens risk wait 24 hours on-chain).
+`bun run abi` regenerates `packages/chain/src/abis.ts` after `forge build`, so the backend can never drift from the contracts. Deployed addresses live in `deployments/4663.json`; `contracts/script/ConfigureMarkets.s.sol` registers the markets in `config/markets.json` (a new market is live in the owner's transaction; loosening the risk on a listed market waits 24 hours on-chain).
 
 Not offered to US persons or residents of other restricted regions.

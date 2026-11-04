@@ -118,9 +118,6 @@ abstract contract Base is Test {
         exchange.scheduleMarket(ID, marketConfig());
         vm.stopPrank();
 
-        skip(24 hours + 1);
-        exchange.applyMarket(ID);
-
         // Counter funded with $100,000 through the real two-step flow.
         setPrice(PRICE);
         usdg.mint(lp, 100_000e6);

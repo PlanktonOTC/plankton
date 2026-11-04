@@ -371,19 +371,28 @@ contract Exchange is IExchangeCounterView, EIP712Upgradeable, DelayedUpgrade {
         return Deps(s.usdg, s.oracle, s.vault, s.backstop, s.firstLoss, s.feeRouter, s.payoutDesk);
     }
 
-    // ------------------------------------------------------------------ admin: markets (tighten instantly, loosen after 24h)
+    // ------------------------------------------------------------------ admin: markets (list and tighten instantly, loosen after 24h)
 
+    /// A new market is listed in this transaction. It needs the oracle config first and all session profiles set: no
+    /// silent defaults. On a live market a tightening applies at once and a loosening waits 24h.
     function scheduleMarket(bytes32 marketId, MarketConfig calldata c) external onlyOwner {
-        (bool loosening, uint64 eta) = MarketConfigLib.schedule(s.markets[marketId], s.pending[marketId], c);
+        Market storage d = s.markets[marketId];
+        if (!d.exists) {
+            if (s.oracle.configOf(marketId).maxAgeSec == 0) revert OracleNotConfigured();
+            if (s.marketIds.length >= MAX_MARKETS) revert TooManyMarkets();
+        }
+        (bool loosening, uint64 eta, bool created) = MarketConfigLib.schedule(d, s.pending[marketId], c);
         emit MarketScheduled(marketId, eta, loosening);
+        if (created) {
+            s.marketIds.push(marketId);
+            emit MarketStateChanged(marketId, c.state);
+        }
     }
 
-    /// Anyone can apply a due change. Reverts unless the oracle config exists and all session profiles are set: no silent defaults.
+    /// Anyone can apply a loosening once its 24h are up.
     function applyMarket(bytes32 marketId) external {
-        if (s.oracle.configOf(marketId).maxAgeSec == 0) revert OracleNotConfigured();
         Market storage d = s.markets[marketId];
-        if (!d.exists && s.marketIds.length >= MAX_MARKETS) revert TooManyMarkets();
-        if (MarketConfigLib.applyPending(d, s.pending[marketId])) s.marketIds.push(marketId);
+        MarketConfigLib.applyPending(d, s.pending[marketId]);
         emit MarketStateChanged(marketId, d.cfg.state);
     }
 

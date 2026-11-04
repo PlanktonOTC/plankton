@@ -21,8 +21,6 @@ contract PennyMarketsTest is Base {
         oracle.scheduleConfig(PENNY, pennyOracleConfig());
         exchange.scheduleMarket(PENNY, marketConfig());
         vm.stopPrank();
-        skip(24 hours + 1);
-        exchange.applyMarket(PENNY);
         mkt = PENNY;
         publish(PRICE, IMarkOracle.Status.Open, 10, true);
     }

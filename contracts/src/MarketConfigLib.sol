@@ -4,8 +4,9 @@ pragma solidity 0.8.30;
 import {MarketState, SessionProfile, MarketConfig, Market, PendingMarket} from "./ExchangeTypes.sol";
 
 /// @notice Market config rules, in a linked library only to keep Exchange under the 24 KB contract size limit.
-/// Tightening applies at once; anything that lets traders take more risk, or charges them more, waits 24h.
-/// Raising maintenance margin waits too: applied at once it would let the owner liquidate open positions at will.
+/// A new listing and any tightening apply at once; anything that lets traders take more risk on a live market, or charges
+/// them more, waits 24h. Raising maintenance margin waits too: applied at once it would let the owner liquidate open
+/// positions at will. A new market has no positions yet, so nobody is exposed to its first config.
 library MarketConfigLib {
     uint256 internal constant CHANGE_DELAY = 24 hours;
 
@@ -13,34 +14,33 @@ library MarketConfigLib {
     error NothingPending();
     error TooEarly();
 
-    /// Queue a new market or a loosening, or apply a tightening immediately.
+    /// List a new market or apply a tightening immediately, or queue a loosening. `created` is true for a new listing.
     function schedule(Market storage d, PendingMarket storage pm, MarketConfig calldata c)
         external
-        returns (bool loosening, uint64 eta)
+        returns (bool loosening, uint64 eta, bool created)
     {
         validate(c);
-        if (!d.exists || isLoosening(d.cfg, c)) {
-            pm.cfg = c;
-            eta = uint64(block.timestamp + CHANGE_DELAY);
-            pm.eta = eta;
-            return (true, eta);
-        }
-        d.cfg = c;
-        delete pm.cfg;
-        pm.eta = 0;
-        return (false, uint64(block.timestamp));
-    }
-
-    /// Apply a due change. Returns true when this created the market.
-    function applyPending(Market storage d, PendingMarket storage pm) external returns (bool created) {
-        if (pm.eta == 0) revert NothingPending();
-        if (block.timestamp < pm.eta) revert TooEarly();
-        validate(pm.cfg);
         if (!d.exists) {
             d.exists = true;
             d.lastAccrual = uint64(block.timestamp);
             created = true;
+        } else if (isLoosening(d.cfg, c)) {
+            pm.cfg = c;
+            eta = uint64(block.timestamp + CHANGE_DELAY);
+            pm.eta = eta;
+            return (true, eta, false);
         }
+        d.cfg = c;
+        delete pm.cfg;
+        pm.eta = 0;
+        eta = uint64(block.timestamp);
+    }
+
+    /// Apply a due loosening.
+    function applyPending(Market storage d, PendingMarket storage pm) external {
+        if (pm.eta == 0) revert NothingPending();
+        if (block.timestamp < pm.eta) revert TooEarly();
+        validate(pm.cfg);
         d.cfg = pm.cfg;
         delete pm.cfg;
         pm.eta = 0;
