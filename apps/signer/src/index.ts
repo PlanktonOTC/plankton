@@ -42,7 +42,12 @@ const tls =
         rejectUnauthorized: true,
       }
     : undefined;
-if (env.NODE_ENV === 'production' && !tls) throw new Error('production needs SIGNER_TLS_CERT, SIGNER_TLS_KEY and SIGNER_TLS_CA (mTLS)');
+// A signer bound to loopback is reachable only from its own host (scripts/run-roles.ts runs it next to its callers),
+// so it needs no mTLS. Anywhere else production refuses to start without it.
+const loopbackOnly = ['127.0.0.1', '::1', 'localhost'].includes(env.SIGNER_HOST ?? '');
+if (env.NODE_ENV === 'production' && !tls && !loopbackOnly) {
+  throw new Error('production needs SIGNER_TLS_CERT, SIGNER_TLS_KEY and SIGNER_TLS_CA (mTLS), or SIGNER_HOST=127.0.0.1');
+}
 
 // Markets Chainlink does not cover, by marketId. Their marks have no on-chain fence, so this key checks each one
 // against its own Robinhood read before signing: the quorum is then two independent checks, not two rubber stamps.
@@ -182,5 +187,5 @@ app.post('/sign/mark', async (c) => {
   return json({ signature, signer: account.address });
 });
 
-const server = Bun.serve({ port: env.PORT ?? env.SIGNER_PORT, fetch: app.fetch, ...(tls ? { tls } : {}) });
+const server = Bun.serve({ port: env.PORT ?? env.SIGNER_PORT, hostname: env.SIGNER_HOST, fetch: app.fetch, ...(tls ? { tls } : {}) });
 log.info({ role, address: account.address, port: server.port, mtls: Boolean(tls) }, 'signer started');

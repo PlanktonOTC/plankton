@@ -14,6 +14,8 @@ const schema = z.object({
   SIGNER_PRIVATE_KEY: z.string().regex(/^0x[0-9a-fA-F]{64}$/).optional(),
   SIGNER_AUTH_TOKEN: z.string().min(16).optional(),
   SIGNER_PORT: z.coerce.number().default(8790),
+  /** Interface the signer listens on. 127.0.0.1 keeps it private to its host, the only case production allows without mTLS. */
+  SIGNER_HOST: z.string().optional(),
   /** Per-key notional limits (USDG, 6 decimals) so a stolen quote key can only sign so much. */
   SIGNER_MAX_NOTIONAL_PER_MIN_USDG: z.coerce.bigint().default(500_000_000_000n),
   SIGNER_MAX_NOTIONAL_PER_DAY_USDG: z.coerce.bigint().default(10_000_000_000_000n),
