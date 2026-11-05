@@ -155,8 +155,9 @@ const cancelBody = z.object({ trader: address, signature: signatureSchema });
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const MAX_OPEN_ORDERS_PER_TRADER = 50;
-// PLANKTON_LOCAL_QUOTE_TTL lengthens it on a private test chain only (a wallet prompt can outlast 20s); production never sets it.
-const QUOTE_TTL_SEC = BigInt(Number(process.env.PLANKTON_LOCAL_QUOTE_TTL) > 0 ? Math.floor(Number(process.env.PLANKTON_LOCAL_QUOTE_TTL)) : 20);
+// Quotes are short-lived, but leave enough time for wallet confirmation and slow RPC gas estimation.
+// The contract rechecks the execution price against the current mark before accepting a quote.
+const QUOTE_TTL_SEC = BigInt(Number(process.env.PLANKTON_LOCAL_QUOTE_TTL) > 0 ? Math.floor(Number(process.env.PLANKTON_LOCAL_QUOTE_TTL)) : 60);
 
 const app = new Hono<{ Bindings: { ip?: string } }>();
 
@@ -301,8 +302,12 @@ app.get('/v1/status', async () => {
 async function issueQuote(symbol: string, trader: Address, sizeDeltaE18: bigint, marginUsdg: bigint) {
   const m = market(symbol);
   const { client, dep } = chain();
+  const startedAt = performance.now();
   await ensureFreshMark(m.cfg.symbol);
+  const markPublishMs = Math.round(performance.now() - startedAt);
+  const readsStartedAt = performance.now();
   const [snap, tr] = await Promise.all([readMarket(client, dep, m.marketId), readTrader(client, dep, m.marketId, trader)]);
+  const snapshotReadMs = Math.round(performance.now() - readsStartedAt);
   if (snap.mark.priceE18 === 0n) throw new HttpError(503, 'no_mark', { closeAtMark: closeAtMarkCall(m.marketId, 10_000) });
 
   // Chain time, not the server clock: the quote's expiry and the mark's age are judged against block.timestamp.
@@ -332,7 +337,17 @@ async function issueQuote(symbol: string, trader: Address, sizeDeltaE18: bigint,
     nonce: BigInt(`0x${randomBytes(8).toString('hex')}`),
     expiry: nowSec + QUOTE_TTL_SEC,
   };
+  const signingStartedAt = performance.now();
   const { signature, signer } = await signQuote(quote);
+  const signingMs = Math.round(performance.now() - signingStartedAt);
+  log.info({
+    symbol: m.cfg.symbol,
+    markPublishMs,
+    snapshotReadMs,
+    signingMs,
+    quoteWindowAtReturnSec: Math.max(0, Number(QUOTE_TTL_SEC) - Math.ceil(signingMs / 1000)),
+    signer,
+  }, 'trade quote issued');
 
   const needed = (result.reducing ? 0n : marginUsdg) + result.feeUsdg;
   const shortfall = needed > tr.collateralUsdg ? needed - tr.collateralUsdg : 0n;

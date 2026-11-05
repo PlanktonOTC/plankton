@@ -63,7 +63,7 @@ async function signPermit(ctx, { spender, value, nonce, deadline }) {
  * Sends a server-signed quote: fetches it, signs a USDG permit when the wallet's deposited collateral does not cover
  * the margin and fee, and calls execute (or permitAndExecute) in one transaction.
  *
- * Quotes live about 20 seconds and a wallet prompt can take longer, so the permit is signed first (for the shortfall plus a
+ * Quotes live about 60 seconds and a wallet prompt can take longer, so the permit is signed first (for the shortfall plus a
  * small buffer) and the quote is fetched again afterwards; an Expired revert fetches yet another.
  */
 export async function sendQuoted(ctx, getQuote, marginUsdg) {
@@ -75,7 +75,7 @@ export async function sendQuoted(ctx, getQuote, marginUsdg) {
     const value = need + permitBuffer(need);
     permit = await signPermit(ctx, { spender: ctx.contracts.exchange, value, nonce: big(q.permit.message.nonce), deadline: big(q.permit.message.deadline) });
     step(ctx, 'quote');
-    q = await getQuote(); // fresh: the wallet prompt used up some of the first quote's 20 seconds
+    q = await getQuote(); // fresh: the permit prompt may have taken time
     if (q.permit && big(q.permit.message.value) > permit.value) {
       // The fee grew past the buffer (the price moved a lot): sign again for the new figure.
       const more = big(q.permit.message.value);

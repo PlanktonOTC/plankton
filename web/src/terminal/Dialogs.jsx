@@ -130,7 +130,7 @@ export function CloseDialog({ symbol, percent: start, account, market }) {
         </>
       )}
       {preview && !preview.ok && <p className="term-form-error" role="status">{friendlyError({ name: 'ApiError', status: 422, message: preview.code, body: { code: preview.code, message: preview.message } })}</p>}
-      <p className="term-modal-warning">The exit price is quoted just before you confirm and is valid for about 20 seconds. Profit above the payout limit may be paid late through the payout desk.</p>
+      <p className="term-modal-warning">The exit price is quoted just before you confirm and is valid for up to 60 seconds. Profit above the payout limit may be paid late through the payout desk.</p>
       {fallback && <p className="term-form-error" role="alert">The quote service cannot price this right now. You can still exit at the on-chain mark.</p>}
       <TxProgress step={t.trader.step} hash={t.trader.hash} />
       {error && !fallback && <p className="term-form-error" role="alert">{error}</p>}

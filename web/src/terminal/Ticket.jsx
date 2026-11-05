@@ -285,7 +285,7 @@ function ReviewDialog({ review: r, market, account, error, busy, step, hash, onC
       )}
       <p className="term-modal-warning">
         {isMarket
-          ? 'The price is quoted to you now and valid for about 20 seconds: confirm promptly in your wallet. Liquidation is an estimate; borrow charges accrue while the position is open.'
+          ? 'A fresh signed quote is fetched when you confirm and is valid for up to 60 seconds. Liquidation is an estimate; borrow charges accrue while the position is open.'
           : 'No transaction is sent now: you sign an order that a keeper carries out when the trigger is reached. It can be cancelled any time before then. A gap in the price can fill beyond the trigger, within the order\'s slippage limit.'}
         {r.tp || r.sl ? ' Take-profit and stop-loss each need one more signature after the position opens.' : ''}
       </p>
