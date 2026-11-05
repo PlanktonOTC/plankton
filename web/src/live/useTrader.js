@@ -34,7 +34,7 @@ export function useWallet() {
     connecting,
     switching,
     connectError,
-    connect: (connector) => connectAsync({ connector }),
+    connect: (connector) => connectAsync({ connector, chainId: CHAIN_ID }),
     disconnect: () => disconnectAsync(),
     switchNetwork: () => switchChainAsync({ chainId: CHAIN_ID }),
   };
@@ -81,9 +81,16 @@ export function useTrader(config) {
       setStep('wallet');
       setHash(null);
       try {
-        if (walletChainId !== CHAIN_ID) {
+        // The Wagmi connection's chainId can lag behind an injected wallet's actual chain. Check both before
+        // asking Wagmi to build a signer, otherwise writes can fail with a connector/connection chain mismatch.
+        const connectorChainId = await connector.getChainId();
+        if (walletChainId !== CHAIN_ID || connectorChainId !== CHAIN_ID) {
           setStep('network');
           await switchNetwork();
+        }
+        const switchedChainId = await connector.getChainId();
+        if (switchedChainId !== CHAIN_ID) {
+          throw new Error('Your wallet could not switch to Robinhood Chain (4663). Select it in your wallet and try again.');
         }
         const ctx = {
           address,
