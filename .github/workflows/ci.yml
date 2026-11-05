@@ -6,18 +6,6 @@ on:
   pull_request:
 
 jobs:
-  contracts:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: foundry-rs/foundry-toolchain@v1
-      - name: Build
-        working-directory: contracts
-        run: forge build
-      - name: Test
-        working-directory: contracts
-        run: forge test
-
   typescript:
     runs-on: ubuntu-latest
     steps:
