@@ -70,7 +70,12 @@ export function CounterView({ account }) {
             <div><input type="number" min="0" step="any" aria-label={action === 'Deposit' ? 'Deposit amount in USDG' : 'Withdraw amount in shares'} value={amount} onChange={(e) => setAmount(e.target.value)} required /><span>{action === 'Deposit' ? 'USDG' : 'SHARES'}</span></div>
           </label>
           <div className="term-quick-values"><button type="button" disabled={!connected} onClick={() => setAmount(action === 'Deposit' ? String(Math.floor(account.wallet * 100) / 100) : formatUnits(account.shares, SHARE_DECIMALS, SHARE_DECIMALS))}>Max</button></div>
-          <p className="term-fineprint">{connected ? `Wallet: ${money(account.wallet)} USDG · Your shares: ${formatUnits(account.shares, SHARE_DECIMALS, 4)} (about ${money(account.sharesValue)} USDG).` : 'Connect a wallet to see your balance.'} A request settles after the next mark, at the worse of two prices. Cash shortages produce pro-rata fills.</p>
+          <p className="term-fineprint">
+            {connected ? `Wallet: ${money(account.wallet)} USDG · Your shares: ${formatUnits(account.shares, SHARE_DECIMALS, 4)} (about ${money(account.sharesValue)} USDG).` : 'Connect a wallet to see your balance.'}{' '}
+            {action === 'Deposit'
+              ? 'USDG is escrowed when you submit. Shares are minted on settlement, usually after the next mark, at the less favorable of the request and settlement prices. If the Counter has no open positions, it can settle sooner.'
+              : 'Shares are queued when you submit. Withdrawals settle after the next mark, or sooner if the Counter has no open positions. Cash shortages are filled pro rata.'}
+          </p>
           {error && <p role="alert" className="term-form-error">{error}</p>}
           <TxProgress step={t.trader.step} hash={t.trader.hash} />
           <button className="term-primary" type="submit" disabled={t.trader.busy}>{connected ? `Request ${action.toLowerCase()}` : 'Connect wallet'} <Arrow /></button>

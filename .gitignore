@@ -23,3 +23,6 @@ web/tools/package-delivery.mjs
 
 # Addresses of a private test chain (scripts/fork-up.ps1); the real ones are deployments/4663.json
 deployments/local.json
+
+# Local-only private-to-public history rewriting utility
+scripts/sync-public.py

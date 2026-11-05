@@ -50,7 +50,8 @@ const REFRESH = [['account-state'], ['account-history'], ['markets'], ['counter'
  *   const result = await run((ctx) => openTrade(ctx, {...}));   // { ok, hash } or { ok: false, message }
  */
 export function useTrader(config) {
-  const { address, isConnected, chainId: walletChainId } = useConnection();
+  const { address, isConnected, chainId: walletChainId, connector } = useConnection();
+  const { disconnectAsync } = useDisconnect();
   const { switchChainAsync } = useSwitchChain();
   const switchNetwork = useCallback(() => switchChainAsync({ chainId: CHAIN_ID }), [switchChainAsync]);
   const publicClient = usePublicClient();
@@ -68,6 +69,13 @@ export function useTrader(config) {
       if (lock.current) return { ok: false, message: 'Another action is still in progress.' };
       if (!isConnected || !address) return { ok: false, message: 'Connect a wallet first.' };
       if (!config?.contracts) return { ok: false, message: 'The exchange contracts are not available yet.' };
+      // Wagmi can retain a connection after an injected wallet silently signs out. That leaves a connector-shaped
+      // object in state without the methods its write hooks need, producing the opaque
+      // "connector.getChainId is not a function" error. Clear that unusable session before signing anything.
+      if (typeof connector?.getChainId !== 'function') {
+        await disconnectAsync().catch(() => {});
+        return { ok: false, message: 'Your wallet session went stale. Reconnect your wallet, then try again.' };
+      }
       lock.current = true;
       setBusy(true);
       setStep('wallet');
@@ -102,6 +110,10 @@ export function useTrader(config) {
         await Promise.all(REFRESH.map((key) => queryClient.invalidateQueries({ queryKey: key })));
         return { ok: true, result, hash: typeof result === 'string' ? result : null };
       } catch (err) {
+        if (/connector\.getChainId is not a function/.test(String(err?.message ?? err))) {
+          await disconnectAsync().catch(() => {});
+          return { ok: false, message: 'Your wallet session went stale. Reconnect your wallet, then try again.', error: err };
+        }
         return { ok: false, message: friendlyError(err), error: err };
       } finally {
         lock.current = false;
@@ -109,7 +121,7 @@ export function useTrader(config) {
         setStep(null);
       }
     },
-    [address, isConnected, walletChainId, config, publicClient, signTypedDataAsync, signMessageAsync, writeContractAsync, switchNetwork, queryClient],
+    [address, isConnected, walletChainId, connector, disconnectAsync, config, publicClient, signTypedDataAsync, signMessageAsync, writeContractAsync, switchNetwork, queryClient],
   );
 
   return { busy, step, hash, run };
