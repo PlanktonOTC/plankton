@@ -8,6 +8,7 @@
 param([switch]$Stop)
 
 $root = Split-Path $PSScriptRoot -Parent
+if (-not $env:DEPLOYMENT_FILE) { $env:DEPLOYMENT_FILE = 'deployments/local.json' }   # test-chain addresses live in their own git-ignored file, never in the real deployments/4663.json
 $pidFile = Join-Path $env:TEMP 'plankton_fork_pids.txt'
 $logDir = Join-Path $env:TEMP 'plankton_fork_logs'
 
@@ -29,6 +30,8 @@ $keys = @{
 }
 $common = @{
   RPC_URLS = 'http://127.0.0.1:8545'
+  PLANKTON_LOCAL_QUOTE_TTL = '55'   # private test chain only: a quote stays valid 55 seconds (the signer's hard cap is 60) so a slow wallet prompt does not expire it
+  PLANKTON_LOCAL_WARMUP = '3'   # private test chain only: confirm a price after 3 checks instead of 20
   SIGNER_AUTH_TOKEN = 'local-fork-token-0123456789'
   NODE_ENV = 'development'
   LOG_LEVEL = 'info'

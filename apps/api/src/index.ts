@@ -155,7 +155,8 @@ const cancelBody = z.object({ trader: address, signature: signatureSchema });
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const MAX_OPEN_ORDERS_PER_TRADER = 50;
-const QUOTE_TTL_SEC = 20n;
+// PLANKTON_LOCAL_QUOTE_TTL lengthens it on a private test chain only (a wallet prompt can outlast 20s); production never sets it.
+const QUOTE_TTL_SEC = BigInt(Number(process.env.PLANKTON_LOCAL_QUOTE_TTL) > 0 ? Math.floor(Number(process.env.PLANKTON_LOCAL_QUOTE_TTL)) : 20);
 
 const app = new Hono<{ Bindings: { ip?: string } }>();
 

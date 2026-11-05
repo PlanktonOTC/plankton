@@ -44,7 +44,8 @@ export const DEFAULT_PRICING_CONFIG: PricingConfig = {
  */
 export const SINGLE_SOURCE_PRICING: Pick<PricingConfig, 'minSources' | 'warmupSamples' | 'maxAvgDeviationBps'> = {
   minSources: 1,
-  warmupSamples: 20,
+  // PLANKTON_LOCAL_WARMUP lowers the wait on a private test chain only; production never sets it.
+  warmupSamples: Number(process.env.PLANKTON_LOCAL_WARMUP) > 0 ? Number(process.env.PLANKTON_LOCAL_WARMUP) : 20,
   maxAvgDeviationBps: 300,
 };
 

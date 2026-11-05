@@ -20,3 +20,6 @@ AGENTS.md
 web/reference/
 web/DELIVERY-MANIFEST.json
 web/tools/package-delivery.mjs
+
+# Addresses of a private test chain (scripts/fork-up.ps1); the real ones are deployments/4663.json
+deployments/local.json

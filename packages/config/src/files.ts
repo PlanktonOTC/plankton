@@ -24,10 +24,13 @@ const deploymentFile = z.object({
 
 /** Contract addresses, written by the deploy. One address book, no version picker. */
 export function loadDeployment() {
+  // DEPLOYMENT_FILE points a private test chain at its own address book (deployments/local.json), so test addresses can
+  // never overwrite the real deployments/4663.json. Unset, it is the real one.
+  const file = process.env.DEPLOYMENT_FILE || 'deployments/4663.json';
   try {
-    return deploymentFile.parse(readJson('../deployments/4663.json'));
+    return deploymentFile.parse(readJson('../' + file));
   } catch (err) {
-    throw new Error(`deployments/4663.json is missing or invalid (deploy the contracts first): ${(err as Error).message}`);
+    throw new Error(`${file} is missing or invalid (deploy the contracts first): ${(err as Error).message}`);
   }
 }
 

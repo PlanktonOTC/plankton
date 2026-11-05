@@ -20,7 +20,8 @@ const client = createChainClient([RPC]);
 const lp = createChainWallet([RPC], LP_KEY);
 const trader = createChainWallet([RPC], TRADER_KEY);
 // Trade the first configured market, with sizes in dollars so any share price works.
-const first = loadMarkets().markets[0];
+const all = loadMarkets().markets;
+const first = all.find((m) => m.symbol === process.env.E2E_SYMBOL) ?? all[0]!;   // E2E_SYMBOL picks the market; a single-source market can be too wide to open at some hours
 if (!first) throw new Error('config/markets.json has no markets');
 const SYMBOL = first.symbol;
 const market = marketIdFor(SYMBOL, first.stockToken as `0x${string}`);

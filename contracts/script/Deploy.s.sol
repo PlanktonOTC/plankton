@@ -137,7 +137,8 @@ contract Deploy is Script {
         // The time, not block.number: on Arbitrum-style chains block.number is the Ethereum block number, which is
         // useless for querying this chain's logs. The indexer finds the matching block from the time.
         string memory out = vm.serializeUint(k, "deployedAt", block.timestamp);
-        vm.writeJson(out, "../deployments/4663.json");
+        // A private test chain sets DEPLOYMENT_FILE so its addresses never overwrite the real deployments/4663.json.
+        vm.writeJson(out, string.concat("../", vm.envOr("DEPLOYMENT_FILE", string("deployments/4663.json"))));
 
         console2.log("exchange   ", address(d.exchange));
         console2.log("oracle     ", address(d.oracle));
