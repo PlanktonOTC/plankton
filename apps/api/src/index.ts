@@ -155,6 +155,7 @@ const cancelBody = z.object({ trader: address, signature: signatureSchema });
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const MAX_OPEN_ORDERS_PER_TRADER = 50;
+const MAX_ORDER_LIFETIME_SEC = 30n * 24n * 60n * 60n;
 // Quotes are short-lived, but leave enough time for wallet confirmation and slow RPC gas estimation.
 // The contract rechecks the execution price against the current mark before accepting a quote.
 const QUOTE_TTL_SEC = BigInt(Number(process.env.PLANKTON_LOCAL_QUOTE_TTL) > 0 ? Math.floor(Number(process.env.PLANKTON_LOCAL_QUOTE_TTL)) : 60);
@@ -189,7 +190,7 @@ app.get('/health', (c) => c.json({ ok: true, rung }));
 // Marks go on-chain only when someone is about to trade (ensureFreshMark), so an idle market's on-chain mark is old or
 // empty. The board and the ticket preview therefore show the live price from the mark service: the price a real quote
 // publishes a moment later. If the mark service is down they fall back to whatever is on-chain.
-interface LiveMark { symbol: string; status: string | null; priceE18: string | null; confidenceBps: number | null }
+interface LiveMark { symbol: string; status: string | null; priceE18: string | null; confidenceBps: number | null; minOpenSpreadBps?: number }
 const STATUS_INDEX: Record<string, number> = { open: 1, extended: 2, weekend: 3, frozen: 4, halted: 5 };
 let liveCache: { at: number; bySymbol: Map<string, LiveMark> | null } | null = null;
 async function liveMarks(): Promise<Map<string, LiveMark> | null> {
@@ -306,7 +307,11 @@ async function issueQuote(symbol: string, trader: Address, sizeDeltaE18: bigint,
   await ensureFreshMark(m.cfg.symbol);
   const markPublishMs = Math.round(performance.now() - startedAt);
   const readsStartedAt = performance.now();
-  const [snap, tr] = await Promise.all([readMarket(client, dep, m.marketId), readTrader(client, dep, m.marketId, trader)]);
+  const [snap, tr, live] = await Promise.all([
+    readMarket(client, dep, m.marketId),
+    readTrader(client, dep, m.marketId, trader),
+    liveMarks(),
+  ]);
   const snapshotReadMs = Math.round(performance.now() - readsStartedAt);
   if (snap.mark.priceE18 === 0n) throw new HttpError(503, 'no_mark', { closeAtMark: closeAtMarkCall(m.marketId, 10_000) });
 
@@ -323,6 +328,7 @@ async function issueQuote(symbol: string, trader: Address, sizeDeltaE18: bigint,
     nowMs,
     calendar,
     windowTz: env.STOCK_TOKEN_WINDOW_TZ,
+    minOpenSpreadBps: live?.get(m.cfg.symbol)?.minOpenSpreadBps ?? 5,
   });
   if (!result.ok) throw new HttpError(422, result.code, { message: result.message });
 
@@ -405,7 +411,7 @@ app.get('/v1/quote/preview', async (c) => {
   const nowMs = Number(nowSec) * 1000;
   const marginUsdg = q.marginUsdg ?? 0n;
   const run = (sizeDeltaE18: bigint) =>
-    quoteFromChain({ snap, trader: tr, cls: m.cfg.class, rung, sizeDeltaE18, marginUsdg, nowMs, calendar, windowTz: env.STOCK_TOKEN_WINDOW_TZ });
+    quoteFromChain({ snap, trader: tr, cls: m.cfg.class, rung, sizeDeltaE18, marginUsdg, nowMs, calendar, windowTz: env.STOCK_TOKEN_WINDOW_TZ, minOpenSpreadBps: live?.get(m.cfg.symbol)?.minOpenSpreadBps ?? 5 });
 
   let sizeDeltaE18: bigint;
   let outcome: ReturnType<typeof run>;
@@ -490,6 +496,11 @@ app.post('/v1/orders', async (c) => {
   if (!m) throw new HttpError(404, 'unknown market');
   const now = await chainTimeSec(client); // the contract judges expiry by block time
   if (order.expiry <= now) throw new HttpError(422, 'order already expired');
+  if (order.validAfter >= order.expiry) throw new HttpError(422, 'order validity window is empty');
+  if (order.expiry > now + MAX_ORDER_LIFETIME_SEC) throw new HttpError(422, 'order expiry cannot be more than 30 days away');
+
+  const entryOrder = !order.reduceOnly && order.sizeBps === 0 && order.sizeDeltaE18 !== 0n;
+  if (entryOrder && order.marginUsdg === 0n) throw new HttpError(422, 'entry orders require deposited collateral');
 
   const signer = await recoverTypedDataAddress({
     domain: exchangeDomain(dep.exchange),
@@ -502,30 +513,62 @@ app.post('/v1/orders', async (c) => {
 
   const d = db();
   const trader = order.trader.toLowerCase();
-  const [{ n }] = await d
-    .select({ n: sql<number>`count(*)::int` })
-    .from(orders)
-    .where(and(eq(orders.trader, trader), eq(orders.status, 'open')));
-  if (n! >= MAX_OPEN_ORDERS_PER_TRADER) throw new HttpError(429, 'too many open orders');
+  await d.transaction(async (tx) => {
+    // Serialize submissions for one wallet so two concurrent requests cannot reserve the same collateral.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${trader}, 0))`);
+    const [{ n }] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(orders)
+      .where(and(eq(orders.trader, trader), eq(orders.status, 'open')));
+    if (n! >= MAX_OPEN_ORDERS_PER_TRADER) throw new HttpError(429, 'too many open orders');
 
-  const inserted = await d
-    .insert(orders)
-    .values({
-      nonce: order.nonce,
-      trader,
-      marketId: order.marketId.toLowerCase(),
-      kind: order.kind,
-      triggerE18: order.triggerE18.toString(),
-      triggerAbove: order.triggerAbove,
-      validAfter: new Date(Number(order.validAfter) * 1000),
-      expiry: new Date(Number(order.expiry) * 1000),
-      body: wire(order),
-      sig: signature,
-      status: 'open',
-    })
-    .onConflictDoNothing()
-    .returning({ nonce: orders.nonce });
-  if (inserted.length === 0) throw new HttpError(409, 'an order with this nonce already exists');
+    if (entryOrder) {
+      const collateral = await client.readContract({
+        address: dep.exchange,
+        abi: exchangeAbi,
+        functionName: 'collateral',
+        args: [order.trader],
+      });
+      const existing = await tx
+        .select({ body: orders.body, expiry: orders.expiry })
+        .from(orders)
+        .where(and(eq(orders.trader, trader), eq(orders.status, 'open')));
+      let reserved = 0n;
+      for (const row of existing) {
+        if (BigInt(Math.floor(row.expiry.getTime() / 1000)) <= now) continue;
+        const parsed = orderWire.safeParse(row.body);
+        if (!parsed.success) throw new HttpError(503, 'could not verify existing order collateral reservations');
+        const pending = parsed.data;
+        if (!pending.reduceOnly && pending.sizeBps === 0 && pending.sizeDeltaE18 !== 0n) reserved += pending.marginUsdg;
+      }
+      if (collateral < reserved + order.marginUsdg) {
+        throw new HttpError(422, 'insufficient deposited collateral after existing entry orders are reserved', {
+          collateralUsdg: collateral.toString(),
+          reservedUsdg: reserved.toString(),
+          requiredUsdg: order.marginUsdg.toString(),
+        });
+      }
+    }
+
+    const inserted = await tx
+      .insert(orders)
+      .values({
+        nonce: order.nonce,
+        trader,
+        marketId: order.marketId.toLowerCase(),
+        kind: order.kind,
+        triggerE18: order.triggerE18.toString(),
+        triggerAbove: order.triggerAbove,
+        validAfter: new Date(Number(order.validAfter) * 1000),
+        expiry: new Date(Number(order.expiry) * 1000),
+        body: wire(order),
+        sig: signature,
+        status: 'open',
+      })
+      .onConflictDoNothing()
+      .returning({ nonce: orders.nonce });
+    if (inserted.length === 0) throw new HttpError(409, 'an order with this nonce already exists');
+  });
   return json({ ok: true, nonce: order.nonce, market: m.symbol }, 201);
 });
 

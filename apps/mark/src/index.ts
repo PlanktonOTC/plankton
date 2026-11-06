@@ -111,7 +111,7 @@ function every(name: string, ms: number, fn: () => Promise<void>): void {
   setInterval(run, ms);
 }
 
-every('robinhood', 15_000, () => runner.pollRobinhood());
+every('robinhood', 10_000, () => runner.pollRobinhood());
 every('chainlink', 5_000, () => runner.pollChainlink());
 every('halts', 30_000, () => runner.pollHalts());
 every('corporate-actions', 3_600_000, () => runner.pollCorporateActions());

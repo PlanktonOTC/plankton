@@ -182,6 +182,10 @@ async function triggerOrders(): Promise<void> {
       // Terminal: the order can never execute. Anything else (trigger, slippage, stale mark) just waits.
       if (name === 'NonceUsed' || name === 'OrderNotActive') {
         await db.update(orders).set({ status: name === 'OrderNotActive' ? 'expired' : 'cancelled', failReason: name }).where(and(eq(orders.trader, row.trader), eq(orders.nonce, row.nonce)));
+      } else if (name === 'InsufficientCollateral') {
+        // Entry collateral is checked when the order is submitted and reserved against other open entries. If it is
+        // later withdrawn or consumed, this signed order can no longer fill; stop retrying it every keeper tick.
+        await db.update(orders).set({ status: 'failed', failReason: name }).where(and(eq(orders.trader, row.trader), eq(orders.nonce, row.nonce), eq(orders.status, 'open')));
       } else if (name === 'BadSigner' || name === 'OrderMismatch' || name === 'NotReducing') {
         await db.update(orders).set({ status: 'failed', failReason: name }).where(and(eq(orders.trader, row.trader), eq(orders.nonce, row.nonce)));
       } else {

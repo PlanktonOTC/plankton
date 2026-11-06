@@ -265,6 +265,7 @@ export class MarkRunner {
       priceE18: r.decision?.priceE18 ?? null,
       refCloseE18: r.decision?.refCloseE18 ?? null,
       confidenceBps: r.decision?.confidenceBps ?? null,
+      minOpenSpreadBps: r.decision?.minOpenSpreadBps ?? 5,
       dispersionBps: r.decision?.dispersionBps ?? null,
       sources: r.decision?.sources ?? [],
       reason: r.decision?.reason ?? null,

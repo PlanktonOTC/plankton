@@ -44,6 +44,8 @@ export interface QuoteRequest {
   openGuard: boolean;
   /** Extra spread while the open guard runs; defaults to OPEN_GUARD_EXTRA_SPREAD_BPS. Never below the contract's. */
   openGuardSpreadBps?: number;
+  /** Source-aware minimum spread for a new/increased position. */
+  minOpenSpreadBps?: number;
   /** Ticket limit (bps of V) while the open guard runs; undefined = no extra limit. */
   openGuardPositionBpsOfV?: number;
   profile: SessionProfileCfg;
@@ -102,7 +104,7 @@ export function buildTradeQuote(m: QuoteMarket, mark: QuoteMark, r: QuoteRequest
     const frozen = mark.status === Status.Frozen || mark.status === Status.Halted || m.state !== MarketState.Active;
     spreadBps = frozen ? m.frozenSpreadBps : 0;
   } else {
-    spreadBps = r.profile.extraSpreadBps + (r.openGuard ? (r.openGuardSpreadBps ?? OPEN_GUARD_EXTRA_SPREAD_BPS) : 0);
+    spreadBps = Math.max(r.profile.extraSpreadBps, r.minOpenSpreadBps ?? 0) + (r.openGuard ? (r.openGuardSpreadBps ?? OPEN_GUARD_EXTRA_SPREAD_BPS) : 0);
   }
 
   if (!reducing) {

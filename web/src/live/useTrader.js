@@ -42,6 +42,19 @@ export function useWallet() {
 
 const REFRESH = [['account-state'], ['account-history'], ['markets'], ['counter'], ['ledger'], ['claims'], ['preview']];
 
+function isTransientRpcError(error) {
+  const seen = new Set();
+  let current = error;
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    if (current.status === 429 || current.status >= 500) return true;
+    const message = [current.name, current.message, current.details, current.shortMessage].filter(Boolean).join(' ').toLowerCase();
+    if (/\b429\b|too many requests|rate.?limit|failed to fetch|network request failed|timed? ?out|timeout/.test(message)) return true;
+    current = current.cause;
+  }
+  return false;
+}
+
 /**
  * Runs wallet actions. `ctx` gives the flows in trade.js the wallet's signing and sending, with a 25% gas margin (the
  * backend does the same: nested library calls make plain estimates run short on this chain).
@@ -100,7 +113,18 @@ export function useTrader(config) {
           signTypedData: (typed) => signTypedDataAsync(typed),
           signMessage: (message) => signMessageAsync({ message }),
           sendTx: async (call) => {
-            const gas = await publicClient.estimateContractGas({ ...call, account: address });
+            setStep('estimate');
+            let gas;
+            try {
+              gas = await publicClient.estimateContractGas({ ...call, account: address });
+            } catch (err) {
+              // A temporary public-RPC outage or rate limit should not block the wallet prompt. Let the wallet
+              // estimate gas through its own RPC; genuine contract reverts still stop here with their real reason.
+              if (!isTransientRpcError(err)) throw err;
+              setStep('wallet');
+              return writeContractAsync(call);
+            }
+            setStep('wallet');
             return writeContractAsync({ ...call, gas: (gas * 125n) / 100n });
           },
           waitForReceipt: async (txHash) => {
@@ -142,6 +166,7 @@ export const STEP_TEXT = {
   'sign-order': 'Sign the order in your wallet…',
   'sign-cancel': 'Sign the cancellation in your wallet…',
   submit: 'Sending to the order book…',
+  estimate: 'Checking transaction with the network…',
   wallet: 'Confirm the transaction in your wallet…',
   confirming: 'Waiting for the network to confirm…',
   done: 'Confirmed.',

@@ -32,6 +32,7 @@ export interface ChainQuoteInput {
   nowMs: number;
   calendar: Calendar;
   windowTz: string;
+  minOpenSpreadBps?: number;
 }
 
 export interface ChainQuote {
@@ -156,6 +157,7 @@ export function quoteFromChain(i: ChainQuoteInput): ChainQuote {
     existingMarginUsdg: BigInt(trader.position.margin),
     positionSizeE18: trader.position.size,
     openGuard: session.openGuard || chainGuard,
+    minOpenSpreadBps: i.minOpenSpreadBps,
     openGuardSpreadBps: Math.max(OPEN_GUARD_EXTRA_SPREAD_BPS, cfg.openGuardSpreadBps),
     openGuardPositionBpsOfV: cfg.openGuardSec > 0 ? cfg.openGuardPositionBpsOfV : undefined,
     profile,
