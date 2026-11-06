@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs';
 import { Hono } from 'hono';
 import pino from 'pino';
 import { privateKeyToAccount } from 'viem/accounts';
-import { loadDeployment, loadEnv, loadMarkets, need } from '@plankton/config';
-import { fetchRhAssets, fetchRhPrices, rhReading } from '@plankton/ingest';
+import { loadCalendar, loadDeployment, loadEnv, loadMarkets, need } from '@plankton/config';
+import { activeHalts, corporateActionFreeze, fetchHalts, fetchRhAssets, fetchRhCorpActions, fetchRhPrices, rhReading } from '@plankton/ingest';
 import {
   attestationTypes,
   attestationWire,
@@ -19,7 +19,7 @@ import {
   quoteTypes,
   quoteWire,
 } from '@plankton/chain';
-import { diffBps, notionalUsdg } from '@plankton/core';
+import { diffBps, halfSpreadBps, notionalUsdg, sessionAt, skewFillPriceE18 } from '@plankton/core';
 
 // One process per key. SIGNER_ROLE=quote signs trade quotes; SIGNER_ROLE=mark signs price attestations.
 // No signing endpoint is ever on the public API, and the API process holds no private key.
@@ -31,6 +31,7 @@ const account = privateKeyToAccount(need(env.SIGNER_PRIVATE_KEY, 'SIGNER_PRIVATE
 const token = Buffer.from(need(env.SIGNER_AUTH_TOKEN, 'SIGNER_AUTH_TOKEN'));
 const dep = loadDeployment();
 const client = createChainClient(env.RPC_URLS);
+const { calendar } = loadCalendar();
 
 const tls =
   env.SIGNER_TLS_CERT && env.SIGNER_TLS_KEY && env.SIGNER_TLS_CA
@@ -49,13 +50,9 @@ if (env.NODE_ENV === 'production' && !tls && !loopbackOnly) {
   throw new Error('production needs SIGNER_TLS_CERT, SIGNER_TLS_KEY and SIGNER_TLS_CA (mTLS), or SIGNER_HOST=127.0.0.1');
 }
 
-// Markets Chainlink does not cover, by marketId. Their marks have no on-chain fence, so this key checks each one
-// against its own Robinhood read before signing: the quorum is then two independent checks, not two rubber stamps.
-const singleSource = new Map(
-  loadMarkets()
-    .markets.filter((m) => !m.chainlinkFeed)
-    .map((m) => [marketIdFor(m.symbol, m.stockToken as `0x${string}`).toLowerCase(), m]),
-);
+// Every live mark is independently checked against this signer's Robinhood observation, including markets that also
+// have Chainlink. The Chainlink fence remains an additional check where available.
+const markMarkets = new Map(loadMarkets().markets.map((m) => [marketIdFor(m.symbol, m.stockToken as `0x${string}`).toLowerCase(), m]));
 // Robinhood is read in the background (prices every 10 s, the asset list every 5 min), never while a request waits:
 // its API can take seconds to answer, and a mark signed on a quote older than a minute is refused below anyway.
 let rhQuotes: { at: number; quotes: Awaited<ReturnType<typeof fetchRhPrices>> } | null = null;
@@ -68,7 +65,7 @@ async function refreshRobinhood(): Promise<void> {
     log.warn({ err: (err as Error).message }, 'robinhood refresh failed');
   }
 }
-if (role === 'mark' && singleSource.size > 0) {
+if ((role === 'mark' || role === 'quote') && markMarkets.size > 0) {
   let running = false;
   const loop = async () => {
     if (running) return;
@@ -78,6 +75,33 @@ if (role === 'mark' && singleSource.size > 0) {
   };
   void loop();
   setInterval(loop, 10_000);
+}
+
+let knownHalts = new Map<string, unknown>();
+let knownHaltsAt = 0;
+let knownCorporateActions: Awaited<ReturnType<typeof fetchRhCorpActions>> = [];
+let knownCorporateActionsAt = 0;
+if (role === 'mark') {
+  let refreshingHalts = false;
+  let refreshingActions = false;
+  const refreshHalts = async () => {
+    if (refreshingHalts) return;
+    refreshingHalts = true;
+    try { knownHalts = activeHalts(await fetchHalts(env.NASDAQ_HALTS_URL), Date.now()); knownHaltsAt = Date.now(); }
+    catch (err) { log.warn({ err: (err as Error).message }, 'independent halt refresh failed'); }
+    finally { refreshingHalts = false; }
+  };
+  const refreshActions = async () => {
+    if (refreshingActions) return;
+    refreshingActions = true;
+    try { knownCorporateActions = await fetchRhCorpActions(env.RH_API_BASE); knownCorporateActionsAt = Date.now(); }
+    catch (err) { log.warn({ err: (err as Error).message }, 'independent corporate-action refresh failed'); }
+    finally { refreshingActions = false; }
+  };
+  void refreshHalts();
+  void refreshActions();
+  setInterval(refreshHalts, 30_000);
+  setInterval(refreshActions, 3_600_000);
 }
 
 // Deadlines are judged against chain time, because that is what the contracts compare them to.
@@ -134,6 +158,35 @@ app.post('/sign/quote', async (c) => {
   if (mark.priceE18 === 0n) return reject('no mark');
   const maxDev = BigInt(cfg.maxExecDeviationBps) + BigInt(cfg.frozenSpreadBps);
   if (diffBps(q.execPriceE18, mark.priceE18) > maxDev) return reject('price too far from the mark');
+  const position = await client.readContract({ address: dep.exchange, abi: exchangeAbi, functionName: 'positionOf', args: [q.trader, q.marketId] });
+  const size = position.size;
+  const reducing = size !== 0n && (size > 0n) !== (q.sizeDeltaE18 > 0n) && (q.sizeDeltaE18 < 0n ? -q.sizeDeltaE18 : q.sizeDeltaE18) <= (size < 0n ? -size : size);
+  if (!reducing) {
+    if (BigInt(mark.updatedAt) > BigInt(now) || BigInt(now) - BigInt(mark.updatedAt) > 60n) return reject('open quote source mark is older than 60 seconds');
+    const m = markMarkets.get(q.marketId.toLowerCase());
+    if (!m || !rhQuotes || !rhAssets || Date.now() - rhQuotes.at > 60_000 || Date.now() - rhAssets.at > 300_000) return reject('independent quote data is stale');
+    const observation = rhReading(m.symbol, m.stockToken, ROBINHOOD_CHAIN_ID, rhQuotes.quotes, rhAssets.assets).observation;
+    const sourceAge = observation ? Date.now() - observation.sourceUpdatedAt : Number.POSITIVE_INFINITY;
+    if (!observation || observation.halted || !Number.isFinite(sourceAge) || sourceAge < 0 || sourceAge > 60_000) {
+      return reject('independent quote source is missing, halted, or stale');
+    }
+    const [info, marketCfg] = await client.multicall({
+      allowFailure: false,
+      contracts: [
+        { address: dep.exchange, abi: exchangeAbi, functionName: 'marketInfo', args: [q.marketId] },
+        { address: dep.exchange, abi: exchangeAbi, functionName: 'configOf', args: [q.marketId] },
+      ],
+    });
+    const usdScale = 10n ** 12n;
+    const skewBefore = (BigInt(info[0]) - BigInt(info[1])) * usdScale;
+    const deltaAbs = q.sizeDeltaE18 < 0n ? -q.sizeDeltaE18 : q.sizeDeltaE18;
+    const tradeNotionalE18 = notionalUsdg(deltaAbs, mark.priceE18) * usdScale;
+    const skewAfter = skewBefore + (q.sizeDeltaE18 > 0n ? tradeNotionalE18 : -tradeNotionalE18);
+    const skewFill = skewFillPriceE18(mark.priceE18, skewBefore, skewAfter, marketCfg.skewScaleE18);
+    const spreadBps = BigInt(Math.max(5, Number(halfSpreadBps(observation))));
+    if (q.sizeDeltaE18 > 0n && q.execPriceE18 * 10_000n < skewFill * (10_000n + spreadBps)) return reject('open quote is tighter than the source-aware minimum spread');
+    if (q.sizeDeltaE18 < 0n && q.execPriceE18 * 10_000n > skewFill * (10_000n - spreadBps)) return reject('open quote is tighter than the source-aware minimum spread');
+  }
   const notional = notionalUsdg(q.sizeDeltaE18, q.execPriceE18);
   if (q.feeUsdg > (notional * (BigInt(cfg.feeBps) + BigInt(cfg.maxExecDeviationBps))) / 10_000n) return reject('fee too high');
 
@@ -164,16 +217,61 @@ app.post('/sign/mark', async (c) => {
   if (last === undefined) last = (await client.readContract({ address: dep.oracle, abi: oracleAbi, functionName: 'markOf', args: [a.marketId] })).sequence;
   if (a.sequence <= last) return reject('sequence is not above the last one');
 
-  // Own Chainlink read: in Open/Extended a mark far from Chainlink is not signed by this key at all.
+  // Verify live status and data independently before signing a mark.
   if (a.status === 1 || a.status === 2) {
+    const session = sessionAt(Date.now(), calendar, { windowTz: env.STOCK_TOKEN_WINDOW_TZ, openGuardMinutes: 20 });
+    if (session.status !== a.status) return reject('attested session does not match this signer\'s calendar');
+    const m = markMarkets.get(a.marketId.toLowerCase());
+    if (!m) return reject('unknown market');
+    if (!rhQuotes || !rhAssets || Date.now() - rhQuotes.at > 60_000 || Date.now() - rhAssets.at > 300_000) return reject('independent Robinhood data is stale');
+    const reading = rhReading(m.symbol, m.stockToken, ROBINHOOD_CHAIN_ID, rhQuotes.quotes, rhAssets.assets);
+    const own = reading.observation;
+    const sourceAge = own ? Date.now() - own.sourceUpdatedAt : Number.POSITIVE_INFINITY;
+    if (!own || own.halted || !Number.isFinite(sourceAge) || sourceAge < 0 || sourceAge > 60_000) return reject('independent Robinhood quote is missing, halted, or stale');
+    if (
+      reading.issues.length > 0 ||
+      knownHaltsAt === 0 || Date.now() - knownHaltsAt > 60_000 ||
+      knownCorporateActionsAt === 0 || Date.now() - knownCorporateActionsAt > 3_600_000 ||
+      knownHalts.has(m.symbol) ||
+      corporateActionFreeze(knownCorporateActions, m.symbol, Date.now())
+    ) {
+      return reject('independent market checks require a held mark');
+    }
+    const rhLimit = BigInt(m.chainlinkFeed ? env.SIGNER_MARK_MAX_DEV_BPS : env.SIGNER_SINGLE_SOURCE_MAX_DEV_BPS);
+    if (diffBps(a.markE18, own.priceE18) > rhLimit) return reject('mark too far from this signer\'s Robinhood quote');
+    if (a.observedAt > now || now - a.observedAt > 60n) return reject('open mark does not carry a fresh source timestamp');
+
     const [cl, clAt] = await client.readContract({ address: dep.oracle, abi: oracleAbi, functionName: 'chainlinkPrice', args: [a.marketId] });
     if (clAt !== 0n && diffBps(a.markE18, cl) > BigInt(env.SIGNER_MARK_MAX_DEV_BPS)) return reject('mark too far from Chainlink');
-    const m = singleSource.get(a.marketId.toLowerCase());
-    if (m) {
-      if (!rhQuotes || !rhAssets || Date.now() - rhQuotes.at > 60_000) return reject('no fresh Robinhood read of my own to check this mark against');
-      const own = rhReading(m.symbol, m.stockToken, ROBINHOOD_CHAIN_ID, rhQuotes.quotes, rhAssets.assets).observation;
-      if (!own) return reject('no Robinhood quote of my own to check this mark against');
-      if (diffBps(a.markE18, own.priceE18) > BigInt(env.SIGNER_SINGLE_SOURCE_MAX_DEV_BPS)) return reject('mark too far from my Robinhood read');
+  } else if (a.status === 3) {
+    const session = sessionAt(Date.now(), calendar, { windowTz: env.STOCK_TOKEN_WINDOW_TZ, openGuardMinutes: 20 });
+    if (session.status !== 3) return reject('weekend mark requested outside this signer\'s weekend calendar');
+  } else if (a.status === 4) {
+    const m = markMarkets.get(a.marketId.toLowerCase());
+    if (!m) return reject('unknown market');
+    const reading = rhQuotes && rhAssets ? rhReading(m.symbol, m.stockToken, ROBINHOOD_CHAIN_ID, rhQuotes.quotes, rhAssets.assets) : null;
+    const sourceAge = reading?.observation ? Date.now() - reading.observation.sourceUpdatedAt : Number.POSITIVE_INFINITY;
+    const sourceUnavailable = !rhQuotes || !rhAssets || Date.now() - rhQuotes.at > 60_000 || Date.now() - rhAssets.at > 300_000 || !reading?.observation || !Number.isFinite(sourceAge) || sourceAge < 0 || sourceAge > 60_000;
+    const actionFeedUnavailable = knownCorporateActionsAt === 0 || Date.now() - knownCorporateActionsAt > 3_600_000;
+    const knownFreeze = Boolean(reading?.issues.length) || sourceUnavailable || actionFeedUnavailable || corporateActionFreeze(knownCorporateActions, m.symbol, Date.now());
+    if (!knownFreeze) return reject('frozen mark has no independent freeze reason');
+  } else if (a.status === 5) {
+    const m = markMarkets.get(a.marketId.toLowerCase());
+    if (!m) return reject('unknown market');
+    const reading = rhQuotes && rhAssets ? rhReading(m.symbol, m.stockToken, ROBINHOOD_CHAIN_ID, rhQuotes.quotes, rhAssets.assets) : null;
+    const haltFeedFresh = knownHaltsAt > 0 && Date.now() - knownHaltsAt <= 60_000;
+    if (!reading?.halted && (!haltFeedFresh || !knownHalts.has(m.symbol))) return reject('halted mark has no fresh independent halt confirmation');
+  } else {
+    return reject('unsupported mark status');
+  }
+  if (a.status === 3 || a.status === 4 || a.status === 5) {
+    const [[regularClose, lastBounded], cfg] = await Promise.all([
+      client.readContract({ address: dep.oracle, abi: oracleAbi, functionName: 'referencesOf', args: [a.marketId] }),
+      client.readContract({ address: dep.oracle, abi: oracleAbi, functionName: 'configOf', args: [a.marketId] }),
+    ]);
+    const reference = a.status === 3 && regularClose !== 0n ? regularClose : lastBounded;
+    if (reference === 0n || diffBps(a.markE18, reference) > BigInt(cfg.heldBandBps)) {
+      return reject('held mark is outside the independently checked oracle reference band');
     }
   }
   lastMarkSequence.set(a.marketId, a.sequence);

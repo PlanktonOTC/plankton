@@ -1,6 +1,6 @@
 import type { Logger } from 'pino';
 import { BaseError, ContractFunctionRevertedError, type Address, type Hex } from 'viem';
-import { acquireLease, type Db } from '@plankton/db';
+import { acquireLease, eq, orders, type Db } from '@plankton/db';
 import {
   chainTimeSec,
   exchangeAbi,
@@ -52,6 +52,8 @@ export class Publisher implements MarkSink {
   private readonly busy = new Set<string>();
   private readonly inFlight = new Map<string, Promise<boolean>>();
   private exposed = new Set<string>();
+  private orderMarkets = new Set<string>();
+  private orderLookupFailed = false;
   private exposureAt = 0;
   private leaderUntil = 0;
 
@@ -117,7 +119,7 @@ export class Publisher implements MarkSink {
     }
   }
 
-  /** Markets with an open position, from the Exchange, refreshed at most every 10 s. */
+  /** Markets with a position or queued order, refreshed at most every 10 s. */
   private async hasExposure(symbol: string, now: number): Promise<boolean> {
     if (now - this.exposureAt > 10_000) {
       this.exposureAt = now;
@@ -126,14 +128,26 @@ export class Publisher implements MarkSink {
         allowFailure: true,
         contracts: entries.map(([, id]) => ({ address: this.d.dep.exchange, abi: exchangeAbi, functionName: 'marketInfo' as const, args: [id] })),
       });
+      let pending: Array<{ marketId: string }> = [];
+      this.orderLookupFailed = false;
+      if (this.d.db) {
+        try {
+          pending = await this.d.db.selectDistinct({ marketId: orders.marketId }).from(orders).where(eq(orders.status, 'open'));
+        } catch (err) {
+          this.orderLookupFailed = true;
+          this.d.log.warn({ err: err instanceof Error ? err.message : String(err) }, 'open order market lookup failed; publishing marks for all markets');
+        }
+      }
       const next = new Set<string>();
       infos.forEach((r, i) => {
         // On a failed read, assume a position may be open: a missing mark can trap an exit, an extra one only costs gas.
         if (r.status !== 'success' || r.result[2] !== 0n || r.result[3] !== 0n) next.add(entries[i]![0]);
       });
       this.exposed = next;
+      const pendingIds = new Set(pending.map((r) => r.marketId.toLowerCase()));
+      this.orderMarkets = new Set(entries.filter(([, id]) => pendingIds.has(id.toLowerCase())).map(([market]) => market.toLowerCase()));
     }
-    return this.exposed.has(symbol);
+    return this.orderLookupFailed || this.exposed.has(symbol) || this.orderMarkets.has(symbol.toLowerCase());
   }
 
   private async isLeader(now: number): Promise<boolean> {
@@ -161,7 +175,9 @@ export class Publisher implements MarkSink {
       confidenceBps: decision.confidenceBps,
       status: decision.status,
       sequence,
-      observedAt: nowSec,
+      // For openable live marks, bind the on-chain freshness clock to the source quote. Held marks retain a fresh
+      // publication timestamp so weekends and halts do not block NAV settlement or fallback exits.
+      observedAt: decision.sourceObservedAtSec === undefined ? nowSec : BigInt(decision.sourceObservedAtSec),
       expiry: nowSec + 120n,
     };
 

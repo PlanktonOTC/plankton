@@ -1,4 +1,4 @@
-import { aggregate, jumpBps, type PricingConfig } from './pricing.ts';
+import { aggregate, halfSpreadBps, jumpBps, type PricingConfig } from './pricing.ts';
 import { Status, type Observation } from './types.ts';
 
 export interface EngineState {
@@ -56,6 +56,10 @@ export interface MarkDecision {
   reason: string;
   /** Mark moved by more than jumpBps vs the last published value (the contract will set its breaker). */
   jump: boolean;
+  /** Source time for an openable live mark; held/non-open marks use publish time instead. */
+  sourceObservedAtSec?: number;
+  /** At least 5 bps, or the Robinhood quote's half bid/ask width if larger. */
+  minOpenSpreadBps: number;
 }
 
 export interface StepResult {
@@ -82,6 +86,8 @@ export function stepMark(prev: EngineState, input: EngineInput, cfg: PricingConf
     disp: number,
     sources: string[],
     reason: string,
+    sourceObservedAtSec?: number,
+    minOpenSpreadBps = 5,
   ): StepResult => {
     if (input.reduceOnly) {
       confidence = Math.max(confidence, cfg.singleSourceConfidenceBps);
@@ -91,7 +97,21 @@ export function stepMark(prev: EngineState, input: EngineInput, cfg: PricingConf
     state.lastPublishedE18 = priceE18;
     state.lastPublishedAt = input.now;
     const ref = state.refCloseE18 ?? priceE18;
-    return { state, decision: { status, priceE18, refCloseE18: ref, confidenceBps: confidence, dispersionBps: disp, sources, reason, jump } };
+    return {
+      state,
+      decision: {
+        status,
+        priceE18,
+        refCloseE18: ref,
+        confidenceBps: confidence,
+        dispersionBps: disp,
+        sources,
+        reason,
+        jump,
+        ...(sourceObservedAtSec === undefined ? {} : { sourceObservedAtSec }),
+        minOpenSpreadBps,
+      },
+    };
   };
 
   if (input.halted) {
@@ -153,7 +173,23 @@ export function stepMark(prev: EngineState, input: EngineInput, cfg: PricingConf
     if (input.session === Status.Open) state.refCloseE18 = agg.priceE18;
   }
 
-  return make(input.session, agg.priceE18, confidence, agg.dispersionBps, agg.used.map((o) => o.source), reason);
+  const rh = agg.used.find((o) => o.source === 'rh_quote');
+  const canOpenAtThisDecision =
+    (input.session === Status.Open || input.session === Status.Extended) &&
+    agg.agree &&
+    state.agreeStreak >= cfg.warmupSamples &&
+    !input.reduceOnly &&
+    !reason.includes('15-minute average');
+  return make(
+    input.session,
+    agg.priceE18,
+    confidence,
+    agg.dispersionBps,
+    agg.used.map((o) => o.source),
+    reason,
+    canOpenAtThisDecision && rh ? Math.floor(rh.sourceUpdatedAt / 1000) : undefined,
+    Math.max(5, rh ? Number(halfSpreadBps(rh)) : 5),
+  );
 }
 
 /** Publish on change above `republishBps`, on a heartbeat, or when the status flips. */
