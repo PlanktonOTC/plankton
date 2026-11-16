@@ -159,37 +159,41 @@ export function LedgerView({ health }) {
   const rows = l?.markets ?? [];
   const gross = rows.reduce((s, r) => s + big(r.longOiUsdg) + big(r.shortOiUsdg), 0n);
   const net = rows.reduce((s, r) => s + (big(r.longOiUsdg) - big(r.shortOiUsdg)), 0n);
+  const backstopTarget = l ? big(l.counter.backstopTargetUsdg) : 0n;
+  const backstopCoverage = backstopTarget > 0n ? Number((big(l.counter.backstopUsdg) * 10_000n) / backstopTarget) / 100 : null;
   const stats = l
-    ? [['Counter NAV', usd0(l.counter.navUsdg), 'From the vault contract'], ['Gross open interest', usd0(gross), `${rows.length} market${rows.length === 1 ? '' : 's'}`], ['Net exposure', `${net < 0n ? '−' : ''}${usd0(net < 0n ? -net : net)}`, net >= 0n ? 'Traders net long' : 'Traders net short'], ['Deferred payouts', usd0(l.counter.deferredOutstandingUsdg), 'Owed, not yet claimable']]
-    : [['Counter NAV', '—', ''], ['Gross open interest', '—', ''], ['Net exposure', '—', ''], ['Deferred payouts', '—', '']];
+    ? [['Pool value · NAV', usd0(l.counter.navUsdg), 'Counter vault'], ['Cash / free cash', `${usd0(l.counter.cashUsdg)} / ${usd0(l.counter.freeCashUsdg)}`, 'Total cash / available cash'], ['Gross open interest', usd0(gross), `${rows.length} active markets`], ['Net exposure', `${net < 0n ? '−' : ''}${usd0(net < 0n ? -net : net)}`, net >= 0n ? 'Traders net long' : 'Traders net short']]
+    : [['Pool value · NAV', '—', ''], ['Cash / free cash', '—', ''], ['Gross open interest', '—', ''], ['Net exposure', '—', '']];
   const stress = l ? big(l.stress25.stressNavUsdg) : 0n;
   const stressLoss = l ? big(l.stress25.lossUsdg) : 0n;
   return (
     <section className="term-secondary-view">
       <div className="term-view-title">
-        <div><p className="term-overline">TRANSPARENCY</p><h1>Read the numbers behind the desk.</h1><p>Every figure here is read from the contracts when you open the page. Nothing is stored or estimated by PlanktonOTC.</p></div>
-        <span className={`term-small-badge ${l ? '' : 'is-off'}`}>{l ? 'LIVE' : ledger.isError ? 'UNAVAILABLE' : 'LOADING'}</span>
+        <div><p className="term-overline">COUNTER HEALTH</p><h1>Live solvency.</h1><p>Pool value, open interest, backstop, and reserves from Robinhood Chain contract reads. Refreshes every 15 seconds.</p></div>
+        <span className={`term-small-badge ${l ? '' : 'is-off'}`}>{l ? 'LIVE · 15S' : ledger.isError ? 'UNAVAILABLE' : 'LOADING'}</span>
       </div>
       {ledger.isError && !l && <Unavailable what="The ledger" error={ledger.error} />}
       <div className="term-stat-grid">{stats.map(([label, value, note]) => <div key={label}><span>{label}</span><strong>{value}</strong><small>{note}</small></div>)}</div>
       <div className="term-counter-grid">
         <div className="term-large-panel">
-          <h2>25% gap stress test</h2>
-          <p>If every market gapped 25% against the Counter at once, in the worst direction for its net exposure.</p>
+          <h2>Backstop and reserves</h2>
           {l ? <>
-            <div className="term-detail"><span>NAV today</span><b>{usd0(l.counter.navUsdg)}</b></div>
-            <div className="term-detail"><span>Loss in the scenario</span><b className={stressLoss > 0n ? 'term-negative' : ''}>{usd0(stressLoss)}</b></div>
-            <div className="term-detail"><span>NAV after the stress</span><b>{usd0(stress)}</b></div>
-            <div className="term-detail"><span>Backstop Fund / target</span><b>{usd0(l.counter.backstopUsdg)} / {usd0(l.counter.backstopTargetUsdg)}</b></div>
+            <div className="term-detail"><span>Backstop balance / target</span><b>{usd0(l.counter.backstopUsdg)} / {usd0(l.counter.backstopTargetUsdg)}</b></div>
+            {backstopCoverage !== null && <div className="term-detail"><span>Backstop target filled</span><b>{Math.min(backstopCoverage, 100).toFixed(1)}%</b></div>}
+            <div className="term-detail"><span>Counter reserve</span><b>{usd0(l.counter.reserveUsdg)}</b></div>
+            <div className="term-detail"><span>First-loss balance</span><b>{usd0(l.counter.firstLossUsdg)}</b></div>
+            <div className="term-detail"><span>Deferred withdrawal claims</span><b>{usd0(l.counter.deferredOutstandingUsdg)}</b></div>
             <div className="term-detail"><span>Bad debt outstanding</span><b className={big(l.counter.totalBadDebtUsdg) > 0n ? 'term-negative' : ''}>{usd0(l.counter.totalBadDebtUsdg)}</b></div>
           </> : <div className="term-empty">Waiting for the contracts.</div>}
-          <h2 style={{ marginTop: 22 }}>v1 fee routing</h2>
-          <div className="term-fee-bar"><i /><i /><i /></div>
-          {[['Counter', '75%'], ['Backstop Fund', '20%'], ['Treasury', '5%']].map(([label, value]) => <div className="term-detail" key={label}><span>{label}</span><b>{value}</b></div>)}
-          <p className="term-fineprint">After any referral rebate. When the Backstop reaches 10% of Counter NAV, its share redirects to the Counter.</p>
+          <h2 style={{ marginTop: 22 }}>25% gap scenario</h2>
+          <p>Illustrative loss if markets move 25% against net exposure at once. This is a scenario estimate, not a guarantee.</p>
+          {l && <>
+            <div className="term-detail"><span>Estimated loss</span><b className={stressLoss > 0n ? 'term-negative' : ''}>{usd0(stressLoss)}</b></div>
+            <div className="term-detail"><span>Estimated NAV after loss</span><b>{usd0(stress)}</b></div>
+          </>}
         </div>
         <div className="term-large-panel">
-          <h2>Markets</h2>
+          <h2>Open positions by market</h2>
           {rows.length ? <div className="term-table-wrap"><table><thead><tr><th>Market</th><th>Long / short OI</th><th>Room long / short</th><th>Bad debt</th></tr></thead><tbody>
             {rows.map((r) => <tr key={r.symbol}><td><strong>{r.symbol}</strong></td><td>{usd0(r.longOiUsdg)}<small>{usd0(r.shortOiUsdg)}</small></td><td>{usd0(r.longRoomUsdg)}<small>{usd0(r.shortRoomUsdg)}</small></td><td>{usd0(r.badDebtUsdg)}</td></tr>)}
           </tbody></table></div> : <div className="term-empty">No market data yet.</div>}

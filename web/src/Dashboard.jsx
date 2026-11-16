@@ -16,7 +16,7 @@ import './dashboard.css';
 import './supporting-metal.css';
 import './terminal/live.css';
 
-const VIEWS = { counter: 'Counter', tape: 'Tape', ledger: 'Ledger', rewards: 'Rewards' };
+const VIEWS = { counter: 'Counter', tape: 'Tape', ledger: 'Solvency', solvency: 'Solvency', rewards: 'Rewards' };
 const params = () => new URLSearchParams(window.location.search);
 
 function TerminalApp() {
@@ -56,7 +56,8 @@ function TerminalApp() {
   const notify = useCallback((message) => setToast(message), []);
   const changeView = useCallback((item) => {
     setView(item);
-    window.history.replaceState({}, '', item === 'Trade' ? '/trade' : `/trade?view=${item.toLowerCase()}`);
+    const key = item === 'Solvency' ? 'ledger' : item.toLowerCase();
+    window.history.replaceState({}, '', item === 'Trade' ? '/trade' : `/trade?view=${key}`);
   }, []);
   const chooseMarket = useCallback((symbol) => { setSelected(symbol); changeView('Trade'); setDialog(null); }, [changeView]);
   const openWallet = useCallback(() => setDialog({ type: 'wallet' }), []);
@@ -135,7 +136,7 @@ function TerminalApp() {
         <header className="term-nav">
           <a className="term-brand" href="/" aria-label="PLANKTON homepage"><img src="/assets/plankton-logo.png" alt="" /><span>PLANKTON</span></a>
           <nav aria-label="Terminal navigation">
-            {['Trade', 'Counter', 'Tape', 'Ledger', 'Rewards'].map((item) => <button key={item} className={view === item ? 'active' : ''} aria-current={view === item ? 'page' : undefined} onClick={() => changeView(item)}>{item}</button>)}
+            {['Trade', 'Counter', 'Tape', 'Solvency', 'Rewards'].map((item) => <button key={item} className={view === item ? 'active' : ''} aria-current={view === item ? 'page' : undefined} onClick={() => changeView(item)}>{item}</button>)}
             <a href="/docs">Guide <Arrow /></a>
           </nav>
           <div className="term-workspace-controls">
@@ -225,7 +226,7 @@ function TerminalApp() {
         )}
         <div className="term-view-shell" hidden={view !== 'Counter'}><CounterView account={account} /></div>
         <div className="term-view-shell" hidden={view !== 'Tape'}><TapeView markets={markets} alerts={alerts} removeAlert={(id) => setAlerts((prev) => prev.filter((a) => a.id !== id))} favorites={favorites} toggleFavorite={toggleFavorite} /></div>
-        <div className="term-view-shell" hidden={view !== 'Ledger'}><LedgerView health={health} /></div>
+        <div className="term-view-shell" hidden={view !== 'Solvency'}><LedgerView health={health} /></div>
         <div className="term-view-shell" hidden={view !== 'Rewards'}><RewardsView /></div>
 
         <footer className="term-footer"><span><i /> {status.tone === 'good' ? 'LIVE' : 'OFFLINE'}</span><p>No token yet. Synthetic perpetuals. No share ownership.</p><div><a href="/docs?topic=risk">Risk</a><a href="/docs?topic=terms">Terms</a><a href="/">Back to PLANKTON ↗</a></div></footer>
