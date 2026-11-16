@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { PresetControls, usePresets } from './Presets.jsx';
+import { presetLevels } from '../live/presets.js';
 import { Arrow, Modal, TxProgress, useTerminal } from './shared.jsx';
 import RiskPanel from './Risk.jsx';
 import { friendlyError } from '../live/errors.js';
@@ -66,6 +68,10 @@ export default function Ticket({ market, account, orders }) {
   const [bracket, setBracket] = useState(false);
   const [tp, setTp] = useState('');
   const [sl, setSl] = useState('');
+  // Which market and side the take-profit / stop-loss fields were last edited by hand for. Until then they follow the defaults.
+  const [tpEditCtx, setTpEditCtx] = useState(null);
+  const [slEditCtx, setSlEditCtx] = useState(null);
+  const { presets, update: savePreset, reset: resetPresets } = usePresets();
   const [days, setDays] = useState('7');
   const [review, setReview] = useState(null);
   const [reviewError, setReviewError] = useState('');
@@ -77,7 +83,8 @@ export default function Ticket({ market, account, orders }) {
   useEffect(() => setTrigger(market.price ? market.price.toFixed(priceDigits(market.price)) : ''), [symbol]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!trigger && market.price) setTrigger(market.price.toFixed(priceDigits(market.price))); }, [market.price]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => setLeverage((v) => Math.min(v, maxLev || 1)), [maxLev]);
-  useEffect(() => { if (type !== 'Market') setBracket(false); }, [type]);
+  // Market orders start with protection on when the trader's defaults say so; limit and stop orders cannot carry it.
+  useEffect(() => { setBracket(type === 'Market' && presets.auto); }, [type]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (t.sideRequest) setSide(t.sideRequest.side); }, [t.sideRequest]);
 
   const marginBig = parseUsdg(margin);
@@ -95,6 +102,24 @@ export default function Ticket({ market, account, orders }) {
   );
   const previewQuery = usePreview(previewParams);
   const preview = type === 'Market' ? previewView(previewQuery.data) : null;
+
+  // Take-profit and stop-loss fill in from the saved defaults, around the expected entry price, and stay put once the trader edits them.
+  const presetRef = preview?.ok ? preview.execPrice : market.price;
+  const presetCtx = `${symbol}|${side}`;
+  const tpAuto = tpEditCtx !== presetCtx;
+  const slAuto = slEditCtx !== presetCtx;
+  const refReady = presetRef > 0;
+  useEffect(() => {
+    if (!bracket || !refReady) return;
+    const lv = presetLevels(side, presetRef, presets, priceDigits(presetRef));
+    if (tpAuto) setTp(lv.tp);
+    if (slAuto) setSl(lv.sl);
+  }, [bracket, presetCtx, presets.tpPct, presets.slPct, refReady, tpAuto, slAuto]); // eslint-disable-line react-hooks/exhaustive-deps
+  function applyPresets() {
+    const lv = presetLevels(side, presetRef, presets, priceDigits(presetRef));
+    setTp(lv.tp); setSl(lv.sl); setTpEditCtx(null); setSlEditCtx(null);
+  }
+  const savePresetValues = (patch) => { savePreset(patch); setTpEditCtx(null); setSlEditCtx(null); };
 
   // The numbers the ticket shows. A market order's come from the API (the same rules the signed quote uses); a limit or
   // stop order's are an estimate from its trigger price, because the fill price is not known until it fills.
@@ -224,10 +249,11 @@ export default function Ticket({ market, account, orders }) {
           </label>
           {bracket && (
             <div className="term-bracket-fields">
-              <label>Take profit<input aria-label="Take profit price" type="number" step="any" min="0" value={tp} onChange={(e) => setTp(e.target.value)} placeholder="USDG" /></label>
-              <label>Stop loss<input aria-label="Stop loss price" type="number" step="any" min="0" value={sl} onChange={(e) => setSl(e.target.value)} placeholder="USDG" /></label>
+              <label>Take profit<input aria-label="Take profit price" type="number" step="any" min="0" value={tp} onChange={(e) => { setTp(e.target.value); setTpEditCtx(presetCtx); }} placeholder="USDG" /></label>
+              <label>Stop loss<input aria-label="Stop loss price" type="number" step="any" min="0" value={sl} onChange={(e) => { setSl(e.target.value); setSlEditCtx(presetCtx); }} placeholder="USDG" /></label>
             </div>
           )}
+          {bracket && <PresetControls presets={presets} update={savePresetValues} reset={() => { resetPresets(); setTpEditCtx(null); setSlEditCtx(null); }} leverage={leverage} onApply={applyPresets} />}
           <div className="term-order-details">
             <div><span>Order value</span><strong>{shown ? money(shown.notional) : '0.00'} USDG</strong></div>
             <div><span>{type === 'Market' ? 'Est. entry' : 'Entry at trigger'}</span><strong>{shown ? money(shown.price, priceDigits(shown.price)) : '—'}</strong></div>

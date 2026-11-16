@@ -100,3 +100,16 @@
 .term-risk-close .term-risk-close-main{flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:3px;background:linear-gradient(110deg,#dae0e4,#b9c5cd);color:#17232b;border-color:#ffffff16;font-weight:500}
 .term-risk-close .term-risk-close-main:hover{filter:brightness(1.07);background:linear-gradient(110deg,#dae0e4,#b9c5cd)}
 .term-risk-close .term-risk-close-main small{display:block;font-size:9px;font-weight:400;color:#3d4b55}
+
+/* take-profit / stop-loss defaults */
+.term-presets{width:100%;margin:10px 0 4px;padding:10px 12px;border:1px solid var(--term-line,#ffffff14);border-radius:6px;background:#ffffff05;font-size:11px;line-height:1.5}
+.term-presets-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.term-presets-row>span{flex:1 1 180px;color:#aab6bd}
+.term-presets-row b{color:#e4eae6;font-weight:600}
+.term-presets-row small{display:block;color:#7d8c95;font-size:10px}
+.term-presets button{background:transparent;border:1px solid #ffffff22;border-radius:4px;color:#c9d3cd;padding:5px 9px;font-size:10.5px;cursor:pointer}
+.term-presets button:hover{border-color:var(--term-green,#aed6be);color:var(--term-green,#aed6be)}
+.term-presets-edit{margin-top:10px;padding-top:10px;border-top:1px solid #ffffff10;display:grid;gap:10px}
+.term-presets-edit>label:not(.term-checkbox){display:flex;align-items:center;justify-content:space-between;gap:10px;color:#aab6bd}
+.term-presets-edit input[type=number]{width:90px;background:#00000040;border:1px solid #ffffff22;border-radius:4px;color:#e4eae6;padding:6px 8px;text-align:right}
+.term-presets-reset{justify-self:start}

@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Arrow, Modal, TxProgress, useTerminal } from './shared.jsx';
+import { PresetControls, usePresets } from './Presets.jsx';
+import { presetLevels } from '../live/presets.js';
 import { friendlyError, isUserRejection } from '../live/errors.js';
 import { marketCloseOrder, newNonce, protectionOrder, protectionProblem } from '../live/orders.js';
 import { protectionFor, previewView, relativeTime } from '../live/model.js';
@@ -265,9 +267,12 @@ export function ProtectionDialog({ symbol, account, orders, market }) {
   const t = useTerminal();
   const position = account.positions.find((p) => p.symbol === symbol);
   const current = protectionFor(symbol, orders);
-  const digits = priceDigits(market?.price ?? 1);
-  const [tp, setTp] = useState(current.takeProfit ? String(current.takeProfit.trigger) : '');
-  const [sl, setSl] = useState(current.stopLoss ? String(current.stopLoss.trigger) : '');
+  const digits = priceDigits(position?.mark ?? market?.price ?? 1);
+  // A level the position does not have yet starts from the trader's saved defaults; every value stays editable.
+  const { presets, update: savePreset, reset: resetPresets } = usePresets();
+  const fromDefaults = position ? presetLevels(position.side, position.mark, presets, digits) : { tp: '', sl: '' };
+  const [tp, setTp] = useState(current.takeProfit ? String(current.takeProfit.trigger) : fromDefaults.tp);
+  const [sl, setSl] = useState(current.stopLoss ? String(current.stopLoss.trigger) : fromDefaults.sl);
   const { error, setError, submit } = useDialogAction(() => t.setDialog(null));
   if (!position) return <Modal title="Position protection" onClose={() => t.setDialog(null)}><p className="term-modal-intro">Open a position first: take-profit and stop-loss orders protect an existing position.</p></Modal>;
   const save = (event) => {
@@ -295,6 +300,7 @@ export function ProtectionDialog({ symbol, account, orders, market }) {
           <label className="term-field">Take-profit trigger<div><input aria-label="Position take profit trigger" type="number" min="0" step="any" value={tp} onChange={(e) => setTp(e.target.value)} placeholder="Optional" /><span>USDG</span></div></label>
           <label className="term-field">Stop-loss trigger<div><input aria-label="Position stop loss trigger" type="number" min="0" step="any" value={sl} onChange={(e) => setSl(e.target.value)} placeholder="Optional" /><span>USDG</span></div></label>
         </div>
+        {(!current.takeProfit || !current.stopLoss) && <PresetControls presets={presets} update={savePreset} reset={resetPresets} canEdit={false} onApply={() => { if (!current.takeProfit) setTp(fromDefaults.tp); if (!current.stopLoss) setSl(fromDefaults.sl); }} />}
         <p className="term-modal-warning">Each level is a signed order that closes the whole position when the mark reaches it; it can only reduce, never open or reverse. A keeper carries it out, so a fast gap or an unavailable quote can fill beyond the trigger or delay it. It lapses after 30 days and when the position closes. Each changed level asks for one signature.</p>
         {error && <p className="term-form-error" role="alert">{error}</p>}
         <TxProgress step={t.trader.step} hash={t.trader.hash} />
