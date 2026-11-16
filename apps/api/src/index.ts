@@ -14,6 +14,7 @@ import {
   marketIdFor,
   orderTypes,
   orderWire,
+  oracleAbi,
   payoutDeskAbi,
   permitTypedData,
   quoteWire,
@@ -35,6 +36,7 @@ import { closeSizeDeltaE18, stressNavUsdg } from '@plankton/core';
 import { marketLimits, quoteFromChain, type MarketLimits } from './quote.ts';
 import { collateralShortfall, liquidationPriceE18, positionAfterOpen, positionValue, solveOpenSize, targetNotional } from './views.ts';
 import { clientIp, corsOrigins, createRateLimiter, isInternal } from './limits.ts';
+import { FRESH_WITHIN_SEC, feedRow, type FeedRow, type RawMark } from './feed.ts';
 
 const env = loadEnv();
 const log = pino({ level: env.LOG_LEVEL });
@@ -725,6 +727,38 @@ app.get('/v1/accounts/:addr/claims', async (c) => {
       claimableNow: !row[4] && now >= BigInt(row[2]) && now >= BigInt(row[3]),
     }));
   return json({ trader: addr.toLowerCase(), claims: mine, scannedFromId: first });
+});
+
+// ---------------------------------------------------------------- public price feed
+
+// The Plankton price feed: the latest price each market has on-chain in MarkOracle, read straight from the chain and open to any
+// website or script (CORS *). Marks are published when someone is about to trade, so a quiet market's price can be minutes old:
+// every row carries its age so a reader can judge it. Nothing here is signed by us or stored; the contract is the source.
+const FEED_TTL_MS = 2_000;
+let feedCache: { at: number; body: { chainId: number; oracle: Address; chainTimeSec: bigint; freshWithinSec: number; markets: FeedRow[] } } | null = null;
+async function buildFeed() {
+  if (feedCache && Date.now() - feedCache.at < FEED_TTL_MS) return feedCache.body;
+  const { client, dep } = chain();
+  const [nowSec, marks] = await Promise.all([
+    chainTimeSec(client),
+    client.multicall({ allowFailure: false, contracts: markets.map((m) => ({ address: dep.oracle, abi: oracleAbi, functionName: 'markOf' as const, args: [marketIdFor(m.symbol, m.stockToken as Address)] })) }),
+  ]);
+  const rows = markets.map((m, i) => feedRow(m.symbol, m.class, marketIdFor(m.symbol, m.stockToken as Address), marks[i] as RawMark, nowSec));
+  const body = { chainId: ROBINHOOD_CHAIN_ID, oracle: dep.oracle, chainTimeSec: nowSec, freshWithinSec: FRESH_WITHIN_SEC, markets: rows };
+  feedCache = { at: Date.now(), body };
+  return body;
+}
+app.use('/v1/feed*', async (c, next) => {
+  await next();
+  c.header('access-control-allow-origin', '*');
+  c.header('cache-control', 'public, max-age=2');
+});
+app.get('/v1/feed', async () => json(await buildFeed()));
+app.get('/v1/feed/:symbol', async (c) => {
+  const row = (await buildFeed()).markets.find((m) => m.symbol === c.req.param('symbol').toUpperCase());
+  if (!row) throw new HttpError(404, 'unknown market');
+  const { chainId, oracle, chainTimeSec: t, freshWithinSec } = await buildFeed();
+  return json({ chainId, oracle, chainTimeSec: t, freshWithinSec, market: row });
 });
 
 app.get('/v1/counter', async () => {
