@@ -11,6 +11,7 @@ export const useConfig = () => useQuery({ queryKey: ['config'], queryFn: () => a
 export const useMarkets = () => useQuery({ queryKey: ['markets'], queryFn: () => apiGet('/v1/markets'), refetchInterval: 4_000 });
 export const useCounter = () => useQuery({ queryKey: ['counter'], queryFn: () => apiGet('/v1/counter'), refetchInterval: 8_000, retry: noRetryOn([503]) });
 export const useLedger = () => useQuery({ queryKey: ['ledger'], queryFn: () => apiGet('/v1/ledger'), refetchInterval: 15_000, retry: noRetryOn([503]) });
+export const useLeaderboard = (enabled = true) => useQuery({ queryKey: ['leaderboard'], queryFn: () => apiGet('/v1/leaderboard'), enabled, refetchInterval: 30_000, retry: noRetryOn([503]) });
 
 export const useAccountState = (address) =>
   useQuery({ queryKey: ['account-state', address], queryFn: () => apiGet(`/v1/accounts/${address}/state`), enabled: Boolean(address), refetchInterval: 5_000, placeholderData: keepPreviousData });

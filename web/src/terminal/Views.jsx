@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Arrow, TxProgress, useTerminal } from './shared.jsx';
-import { useCounter, useLedger } from '../live/queries.js';
+import { useCounter, useLedger, useLeaderboard } from '../live/queries.js';
 import { relativeTime } from '../live/model.js';
 import { counterDeposit, counterWithdraw } from '../live/trade.js';
-import { explorerTx } from '../live/wagmi.js';
-import { big, formatUnits, money, parseUnits, parseUsdg, usdgNum } from '../live/units.js';
+import { explorerAddress, explorerTx } from '../live/wagmi.js';
+import { big, formatUnits, money, parseUnits, parseUsdg, shortAddress, usdgNum } from '../live/units.js';
 
 const SHARE_DECIMALS = 9;
 const usd0 = (v) => `$${money(usdgNum(v), 0)}`;
@@ -201,6 +201,36 @@ export function LedgerView({ health }) {
           {health.map(([label, ok, note]) => <div className="term-detail" key={label}><span>{label}</span><b className={ok ? 'term-positive' : 'term-negative'}>{ok ? 'Connected' : note ?? 'Not connected'}</b></div>)}
           <a href="/docs?topic=security" className="term-text-link">Read the security model ↗</a>
         </div>
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------- the public weekly leaderboard
+
+export function LeaderboardView({ active = true }) {
+  const query = useLeaderboard(active);
+  const data = query.data;
+  const rows = data?.rows ?? [];
+  const formatPnl = (value) => {
+    const amount = big(value);
+    return `${amount < 0n ? '−' : '+'}$${formatUnits(amount < 0n ? -amount : amount, 6, 2)}`;
+  };
+  const date = (value) => new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(value));
+  return (
+    <section className="term-secondary-view">
+      <div className="term-view-title">
+        <div><p className="term-overline">PUBLIC ACTIVITY</p><h1>Weekly leaderboard.</h1><p>Wallets ranked by realized P&amp;L after recorded trade fees during the current UTC week.</p></div>
+        <span className={`term-small-badge ${data ? '' : 'is-off'}`}>{data ? 'LIVE · 30S' : query.isError ? 'UNAVAILABLE' : 'LOADING'}</span>
+      </div>
+      {query.isError && !data && <Unavailable what="The leaderboard" error={query.error} />}
+      {data && <div className="term-leaderboard-period"><strong>UTC WEEK</strong><span>{date(data.startsAt)} – {date(new Date(new Date(data.endsAt).getTime() - 1))}</span><small>Updated {new Date(data.generatedAt).toLocaleTimeString('en', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}</small></div>}
+      <div className="term-large-panel term-leaderboard-panel">
+        <h2>Top traders <span>{rows.length}</span></h2>
+        <p>Net realized P&amp;L is realized P&amp;L minus recorded trade fees. Open-position P&amp;L and borrow are excluded. This board has no prizes.</p>
+        {rows.length ? <div className="term-table-wrap"><table><thead><tr><th>Rank</th><th>Wallet</th><th>Net realized</th><th>Realized P&amp;L</th><th>Fees</th><th>Fills</th></tr></thead><tbody>
+          {rows.map((row) => <tr key={row.trader}><td><strong>#{row.rank}</strong></td><td><a className="term-leaderboard-wallet" href={explorerAddress(row.trader)} target="_blank" rel="noreferrer">{shortAddress(row.trader)} ↗</a></td><td className={big(row.netPnlUsdg) > 0n ? 'term-positive' : big(row.netPnlUsdg) < 0n ? 'term-negative' : ''}><strong>{formatPnl(row.netPnlUsdg)}</strong></td><td>{formatPnl(row.realizedPnlUsdg)}</td><td>${formatUnits(big(row.feesUsdg), 6, 2)}</td><td>{row.fills}</td></tr>)}
+        </tbody></table></div> : <div className="term-empty">No indexed fills this UTC week yet.<small>Rankings refresh automatically as the indexer records trades.</small></div>}
       </div>
     </section>
   );

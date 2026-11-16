@@ -22,3 +22,4 @@ export const wagmiConfig = createConfig({
 });
 
 export const explorerTx = (hash) => `${EXPLORER_URL}/tx/${hash}`;
+export const explorerAddress = (address) => `${EXPLORER_URL}/address/${address}`;

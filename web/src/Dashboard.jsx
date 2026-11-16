@@ -10,14 +10,14 @@ import { Arrow, Terminal, useStored } from './terminal/shared.jsx';
 import Chart from './terminal/Chart.jsx';
 import Positions from './terminal/Positions.jsx';
 import Ticket from './terminal/Ticket.jsx';
-import { CounterView, LedgerView, RewardsView, TapeView } from './terminal/Views.jsx';
+import { CounterView, LeaderboardView, LedgerView, RewardsView, TapeView } from './terminal/Views.jsx';
 import { AccountDialog, AlertDialog, CancelOrderDialog, CapacityDialog, CloseAtMarkDialog, CloseDialog, CommandMenu, MarginDialog, ProtectionDialog, RiskDialog, ShortcutsDialog, SourcesDialog, WalletDialog } from './terminal/Dialogs.jsx';
 import MarketTile, { CompanyMark } from './MarketRail';
 import './dashboard.css';
 import './supporting-metal.css';
 import './terminal/live.css';
 
-const VIEWS = { counter: 'Counter', tape: 'Tape', ledger: 'Solvency', solvency: 'Solvency', rewards: 'Rewards' };
+const VIEWS = { counter: 'Counter', tape: 'Tape', ledger: 'Solvency', solvency: 'Solvency', leaderboard: 'Leaderboard', rewards: 'Rewards' };
 const params = () => new URLSearchParams(window.location.search);
 
 function TerminalApp() {
@@ -137,7 +137,7 @@ function TerminalApp() {
         <header className="term-nav">
           <a className="term-brand" href="/" aria-label="PLANKTON homepage"><img src="/assets/plankton-logo.png" alt="" /><span>PLANKTON</span></a>
           <nav aria-label="Terminal navigation">
-            {['Trade', 'Counter', 'Tape', 'Solvency', 'Rewards'].map((item) => <button key={item} className={view === item ? 'active' : ''} aria-current={view === item ? 'page' : undefined} onClick={() => changeView(item)}>{item}</button>)}
+            {['Trade', 'Counter', 'Tape', 'Leaderboard', 'Solvency', 'Rewards'].map((item) => <button key={item} className={view === item ? 'active' : ''} aria-current={view === item ? 'page' : undefined} onClick={() => changeView(item)}>{item}</button>)}
             <a href="/docs">Guide <Arrow /></a>
           </nav>
           <div className="term-workspace-controls">
@@ -227,6 +227,7 @@ function TerminalApp() {
         )}
         <div className="term-view-shell" hidden={view !== 'Counter'}><CounterView account={account} /></div>
         <div className="term-view-shell" hidden={view !== 'Tape'}><TapeView markets={markets} alerts={alerts} removeAlert={(id) => setAlerts((prev) => prev.filter((a) => a.id !== id))} favorites={favorites} toggleFavorite={toggleFavorite} /></div>
+        <div className="term-view-shell" hidden={view !== 'Leaderboard'}><LeaderboardView active={view === 'Leaderboard'} /></div>
         <div className="term-view-shell" hidden={view !== 'Solvency'}><LedgerView health={health} /></div>
         <div className="term-view-shell" hidden={view !== 'Rewards'}><RewardsView /></div>
 

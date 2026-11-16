@@ -37,7 +37,7 @@ export const trades = pgTable(
     realizedPnlUsdg: u256('realized_pnl_usdg').notNull(),
     path: smallint('path').notNull(), // 0 quote | 1 order | 2 closeAtMark | 3 liquidation
   },
-  (t) => [primaryKey({ columns: [t.txHash, t.logIndex] }), index('trades_trader_time').on(t.trader, t.at)],
+  (t) => [primaryKey({ columns: [t.txHash, t.logIndex] }), index('trades_trader_time').on(t.trader, t.at), index('trades_at').on(t.at)],
 );
 
 export const orders = pgTable(

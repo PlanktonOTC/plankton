@@ -31,7 +31,7 @@ import {
   type TraderSnapshot,
   type TradeQuoteMsg,
 } from '@plankton/chain';
-import { and, createDb, desc, eq, gte, lt, or, orders, positions, sql, trades, type Db } from '@plankton/db';
+import { and, asc, createDb, desc, eq, gte, lt, or, orders, positions, sql, trades, type Db } from '@plankton/db';
 import { closeSizeDeltaE18, stressNavUsdg } from '@plankton/core';
 import { marketLimits, quoteFromChain, type MarketLimits } from './quote.ts';
 import { collateralShortfall, liquidationPriceE18, positionAfterOpen, positionValue, solveOpenSize, targetNotional } from './views.ts';
@@ -54,6 +54,7 @@ class HttpError extends Error {
 
 let dbHandle: Db | null = null;
 const db = (): Db => (dbHandle ??= createDb(requireDatabaseUrl(env)).db);
+let leaderboardCache: { at: number; body: Record<string, unknown> } | null = null;
 
 let chainCtx: { dep: Deployment; client: ChainClient } | null = null;
 function chain() {
@@ -688,6 +689,43 @@ app.get('/v1/accounts/:addr/trades', async (c) => {
     trades: rows.map((row) => ({ ...row, symbol: symbolOf(row.marketId) })),
     nextCursor: rows.length === limit && last ? { cursorAt: last.at.toISOString(), cursorTx: last.txHash, cursorLog: last.logIndex } : null,
   });
+});
+
+// Public UTC-week leaderboard. Rank realized P&L after actual trade fees, using indexed TradeExecuted events only.
+app.get('/v1/leaderboard', async () => {
+  const now = Date.now();
+  if (leaderboardCache && now - leaderboardCache.at < 30_000) return json(leaderboardCache.body);
+  const current = new Date(now);
+  const weekdayFromMonday = (current.getUTCDay() + 6) % 7;
+  const start = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth(), current.getUTCDate() - weekdayFromMonday));
+  const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const rows = await db().select({
+    trader: trades.trader,
+    realizedPnlUsdg: sql<string>`COALESCE(SUM(${trades.realizedPnlUsdg}), 0)::text`,
+    feesUsdg: sql<string>`COALESCE(SUM(${trades.feeUsdg}), 0)::text`,
+    fills: sql<number>`COUNT(*)::int`,
+  }).from(trades)
+    .where(and(gte(trades.at, start), lt(trades.at, end)))
+    .groupBy(trades.trader)
+    .orderBy(desc(sql`SUM(${trades.realizedPnlUsdg}) - SUM(${trades.feeUsdg})`), asc(trades.trader))
+    .limit(50);
+  const body = {
+    period: 'utc-week',
+    startsAt: start.toISOString(),
+    endsAt: end.toISOString(),
+    generatedAt: new Date(now).toISOString(),
+    ranking: 'realized P&L minus recorded trade fees; open P&L excluded',
+    rows: rows.map((row, index) => ({
+      rank: index + 1,
+      trader: row.trader,
+      realizedPnlUsdg: row.realizedPnlUsdg,
+      feesUsdg: row.feesUsdg,
+      netPnlUsdg: (BigInt(row.realizedPnlUsdg) - BigInt(row.feesUsdg)).toString(),
+      fills: row.fills,
+    })),
+  };
+  leaderboardCache = { at: now, body };
+  return json(body);
 });
 
 // What the chain says about one wallet right now: the deposited collateral, each open position valued at the current

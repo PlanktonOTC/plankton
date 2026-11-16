@@ -123,3 +123,12 @@
 .term-history-export select{border:1px solid #ffffff18;background:#171d20;color:#e2e8ea;border-radius:3px}
 .term-history-export-status{flex:1 0 100%;margin-top:0}
 @media(max-width:760px){.term-history-export{gap:7px;padding:10px}.term-history-export>div{flex-basis:100%}.term-history-export>button{flex:1 1 auto}.term-history-export>label{flex:1 0 auto;justify-content:flex-start}}
+
+.term-leaderboard-period{display:flex;align-items:center;gap:12px;padding:10px 13px;margin-bottom:14px;border:1px solid var(--term-line,#ffffff12);color:#a9b4ba;font-size:10px}
+.term-leaderboard-period strong{color:#8b979e;font-size:8px;letter-spacing:.12em}
+.term-leaderboard-period small{margin-left:auto;color:#77848b;font-size:9px}
+.term-leaderboard-panel>p{color:#8b979e;font-size:10px;line-height:1.6;margin:8px 0 18px;max-width:760px}
+.term-leaderboard-panel h2 span{margin-left:8px;color:#829099;font-size:11px}
+.term-leaderboard-wallet{color:#b8c6cc;text-decoration:underline!important;text-underline-offset:3px;font-variant-numeric:tabular-nums}
+.term-leaderboard-wallet:hover{color:#f3f5f6}
+@media(max-width:760px){.term-leaderboard-period{gap:8px;flex-wrap:wrap}.term-leaderboard-period small{flex-basis:100%;margin-left:0}}

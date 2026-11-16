@@ -1,0 +1,1 @@
+CREATE INDEX "trades_at" ON "trades" USING btree ("at");

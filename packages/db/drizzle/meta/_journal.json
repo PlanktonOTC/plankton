@@ -8,6 +8,13 @@
       "when": 1793392841905,
       "tag": "0000_giant_saracen",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794869156077,
+      "tag": "0001_shiny_nomad",
+      "breakpoints": true
     }
   ]
 }
