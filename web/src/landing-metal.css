@@ -114,6 +114,22 @@
 .marketing .footer-main > div:first-child p { color: #aeaeae; }
 .marketing .footer-main a { transition: color .2s ease, text-shadow .2s ease; }
 .marketing .footer-bottom { border-color: #d5d5d51c; color: #a3a3a3; }
+.marketing .hero-copy p.ca-address,
+.marketing .footer-main > div:first-child p.ca-address {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px auto 0;
+  color: #9da39e;
+  font-size: 10px;
+  line-height: 1.5;
+  letter-spacing: .04em;
+}
+.marketing .ca-address span { color: #c6cbc7; }
+.marketing .ca-address code { font-family: inherit; overflow-wrap: anywhere; letter-spacing: .02em; }
+.marketing .footer-main > div:first-child p.ca-address { justify-content: flex-start; margin: 4px 0 0; }
 .marketing .closing .button {
   color: #212121;
   border-color: #f5f5f5b3;
