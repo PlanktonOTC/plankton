@@ -1,11 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTerminal } from './shared.jsx';
 import { protectionFor, relativeTime } from '../live/model.js';
 import { explorerTx } from '../live/wagmi.js';
 import { money, priceDigits, signed } from '../live/units.js';
+import { downloadTaxReport, downloadTradeHistory, fetchTradeExport } from '../live/tradeExport.js';
 
 export default function Positions({ account, orders, trades, historyError, tab, setTab }) {
   const t = useTerminal();
+  const currentYear = new Date().getUTCFullYear();
+  const [exportYear, setExportYear] = useState(currentYear);
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState('');
   const connected = t.wallet.isConnected;
   const counts = { Positions: account.positions.length, 'Open orders': orders.length, History: trades.length };
   const empty = !connected
@@ -25,6 +30,35 @@ export default function Positions({ account, orders, trades, historyError, tab, 
           <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)} aria-pressed={tab === item}>{item}<span>{connected ? counts[item] : 0}</span></button>
         ))}
       </div>
+      {connected && tab === 'History' && trades.length > 0 && (
+        <div className="term-history-export">
+          <div><strong>Download your records</strong><small>Exports all indexed fills, not just these rows. The UTC tax summary includes realized P&amp;L and fees; borrow and cash movements are excluded.</small></div>
+          <button className="term-secondary" disabled={exporting} onClick={async () => {
+            setExporting(true); setExportMessage('');
+            try {
+              const rows = await fetchTradeExport(t.wallet.address);
+              downloadTradeHistory(t.wallet.address, rows);
+              setExportMessage(`${rows.length} fills exported.`);
+            } catch (error) { setExportMessage(error.message || 'Could not export trade history.'); }
+            finally { setExporting(false); }
+          }}>{exporting ? 'Preparing…' : 'Export all trades CSV'}</button>
+          <label>Tax year (UTC)
+            <select value={exportYear} onChange={(event) => setExportYear(Number(event.target.value))} disabled={exporting}>
+              {Array.from({ length: Math.max(1, currentYear - 2016) }, (_, index) => currentYear - index).map((year) => <option key={year} value={year}>{year}</option>)}
+            </select>
+          </label>
+          <button className="term-secondary" disabled={exporting} onClick={async () => {
+            setExporting(true); setExportMessage('');
+            try {
+              const rows = await fetchTradeExport(t.wallet.address, exportYear);
+              downloadTaxReport(t.wallet.address, exportYear, rows);
+              setExportMessage(`${exportYear} summary and ${rows.length} fills exported.`);
+            } catch (error) { setExportMessage(error.message || 'Could not prepare the tax summary.'); }
+            finally { setExporting(false); }
+          }}>{exporting ? 'Preparing…' : 'Export tax report CSV'}</button>
+          {exportMessage && <small className="term-history-export-status" role="status">{exportMessage}</small>}
+        </div>
+      )}
       <div className="term-table-wrap">
         {connected && tab === 'Positions' && account.positions.length > 0 && (
           <table>

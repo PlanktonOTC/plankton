@@ -31,7 +31,7 @@ import {
   type TraderSnapshot,
   type TradeQuoteMsg,
 } from '@plankton/chain';
-import { and, createDb, desc, eq, orders, positions, sql, trades, type Db } from '@plankton/db';
+import { and, createDb, desc, eq, gte, lt, or, orders, positions, sql, trades, type Db } from '@plankton/db';
 import { closeSizeDeltaE18, stressNavUsdg } from '@plankton/core';
 import { marketLimits, quoteFromChain, type MarketLimits } from './quote.ts';
 import { collateralShortfall, liquidationPriceE18, positionAfterOpen, positionValue, solveOpenSize, targetNotional } from './views.ts';
@@ -639,6 +639,54 @@ app.get('/v1/accounts/:addr', async (c) => {
     positions: pos.map((r) => ({ ...r, symbol: symbolOf(r.marketId) })),
     openOrders: open.map((r) => ({ ...r, symbol: symbolOf(r.marketId) })),
     recentTrades: recent.map((r) => ({ ...r, symbol: symbolOf(r.marketId) })),
+  });
+});
+
+// Complete indexed fill history for downloads. Cursor pagination keeps large histories bounded and stable while new fills arrive.
+app.get('/v1/accounts/:addr/trades', async (c) => {
+  const addr = c.req.param('addr');
+  if (!ADDRESS.test(addr)) throw new HttpError(400, 'invalid address');
+  const trader = addr.toLowerCase();
+  const limitText = c.req.query('limit') ?? '500';
+  const limit = Number(limitText);
+  if (!/^\d+$/.test(limitText) || !Number.isSafeInteger(limit) || limit < 1 || limit > 500) {
+    throw new HttpError(400, 'limit must be an integer from 1 to 500');
+  }
+
+  const filters = [eq(trades.trader, trader)];
+  const year = c.req.query('year');
+  if (year !== undefined) {
+    if (!/^\d{4}$/.test(year) || Number(year) < 1970 || Number(year) > 9999) throw new HttpError(400, 'year must be a four-digit UTC calendar year');
+    const start = new Date(Date.UTC(Number(year), 0, 1));
+    const end = new Date(Date.UTC(Number(year) + 1, 0, 1));
+    filters.push(gte(trades.at, start), lt(trades.at, end));
+  }
+
+  const cursorAt = c.req.query('cursorAt');
+  const cursorTx = c.req.query('cursorTx');
+  const cursorLog = c.req.query('cursorLog');
+  if ([cursorAt, cursorTx, cursorLog].some((v) => v !== undefined)) {
+    const at = cursorAt ? new Date(cursorAt) : null;
+    const logIndex = cursorLog && /^\d+$/.test(cursorLog) ? Number(cursorLog) : NaN;
+    if (!at || !Number.isFinite(at.getTime()) || !cursorTx || !/^0x[0-9a-f]{64}$/i.test(cursorTx) || !Number.isSafeInteger(logIndex) || logIndex < 0) {
+      throw new HttpError(400, 'invalid trade history cursor');
+    }
+    filters.push(or(
+      lt(trades.at, at),
+      and(eq(trades.at, at), lt(trades.txHash, cursorTx.toLowerCase())),
+      and(eq(trades.at, at), eq(trades.txHash, cursorTx.toLowerCase()), lt(trades.logIndex, logIndex)),
+    )!);
+  }
+
+  const rows = await db().select().from(trades).where(and(...filters))
+    .orderBy(desc(trades.at), desc(trades.txHash), desc(trades.logIndex)).limit(limit);
+  const symbolOf = (marketId: string) => byId.get(marketId.toLowerCase())?.symbol ?? null;
+  const last = rows.at(-1);
+  return json({
+    trader,
+    year: year ? Number(year) : null,
+    trades: rows.map((row) => ({ ...row, symbol: symbolOf(row.marketId) })),
+    nextCursor: rows.length === limit && last ? { cursorAt: last.at.toISOString(), cursorTx: last.txHash, cursorLog: last.logIndex } : null,
   });
 });
 
