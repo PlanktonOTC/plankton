@@ -183,7 +183,10 @@ app.post('/sign/quote', async (c) => {
     const tradeNotionalE18 = notionalUsdg(deltaAbs, mark.priceE18) * usdScale;
     const skewAfter = skewBefore + (q.sizeDeltaE18 > 0n ? tradeNotionalE18 : -tradeNotionalE18);
     const skewFill = skewFillPriceE18(mark.priceE18, skewBefore, skewAfter, marketCfg.skewScaleE18);
-    const spreadBps = BigInt(Math.max(5, Number(halfSpreadBps(observation))));
+    // The API priced this quote from the mark service's reading, taken seconds before this one; the bid/ask can widen in
+    // between. Allow a quarter of the half-spread for that drift so honest quotes are not refused, while a quote that
+    // ignores the source spread altogether is still caught.
+    const spreadBps = BigInt(Math.max(5, Math.floor((Number(halfSpreadBps(observation)) * 3) / 4)));
     if (q.sizeDeltaE18 > 0n && q.execPriceE18 * 10_000n < skewFill * (10_000n + spreadBps)) return reject('open quote is tighter than the source-aware minimum spread');
     if (q.sizeDeltaE18 < 0n && q.execPriceE18 * 10_000n > skewFill * (10_000n - spreadBps)) return reject('open quote is tighter than the source-aware minimum spread');
   }
