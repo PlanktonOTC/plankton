@@ -30,7 +30,16 @@ function useDialogAction(onDone) {
 export function WalletDialog() {
   const t = useTerminal();
   const [error, setError] = useState('');
-  const { choices, connect, connecting } = t.wallet;
+  const { choices, connect, connecting, login, privyReady } = t.wallet;
+  if (login) {
+    return (
+      <Modal title="Sign in to trade" onClose={() => t.setDialog(null)}>
+        <p className="term-modal-intro">Use your email, a passkey (Face ID or Touch ID) or Google, and a Robinhood Chain wallet is made for you: no extension, no seed phrase. MetaMask, Rabby and other wallets work too.</p>
+        <button className="term-primary" disabled={!privyReady} onClick={() => { t.setDialog(null); login(); }}>{privyReady ? 'Continue with email, passkey or wallet' : 'Loading sign-in…'} <Arrow /></button>
+        <p className="term-modal-warning">A new wallet starts empty. Send it USDG and a little ETH for gas on Robinhood Chain; after one deposit, trades need no gas. You approve every signature in the wallet window.</p>
+      </Modal>
+    );
+  }
   return (
     <Modal title="Connect a wallet" onClose={() => t.setDialog(null)} busy={connecting}>
       <p className="term-modal-intro">Choose the wallet you use for Robinhood Chain. PlanktonOTC never holds your keys: you approve each transaction in your wallet.</p>

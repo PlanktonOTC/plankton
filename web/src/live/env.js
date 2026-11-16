@@ -5,6 +5,8 @@ const raw = (typeof import.meta !== 'undefined' && import.meta.env) || {};
 /** Where the browser sends API calls: '/api', forwarded server-side by the dev server (vite.config.js) or web/server.mjs. */
 export const API_URL = String(raw.VITE_API_URL ?? '/api').replace(/\/$/, '');
 export const CHAIN_ID = Number(raw.VITE_CHAIN_ID ?? 4663);
+/** Privy app id (public). When set, traders can sign in with email, a passkey or Google and get a wallet made for them. */
+export const PRIVY_APP_ID = String(raw.VITE_PRIVY_APP_ID ?? '').trim();
 /** Used for reading the chain from the browser (receipts) and when a wallet is asked to add the network. */
 export const RPC_URL = String(raw.VITE_RPC_URL ?? 'https://rpc.mainnet.chain.robinhood.com');
 export const EXPLORER_URL = String(raw.VITE_EXPLORER_URL ?? 'https://robinhoodchain.blockscout.com').replace(/\/$/, '');

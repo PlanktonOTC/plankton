@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { apiDelete, apiGet, apiPost } from './api.js';
 import { CHAIN_ID } from './env.js';
 import { friendlyError } from './errors.js';
+import { usePrivyAuth } from './privyAuth.js';
 
 /** The connected wallet, the available wallets, and connect / disconnect / switch-network actions. */
 export function useWallet() {
@@ -11,6 +12,7 @@ export function useWallet() {
   const { connectAsync, connectors, isPending: connecting, error: connectError } = useConnect();
   const { disconnectAsync } = useDisconnect();
   const { switchChainAsync, isPending: switching } = useSwitchChain();
+  const privy = usePrivyAuth();
   // Two entries can describe one wallet (an announced MetaMask and the generic injected connector): keep one per name.
   const choices = useMemo(() => {
     const seen = new Set();
@@ -30,12 +32,18 @@ export function useWallet() {
     walletChainId: conn.chainId,
     wrongNetwork: conn.isConnected && conn.chainId !== CHAIN_ID,
     connectorName: conn.connector?.name,
-    choices,
+    // With Privy every sign-in (email, passkey, Google or a browser wallet) goes through its modal instead of this list.
+    choices: privy ? [] : choices,
+    login: privy ? () => privy.login() : null,
+    privyReady: privy?.ready ?? true,
     connecting,
     switching,
     connectError,
     connect: (connector) => connectAsync({ connector, chainId: CHAIN_ID }),
-    disconnect: () => disconnectAsync(),
+    disconnect: async () => {
+      if (privy?.authenticated) await privy.logout();
+      await disconnectAsync().catch(() => {});
+    },
     switchNetwork: () => switchChainAsync({ chainId: CHAIN_ID }),
   };
 }
