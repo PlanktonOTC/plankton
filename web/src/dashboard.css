@@ -87,3 +87,6 @@
 @media(min-width:1700px){.term-ticket-body{padding:23px 23px 30px}.term-actions-desktop{padding-inline:23px}}
 @media(min-width:1024px) and (max-width:1200px){.term-ticket-body{padding:17px 13px 24px}.term-actions-desktop{padding:12px 13px 10px}}
 @media(max-width:1023px){.term-ticket-body{overflow:visible}.term-actions-mobile{display:block}.term-actions-desktop{display:none}.term-ticket-actions .term-primary{margin-top:0}}
+
+/* Phones and tablets: the middle column and the positions table must not trap swipes, or the page cannot be scrolled from the header, chart or positions. */
+@media(max-width:1023px){.term-center{overflow:visible;overscroll-behavior:auto}.term-table-wrap{overscroll-behavior-x:contain;overscroll-behavior-y:auto}}
