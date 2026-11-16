@@ -114,6 +114,15 @@
 .marketing .footer-main > div:first-child p { color: #aeaeae; }
 .marketing .footer-main a { transition: color .2s ease, text-shadow .2s ease; }
 .marketing .footer-bottom { border-color: #d5d5d51c; color: #a3a3a3; }
+.marketing .nav-token {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+.marketing .nav-token svg { width: 12px; }
 .marketing .hero-copy p.ca-address,
 .marketing .footer-main > div:first-child p.ca-address {
   display: flex;
