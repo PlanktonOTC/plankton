@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import pino from 'pino';
@@ -74,6 +74,16 @@ const market = (symbol: string) => {
 };
 
 const json = (v: unknown, status = 200) => new Response(toJson(v), { status, headers: { 'content-type': 'application/json' } });
+
+function feedJson(ifNoneMatch: string | undefined, value: unknown): Response {
+  const body = toJson(value);
+  const etag = `"${createHash('sha256').update(body).digest('hex')}"`;
+  const headers = new Headers({ etag, 'cache-control': 'public, max-age=2', 'access-control-allow-origin': '*', 'access-control-expose-headers': 'ETag' });
+  const matches = ifNoneMatch?.split(',').some((tag) => tag.trim() === etag || tag.trim() === '*' || tag.trim() === `W/${etag}`);
+  if (matches) return new Response(null, { status: 304, headers });
+  headers.set('content-type', 'application/json');
+  return new Response(body, { headers });
+}
 
 /** Fetch from the mark service (it owns live prices). Short timeout: a dead mark service must not hang the API. */
 async function fromMark<T>(path: string): Promise<T> {
@@ -733,9 +743,10 @@ app.get('/v1/accounts/:addr/claims', async (c) => {
 
 // The Plankton price feed: the latest price each market has on-chain in MarkOracle, read straight from the chain and open to any
 // website or script (CORS *). Marks are published when someone is about to trade, so a quiet market's price can be minutes old:
-// every row carries its age so a reader can judge it. Nothing here is signed by us or stored; the contract is the source.
+// every row carries its age so a reader can judge it. The API keeps a short in-memory response cache; the contract is the source.
 const FEED_TTL_MS = 2_000;
 let feedCache: { at: number; body: { chainId: number; oracle: Address; chainTimeSec: bigint; freshWithinSec: number; markets: FeedRow[] } } | null = null;
+const marketFeedCache = new Map<string, { at: number; body: { chainId: number; oracle: Address; chainTimeSec: bigint; freshWithinSec: number; market: FeedRow } }>();
 async function buildFeed() {
   if (feedCache && Date.now() - feedCache.at < FEED_TTL_MS) return feedCache.body;
   const { client, dep } = chain();
@@ -748,18 +759,29 @@ async function buildFeed() {
   feedCache = { at: Date.now(), body };
   return body;
 }
+async function buildMarketFeed(symbol: string) {
+  const key = symbol.toUpperCase();
+  const selected = market(key);
+  const cached = marketFeedCache.get(key);
+  if (cached && Date.now() - cached.at < FEED_TTL_MS) return cached.body;
+  const { client, dep } = chain();
+  const [nowSec, rawMark] = await Promise.all([
+    chainTimeSec(client),
+    client.readContract({ address: dep.oracle, abi: oracleAbi, functionName: 'markOf', args: [selected.marketId] }),
+  ]);
+  const row = feedRow(key, selected.cfg.class, selected.marketId, rawMark as RawMark, nowSec);
+  const body = { chainId: ROBINHOOD_CHAIN_ID, oracle: dep.oracle, chainTimeSec: nowSec, freshWithinSec: FRESH_WITHIN_SEC, market: row };
+  marketFeedCache.set(key, { at: Date.now(), body });
+  return body;
+}
 app.use('/v1/feed*', async (c, next) => {
   await next();
   c.header('access-control-allow-origin', '*');
   c.header('cache-control', 'public, max-age=2');
+  c.header('access-control-expose-headers', 'ETag');
 });
-app.get('/v1/feed', async () => json(await buildFeed()));
-app.get('/v1/feed/:symbol', async (c) => {
-  const row = (await buildFeed()).markets.find((m) => m.symbol === c.req.param('symbol').toUpperCase());
-  if (!row) throw new HttpError(404, 'unknown market');
-  const { chainId, oracle, chainTimeSec: t, freshWithinSec } = await buildFeed();
-  return json({ chainId, oracle, chainTimeSec: t, freshWithinSec, market: row });
-});
+app.get('/v1/feed', async (c) => feedJson(c.req.header('if-none-match'), await buildFeed()));
+app.get('/v1/feed/:symbol', async (c) => feedJson(c.req.header('if-none-match'), await buildMarketFeed(c.req.param('symbol'))));
 
 app.get('/v1/counter', async () => {
   const { client, dep } = chain();

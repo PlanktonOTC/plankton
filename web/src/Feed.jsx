@@ -52,10 +52,10 @@ function Snippets({ data, symbol }) {
   const row = data?.markets.find((m) => m.symbol === symbol) ?? data?.markets[0];
   const snippets = useMemo(() => {
     if (!data || !row) return [];
-    const v = row.symbol.toLowerCase();
+    const endpoint = `${origin}/api/v1/feed/${row.symbol}`;
     return [
-      ['curl', `curl ${origin}/api/v1/feed/${row.symbol}`],
-      ['JavaScript', `const res = await fetch('${origin}/api/v1/feed');\nconst { markets } = await res.json();\nconst ${v} = markets.find((m) => m.symbol === '${row.symbol}');\nconsole.log(${v}.price, ${v}.ageSec, ${v}.fresh);`],
+      ['curl', `curl -i '${endpoint}'\n\n# Revalidate with the ETag from the previous response:\ncurl -i -H 'If-None-Match: "<etag>"' '${endpoint}'`],
+      ['JavaScript', `const url = '${endpoint}';\nlet etag;\n\nasync function read${row.symbol}() {\n  const res = await fetch(url, { headers: etag ? { 'If-None-Match': etag } : {} });\n  if (res.status === 304) return console.log('${row.symbol} unchanged');\n  if (!res.ok) throw new Error(\`Feed HTTP \${res.status}\`);\n  etag = res.headers.get('ETag');\n  const { market } = await res.json();\n  console.log(market.price, market.ageSec, market.fresh, market.status);\n}\n\nawait read${row.symbol}();`],
       ['Solidity (on-chain)', `// Chain ${data.chainId}. Oracle: ${data.oracle}\nIMarkOracle.Mark memory m = IMarkOracle(${data.oracle}).markOf(\n    ${row.marketId}\n); // ${row.symbol}\n// m.priceE18 (18 decimals), m.updatedAt, m.status, m.confidenceBps`],
     ];
   }, [data, row, origin]);
@@ -92,7 +92,7 @@ export default function Feed() {
       <main className="feed-main wrap">
         <span className="eyebrow">PLANKTON PRICE FEED</span>
         <h1>On-chain prices<br />for small caps.</h1>
-        <p className="feed-lead">The latest price each Plankton market holds on Robinhood Chain, read straight from the oracle contract. Free to use, no key needed, open to any website or script.</p>
+        <p className="feed-lead">The latest price each Plankton market holds on Robinhood Chain, read straight from the oracle contract. Free to use, no key needed, open to any website or script. Single-market lookups read only that market, with ETags for lightweight revalidation.</p>
 
         <div className="feed-endpoint">
           <code>GET {endpoint}</code>
@@ -123,11 +123,12 @@ export default function Feed() {
         {data && (
           <section className="feed-use" ref={codeRef}>
             <h2>Use it in your own app</h2>
-            <p>Showing the code for <strong>{selected}</strong>. Click another market in the table to change it. The contract call reads the same value the website shows.</p>
+            <p>Showing the code for <strong>{selected}</strong>. Click another market in the table to change it. Use the single-market endpoint for a compact response, or read the same mark directly from the contract.</p>
             <Snippets data={data} symbol={selected} />
             <dl className="feed-facts">
               <div><dt>Chain</dt><dd>Robinhood Chain ({data.chainId})</dd></div>
               <div><dt>Oracle contract</dt><dd><code>{data.oracle}</code></dd></div>
+              <div><dt>Efficient polling</dt><dd>Single-market endpoint, two-second server cache, and ETag conditional requests return <code>304 Not Modified</code> when the response has not changed.</dd></div>
               <div><dt>Price format</dt><dd><code>priceE18</code> is the exact on-chain integer with 18 decimals; <code>price</code> is the same value in plain USD.</dd></div>
               <div><dt>Use with care</dt><dd>These are reference prices for building and checking. Check <code>fresh</code> and <code>ageSec</code> before relying on one.</dd></div>
             </dl>
