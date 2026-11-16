@@ -2,10 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Arrow, Modal, TxProgress, useTerminal } from './shared.jsx';
 import RiskPanel from './Risk.jsx';
 import { friendlyError } from '../live/errors.js';
-import { ENTRY_SLIPPAGE_BPS, entryOrder, newNonce, protectionOrder, protectionProblem } from '../live/orders.js';
+import { ENTRY_SLIPPAGE_BPS, canGoGasless, entryOrder, marketOrder, newNonce, protectionOrder, protectionProblem } from '../live/orders.js';
 import { previewView } from '../live/model.js';
 import { useDebounced, usePreview } from '../live/queries.js';
-import { depositCollateral, openTrade, placeOrder } from '../live/trade.js';
+import { depositCollateral, gaslessOrder, openTrade, placeOrder } from '../live/trade.js';
 import { money, parseE18, parseUsdg, priceDigits } from '../live/units.js';
 
 const DAY = 86_400n;
@@ -138,7 +138,8 @@ export default function Ticket({ market, account, orders }) {
     if (primaryError) return t.notify(primaryError);
     if (type === 'Market' && !preview?.ok) return t.notify('Waiting for the price estimate. Try again in a moment.');
     setReviewError('');
-    setReview({ side, type, margin, leverage, trigger, tp: bracket ? tp : '', sl: bracket ? sl : '', days, preview, estimate: orderEstimate });
+    const gasless = type === 'Market' && canGoGasless(account.collateral, Number(margin), preview.fee);
+    setReview({ side, type, margin, leverage, trigger, tp: bracket ? tp : '', sl: bracket ? sl : '', days, preview, estimate: orderEstimate, gasless });
   }
 
   async function confirm() {
@@ -149,7 +150,9 @@ export default function Ticket({ market, account, orders }) {
       const chainNow = BigInt((await ctx.api.get('/v1/config')).chainTimeSec);
       const protect = async (kind, price) => placeOrder(ctx, protectionOrder({ kind, positionSide: r.side, marketId: market.marketId, trader: address, triggerE18: parseE18(price), validAfter: chainNow, expiry: chainNow + 30n * DAY, nonce: newNonce() }));
       if (r.type === 'Market') {
-        const hash = await openTrade(ctx, { symbol, sizeDeltaE18: r.preview.sizeDeltaE18, marginUsdg });
+        const hash = r.gasless
+          ? await gaslessOrder(ctx, marketOrder({ marketId: market.marketId, trader: address, sizeDeltaE18: r.preview.sizeDeltaE18, marginUsdg, validAfter: chainNow, nonce: newNonce() }))
+          : await openTrade(ctx, { symbol, sizeDeltaE18: r.preview.sizeDeltaE18, marginUsdg });
         // The position exists now: protective orders belong to it.
         if (r.tp) await protect('takeProfit', r.tp);
         if (r.sl) await protect('stopLoss', r.sl);
@@ -280,7 +283,9 @@ function ReviewDialog({ review: r, market, account, error, busy, step, hash, onC
       {rows.map(([label, value]) => <div className="term-detail" key={label}><span>{label}</span><b>{value}</b></div>)}
       {r.tp && <div className="term-detail"><span>Take profit</span><b>{r.tp}</b></div>}
       {r.sl && <div className="term-detail"><span>Stop loss</span><b>{r.sl}</b></div>}
-      {shortfall > 0.005 && (
+      {isMarket && r.gasless && <p className="term-modal-intro">Gasless: you sign one message and pay no gas. A keeper fills the order from your deposited USDG within a few seconds.</p>}
+      {isMarket && !r.gasless && <p className="term-modal-intro">Tip: deposit USDG in Account &amp; deposits once, and market orders become a single gas-free signature.</p>}
+      {shortfall > 0.005 && !r.gasless && (
         <p className="term-modal-warning">{isMarket ? `Your wallet will move about ${money(shortfall)} USDG into the exchange as part of this order (one permit signature, no separate approval).` : `This order is funded from your deposited USDG, and you have ${money(account.collateral)}. About ${money(shortfall)} USDG will be deposited from your wallet first.`}</p>
       )}
       <p className="term-modal-warning">
@@ -291,7 +296,7 @@ function ReviewDialog({ review: r, market, account, error, busy, step, hash, onC
       </p>
       <TxProgress step={step} hash={hash} />
       {error && <p className="term-form-error" role="alert">{error}</p>}
-      <button className="term-primary" disabled={busy} onClick={onConfirm}>{busy ? 'Working…' : isMarket ? `Confirm ${r.side}` : 'Sign and place order'} <Arrow down={r.side === 'short'} /></button>
+      <button className="term-primary" disabled={busy} onClick={onConfirm}>{busy ? 'Working…' : isMarket ? `${r.gasless ? 'Sign' : 'Confirm'} ${r.side}${r.gasless ? ' · no gas' : ''}` : 'Sign and place order'} <Arrow down={r.side === 'short'} /></button>
     </Modal>
   );
 }

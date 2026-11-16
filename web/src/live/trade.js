@@ -152,6 +152,36 @@ export async function placeOrder(ctx, order) {
   return ctx.api.post('/v1/orders', orderBody(order, sig));
 }
 
+// ---------------------------------------------------------------- gasless market orders
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const UNFILLED = {
+  expired: 'The order lapsed before it could fill (the price moved or the market paused). Nothing was spent.',
+  cancelled: 'The order was cancelled before it filled. Nothing was spent.',
+  InsufficientCollateral: 'Not enough deposited USDG for this order. Deposit more in Account & deposits.',
+  NotReducing: 'There is no position left to close.',
+};
+
+/**
+ * Signs a market order and waits for the keeper to fill it. The trader pays no gas: the keeper sends the transaction.
+ * Resolves with the fill transaction hash, or throws with the reason it did not fill.
+ */
+export async function gaslessOrder(ctx, order, { timeoutMs = 60_000, pollMs = 1_000, wait = sleep } = {}) {
+  await placeOrder(ctx, order);
+  step(ctx, 'keeper');
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    await wait(pollMs);
+    const o = await ctx.api.get(`/v1/orders/${order.trader}/${order.nonce}`);
+    if (o.status === 'filled') {
+      step(ctx, 'done', o.fillTx);
+      return o.fillTx;
+    }
+    if (o.status !== 'open') throw new Error(UNFILLED[o.failReason] ?? UNFILLED[o.status] ?? `The order did not fill (${o.failReason ?? o.status}). Nothing was spent.`);
+    if (Date.now() > deadline) throw new Error('The order has not filled yet. It stays live for 2 minutes; check Open orders.');
+  }
+}
+
 /** Cancels off-chain with a signed message. The response also has the on-chain cancel call for a stronger guarantee. */
 export async function cancelOrderRequest(ctx, nonce) {
   step(ctx, 'sign-cancel');

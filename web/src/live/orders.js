@@ -1,12 +1,22 @@
 // The messages a trader signs. They must match the contracts exactly (Exchange.ORDER_TYPEHASH, USDG's permit domain):
 // packages/chain/test/web-abi.test.ts compares these definitions with the backend's.
 
-export const ORDER_KIND = { limit: 0, stop: 1, takeProfit: 2, stopLoss: 3 };
-export const KIND_LABEL = { 0: 'Limit', 1: 'Stop', 2: 'Take profit', 3: 'Stop loss', 4: 'TWAP slice' };
+export const ORDER_KIND = { limit: 0, stop: 1, takeProfit: 2, stopLoss: 3, market: 4 };
+// Kind 4 has no trigger: the contract (Exchange.executeOrder) and the keeper fill it as soon as it arrives.
+export const KIND_LABEL = { 0: 'Limit', 1: 'Stop', 2: 'Take profit', 3: 'Stop loss', 4: 'Market' };
 
 /** How far the execution price may sit from the mark when a keeper fills the order. Wider for protective exits: a stop must get out. */
 export const ENTRY_SLIPPAGE_BPS = 250;
 export const PROTECT_SLIPPAGE_BPS = 500;
+/** A gasless market order fills seconds after it is signed, so it allows less than a resting entry order. */
+export const MARKET_SLIPPAGE_BPS = 150;
+/** A gasless market order that the keeper cannot fill in this time lapses: it never fills later at a surprising price. */
+export const MARKET_ORDER_LIFETIME_SEC = 120n;
+/** Deposited USDG kept spare above margin and fee before a market order goes gasless (the fee can tick up at the fill). */
+const GASLESS_BUFFER_USDG = 0.01;
+
+/** A market order is gasless when the deposited collateral already covers its margin and fee: the keeper fills it. */
+export const canGoGasless = (collateral, margin, fee) => collateral >= margin + fee + GASLESS_BUFFER_USDG;
 
 export const orderTypes = {
   Order: [
@@ -143,4 +153,46 @@ export function protectionProblem(side, reference, takeProfit, stopLoss) {
   if (tp !== null && (side === 'long' ? tp <= reference : tp >= reference)) return `Take profit must be ${side === 'long' ? 'above' : 'below'} the current price.`;
   if (sl !== null && (side === 'long' ? sl >= reference : sl <= reference)) return `Stop loss must be ${side === 'long' ? 'below' : 'above'} the current price.`;
   return null;
+}
+
+/**
+ * A gasless market order: the trader signs it (no gas) and the keeper fills it at once, paying the gas. Opens draw the
+ * margin and fee from collateral already deposited in the exchange. `sizeDeltaE18` is signed (negative is short).
+ */
+export function marketOrder({ marketId, trader, sizeDeltaE18, marginUsdg, validAfter, nonce, maxSlippageBps = MARKET_SLIPPAGE_BPS }) {
+  return {
+    marketId,
+    trader,
+    kind: ORDER_KIND.market,
+    sizeDeltaE18,
+    sizeBps: 0,
+    triggerE18: 0n,
+    triggerAbove: false,
+    reduceOnly: false,
+    maxSlippageBps,
+    marginUsdg,
+    validAfter,
+    expiry: validAfter + MARKET_ORDER_LIFETIME_SEC,
+    nonce,
+  };
+}
+
+/** A gasless close of `sizeBps` of the position (10_000 = all). Reduce-only, so it can never open or flip a position. */
+export function marketCloseOrder({ marketId, trader, sizeBps, validAfter, nonce, maxSlippageBps = ENTRY_SLIPPAGE_BPS }) {
+  if (!(sizeBps > 0 && sizeBps <= 10_000)) throw new Error('close size must be 1 to 10000 bps');
+  return {
+    marketId,
+    trader,
+    kind: ORDER_KIND.market,
+    sizeDeltaE18: 0n,
+    sizeBps,
+    triggerE18: 0n,
+    triggerAbove: false,
+    reduceOnly: true,
+    maxSlippageBps,
+    marginUsdg: 0n,
+    validAfter,
+    expiry: validAfter + MARKET_ORDER_LIFETIME_SEC,
+    nonce,
+  };
 }

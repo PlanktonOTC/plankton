@@ -572,6 +572,20 @@ app.post('/v1/orders', async (c) => {
   return json({ ok: true, nonce: order.nonce, market: m.symbol }, 201);
 });
 
+// Where one order stands, so a screen can wait for a gasless market order to fill. Order rows are public chain intent.
+app.get('/v1/orders/:trader/:nonce', async (c) => {
+  const trader = c.req.param('trader');
+  const nonceStr = c.req.param('nonce');
+  if (!ADDRESS.test(trader)) throw new HttpError(400, 'invalid address');
+  if (!/^\d{1,19}$/.test(nonceStr)) throw new HttpError(400, 'bad nonce');
+  const [row] = await db()
+    .select({ status: orders.status, fillTx: orders.fillTx, failReason: orders.failReason })
+    .from(orders)
+    .where(and(eq(orders.trader, trader.toLowerCase()), eq(orders.nonce, BigInt(nonceStr))));
+  if (!row) throw new HttpError(404, 'unknown order');
+  return json({ status: row.status, fillTx: row.fillTx, failReason: row.failReason });
+});
+
 // Off-chain cancel needs a signed message from the trader. The response also carries the on-chain cancel call,
 // which is the only cancel that binds a keeper that has already picked the order up.
 app.delete('/v1/orders/:nonce', async (c) => {

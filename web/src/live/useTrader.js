@@ -166,6 +166,7 @@ export const STEP_TEXT = {
   'sign-order': 'Sign the order in your wallet…',
   'sign-cancel': 'Sign the cancellation in your wallet…',
   submit: 'Sending to the order book…',
+  keeper: 'Filling your order. No gas needed…',
   estimate: 'Checking transaction with the network…',
   wallet: 'Confirm the transaction in your wallet…',
   confirming: 'Waiting for the network to confirm…',

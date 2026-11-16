@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { Arrow, Modal, TxProgress, useTerminal } from './shared.jsx';
-import { friendlyError } from '../live/errors.js';
-import { newNonce, protectionOrder, protectionProblem } from '../live/orders.js';
+import { friendlyError, isUserRejection } from '../live/errors.js';
+import { marketCloseOrder, newNonce, protectionOrder, protectionProblem } from '../live/orders.js';
 import { protectionFor, previewView, relativeTime } from '../live/model.js';
 import { useClaims, usePreview, useSources } from '../live/queries.js';
-import { addMarginTx, cancelOrderOnChain, cancelOrderRequest, claimPayout, closeAtMarkTx, closeTrade, depositCollateral, placeOrder, withdrawCollateral } from '../live/trade.js';
+import { addMarginTx, cancelOrderOnChain, cancelOrderRequest, claimPayout, closeAtMarkTx, depositCollateral, gaslessOrder, placeOrder, withdrawCollateral } from '../live/trade.js';
 import { big, e18Num, money, parseE18, parseUsdg, priceDigits, shortAddress, usdgNum } from '../live/units.js';
 
 const DAY = 86_400n;
@@ -113,8 +113,13 @@ export function CloseDialog({ symbol, percent: start, account, market }) {
   const preview = previewView(usePreview(params).data);
   if (!position) return <Modal title="Close position" onClose={() => t.setDialog(null)}><p className="term-modal-intro">This position is already closed.</p></Modal>;
   const go = async () => {
-    const result = await submit((ctx) => closeTrade(ctx, { symbol, sizeBps: percent * 100 }), `${percent === 100 ? 'Closed' : `Trimmed ${percent}% of`} ${symbol}.`);
-    if (!result.ok && result.error?.body?.closeAtMark) setFallback(true);
+    // Gasless: the trader signs a reduce-only market order and the keeper closes it, paying the gas. If that cannot
+    // happen (quote service down, market frozen), the permissionless exit at the on-chain mark is offered instead.
+    const result = await submit(async (ctx) => {
+      const chainNow = BigInt((await ctx.api.get('/v1/config')).chainTimeSec);
+      return gaslessOrder(ctx, marketCloseOrder({ marketId: position.marketId, trader: ctx.address, sizeBps: percent * 100, validAfter: chainNow, nonce: newNonce() }));
+    }, `${percent === 100 ? 'Closed' : `Trimmed ${percent}% of`} ${symbol}.`);
+    if (!result.ok && !isUserRejection(result.error)) setFallback(true);
   };
   return (
     <Modal title={percent === 100 ? 'Close position' : 'Trim position'} onClose={() => t.setDialog(null)} busy={t.trader.busy}>
@@ -130,7 +135,7 @@ export function CloseDialog({ symbol, percent: start, account, market }) {
         </>
       )}
       {preview && !preview.ok && <p className="term-form-error" role="status">{friendlyError({ name: 'ApiError', status: 422, message: preview.code, body: { code: preview.code, message: preview.message } })}</p>}
-      <p className="term-modal-warning">The exit price is quoted just before you confirm and is valid for up to 60 seconds. Profit above the payout limit may be paid late through the payout desk.</p>
+      <p className="term-modal-warning">Gasless: you sign one message and a keeper closes the position within a few seconds, paying the gas. The exit price is quoted at the fill. Profit above the payout limit may be paid late through the payout desk.</p>
       {fallback && <p className="term-form-error" role="alert">The quote service cannot price this right now. You can still exit at the on-chain mark.</p>}
       <TxProgress step={t.trader.step} hash={t.trader.hash} />
       {error && !fallback && <p className="term-form-error" role="alert">{error}</p>}
