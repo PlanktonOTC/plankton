@@ -34,7 +34,7 @@ export function useWallet() {
     connectorName: conn.connector?.name,
     // With Privy every sign-in (email, passkey, Google or a browser wallet) goes through its modal instead of this list.
     choices: privy ? [] : choices,
-    login: privy ? () => privy.login() : null,
+    login: privy ? (methods) => privy.login(methods ? { loginMethods: methods } : undefined) : null,
     privyReady: privy?.ready ?? true,
     connecting,
     switching,

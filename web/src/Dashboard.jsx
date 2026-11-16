@@ -5,6 +5,7 @@ import { useTrader, useWallet } from './live/useTrader.js';
 import { accountView, marketView, orderView, tradeView } from './live/model.js';
 import { friendlyError } from './live/errors.js';
 import { compact, money, priceDigits, shortAddress, signed } from './live/units.js';
+import { PRIVY_APP_ID } from './live/env.js';
 import { Arrow, Terminal, useStored } from './terminal/shared.jsx';
 import Chart from './terminal/Chart.jsx';
 import Positions from './terminal/Positions.jsx';
@@ -146,7 +147,7 @@ function TerminalApp() {
             <button aria-label="Keyboard shortcuts" onClick={() => setDialog({ type: 'shortcuts' })}>?</button>
             {wallet.isConnected
               ? <button className={`term-demo-account-button term-wallet-button ${wallet.wrongNetwork ? 'is-wrong' : ''}`} onClick={() => (wallet.wrongNetwork ? wallet.switchNetwork().catch((e) => notify(friendlyError(e))) : setDialog({ type: 'account' }))}><i />{wallet.wrongNetwork ? 'Switch network' : shortAddress(wallet.address)}</button>
-              : <button className="term-demo-account-button term-wallet-button" onClick={openWallet}><i />Connect wallet</button>}
+              : <button className="term-demo-account-button term-wallet-button is-cta" onClick={openWallet}><i />{PRIVY_APP_ID ? 'Sign in' : 'Connect wallet'}</button>}
           </div>
         </header>
         <div className={`term-preview-strip term-status-${status.tone}`}><span><i /> {status.tone === 'good' ? 'LIVE' : status.tone === 'muted' ? 'CONNECTING' : 'ATTENTION'}</span><p>{status.text}</p><a href="/docs?topic=risk">Know the risks ↗</a></div>

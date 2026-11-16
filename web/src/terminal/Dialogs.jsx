@@ -27,33 +27,82 @@ function useDialogAction(onDone) {
 
 // ---------------------------------------------------------------- wallet
 
+const ICONS = {
+  email: <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3" /><path d="m4 7 8 6 8-6" /></svg>,
+  passkey: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H6a2 2 0 0 0-2 2v2M16 4h2a2 2 0 0 1 2 2v2M8 20H6a2 2 0 0 1-2-2v-2M16 20h2a2 2 0 0 0 2-2v-2" /><path d="M9 9v1M15 9v1M12 9v4h-1M9.5 15.5a3.5 3.5 0 0 0 5 0" /></svg>,
+  google: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 12.2c0-.6-.1-1.2-.2-1.7H12v3.3h4.8a4.1 4.1 0 0 1-1.8 2.7v2.2h2.9c1.7-1.6 2.6-3.9 2.6-6.5Z" /><path d="M12 21c2.4 0 4.5-.8 5.9-2.2L15 16.6c-.8.5-1.8.9-3 .9a5.2 5.2 0 0 1-4.9-3.6H4.1v2.3A9 9 0 0 0 12 21Z" /><path d="M7.1 13.9a5.4 5.4 0 0 1 0-3.5V8.1h-3a9 9 0 0 0 0 8.1l3-2.3Z" /><path d="M12 6.5c1.3 0 2.5.5 3.4 1.3L18 5.3A9 9 0 0 0 4.1 8.1l3 2.3A5.2 5.2 0 0 1 12 6.5Z" /></svg>,
+  wallet: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h11v4" /><rect x="4" y="7" width="16" height="12" rx="2.5" /><path d="M16 13h2" /></svg>,
+};
+
+/** Three short promises instead of a paragraph: what signing in here does and does not mean. */
+function TrustStrip() {
+  return (
+    <ul className="term-connect-trust">
+      <li><b>Self-custody</b><span>Plankton never holds your keys</span></li>
+      <li><b>Gas-free trades</b><span>after one USDG deposit</span></li>
+      <li><b>You approve</b><span>every signature, every time</span></li>
+    </ul>
+  );
+}
+
 export function WalletDialog() {
   const t = useTerminal();
   const [error, setError] = useState('');
   const { choices, connect, connecting, login, privyReady } = t.wallet;
+  const start = (methods) => { t.setDialog(null); login(methods); };
+
   if (login) {
+    const tiles = [
+      { key: 'email', title: 'Email', detail: 'One-time code' },
+      { key: 'passkey', title: 'Passkey', detail: 'Face ID or Touch ID' },
+      { key: 'google', title: 'Google', detail: 'Your Google account' },
+    ];
     return (
-      <Modal title="Sign in to trade" onClose={() => t.setDialog(null)}>
-        <p className="term-modal-intro">Use your email, a passkey (Face ID or Touch ID) or Google, and a Robinhood Chain wallet is made for you: no extension, no seed phrase. MetaMask, Rabby and other wallets work too.</p>
-        <button className="term-primary" disabled={!privyReady} onClick={() => { t.setDialog(null); login(); }}>{privyReady ? 'Continue with email, passkey or wallet' : 'Loading sign-in…'} <Arrow /></button>
-        <p className="term-modal-warning">A new wallet starts empty. Send it USDG and a little ETH for gas on Robinhood Chain; after one deposit, trades need no gas. You approve every signature in the wallet window.</p>
+      <Modal title="Sign in to Plankton" onClose={() => t.setDialog(null)}>
+        <p className="term-connect-lead">New here? Pick one and a Robinhood Chain wallet is made for you. No extension, no seed phrase.</p>
+        <div className="term-connect-tiles">
+          {tiles.map((x) => (
+            <button key={x.key} className={`term-connect-tile is-${x.key}`} disabled={!privyReady} onClick={() => start([x.key])}>
+              <span className="term-connect-icon">{ICONS[x.key]}</span>
+              <b>{x.title}</b>
+              <small>{x.detail}</small>
+            </button>
+          ))}
+        </div>
+        <div className="term-connect-divider"><span>or use a wallet you have</span></div>
+        <button className="term-connect-row" disabled={!privyReady} onClick={() => start(['wallet'])}>
+          <span className="term-connect-icon">{ICONS.wallet}</span>
+          <span><b>Browser or mobile wallet</b><small>MetaMask, Rabby, Coinbase Wallet and more</small></span>
+          <Arrow />
+        </button>
+        {!privyReady && <p className="term-connect-loading" role="status">Loading sign-in…</p>}
+        <TrustStrip />
       </Modal>
     );
   }
+
   return (
     <Modal title="Connect a wallet" onClose={() => t.setDialog(null)} busy={connecting}>
-      <p className="term-modal-intro">Choose the wallet you use for Robinhood Chain. PlanktonOTC never holds your keys: you approve each transaction in your wallet.</p>
-      <div className="term-wallet-list">
-        {choices.map((c) => (
-          <button key={c.id ?? c.uid ?? c.name} disabled={connecting} onClick={async () => { setError(''); try { await connect(c); t.setDialog(null); } catch (e) { setError(friendlyError(e)); } }}>
-            {c.icon ? <img src={c.icon} alt="" width="28" height="28" /> : <span className="term-wallet-glyph" aria-hidden="true">◇</span>}
-            <span>{c.name}</span><Arrow />
+      <p className="term-connect-lead">Choose the wallet you use for Robinhood Chain. You will be asked to switch network if needed.</p>
+      <div className="term-connect-list">
+        {choices.map((c, i) => (
+          <button key={c.id ?? c.uid ?? c.name} className="term-connect-row" disabled={connecting} onClick={async () => { setError(''); try { await connect(c); t.setDialog(null); } catch (e) { setError(friendlyError(e)); } }}>
+            <span className="term-connect-icon">{c.icon ? <img src={c.icon} alt="" width="26" height="26" /> : ICONS.wallet}</span>
+            <span><b>{c.name}</b><small>{c.id === 'injected' ? 'Browser wallet' : 'Detected in this browser'}</small></span>
+            {i === 0 && c.id !== 'injected' ? <em className="term-connect-tag">Installed</em> : <Arrow />}
           </button>
         ))}
-        {!choices.length && <div className="term-empty">No browser wallet found.<small>Install a wallet extension such as MetaMask or Rabby, then reload this page.</small></div>}
+        {!choices.length && (
+          <div className="term-connect-empty">
+            <span className="term-connect-icon">{ICONS.wallet}</span>
+            <b>No wallet found in this browser</b>
+            <small>Install one, then reload this page.</small>
+            <div><a href="https://metamask.io/download/" target="_blank" rel="noreferrer">Get MetaMask <Arrow /></a><a href="https://rabby.io/" target="_blank" rel="noreferrer">Get Rabby <Arrow /></a></div>
+          </div>
+        )}
       </div>
       {error && <p className="term-form-error" role="alert">{error}</p>}
-      <p className="term-modal-warning">Wallets are detected automatically. You will be asked to switch to Robinhood Chain if you are on another network.</p>
+      <TrustStrip />
     </Modal>
   );
 }
