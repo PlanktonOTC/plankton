@@ -49,6 +49,12 @@ export default function RiskPanel({ position, market }) {
         <div><dt>Estimated liquidation</dt><dd>{p.liquidation === null ? '—' : money(p.liquidation, digits)}</dd></div>
         <div><dt>Distance to estimate</dt><dd>{p.distancePercent === null ? '—' : money(p.distancePercent, 1)}<small>%</small></dd></div>
       </dl>
+      <div className="term-risk-close">
+        <button className="term-risk-close-main" onClick={() => t.setDialog({ type: 'close', symbol: p.symbol, percent: 100 })}>
+          Close position <small>1 signature · no gas</small>
+        </button>
+        <button onClick={() => t.setDialog({ type: 'close', symbol: p.symbol, percent: 25 })}>Trim 25%</button>
+      </div>
       <div className="term-risk-actions">
         <button onClick={() => t.setDialog({ type: 'margin', symbol: p.symbol })}>Add margin <span>+</span></button>
         <button onClick={() => t.setDialog({ type: 'protection', symbol: p.symbol })}>TP / SL <span>↗</span></button>

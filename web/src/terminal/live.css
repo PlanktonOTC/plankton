@@ -63,3 +63,11 @@
 .term-center-empty{display:grid;place-items:center;min-height:360px}
 .term-modal-actions{display:flex;gap:10px;flex-wrap:wrap}
 .term-modal-actions>button{flex:1}
+
+/* Close and trim sit in the side panel, next to the position they act on. */
+.term-risk-close{display:flex;gap:7px;margin:4px 0 8px}
+.term-risk-close>button{border:1px solid #c1c1c12b;border-radius:5px;background:#c5c5c50d;color:#d6dde1;font-size:11px;padding:11px;transition:background .2s}
+.term-risk-close>button:hover{background:#d0d0d024}
+.term-risk-close .term-risk-close-main{flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:3px;background:linear-gradient(110deg,#dae0e4,#b9c5cd);color:#17232b;border-color:#ffffff16;font-weight:500}
+.term-risk-close .term-risk-close-main:hover{filter:brightness(1.07);background:linear-gradient(110deg,#dae0e4,#b9c5cd)}
+.term-risk-close .term-risk-close-main small{display:block;font-size:9px;font-weight:400;color:#3d4b55}
