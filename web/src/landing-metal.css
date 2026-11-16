@@ -192,3 +192,13 @@
   .marketing :is(.feature-info-panel, .studio-bento > div, .studio-bento > .report-card, .example-card, .roadmap-console, .future-plan)::before { display: none; }
   .marketing :is(.feature-info-panel, .studio-bento > div, .studio-bento > .report-card, .example-card, .roadmap-console, .future-plan, .footer) { background: Canvas; border-color: CanvasText; box-shadow: none; }
 }
+
+/* Contract address section under the hero */
+.contract-address{padding:34px 0 30px;border-bottom:1px solid var(--line)}
+.contract-address .eyebrow{margin-bottom:14px}
+.contract-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.contract-value{flex:1 1 auto;min-width:0;padding:14px 16px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:clamp(11px,1.5vw,16px);letter-spacing:.02em;overflow-wrap:anywhere;word-break:break-all;user-select:all}
+.contract-copy{flex:0 0 auto;padding:14px 22px;border:1px solid #ffffff40;background:transparent;color:var(--ink);font:inherit;font-size:13px;cursor:pointer}
+.contract-copy:hover{border-color:var(--green);color:var(--green)}
+.contract-address small{display:block;margin-top:12px;color:var(--muted);font-size:12px}
+@media(max-width:600px){.contract-address{padding:24px 0 22px}.contract-copy{width:100%}}
