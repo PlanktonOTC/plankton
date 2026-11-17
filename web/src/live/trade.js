@@ -212,6 +212,14 @@ export function cancelOrderOnChain(ctx, nonce) {
   return confirmed(ctx, { address: ctx.contracts.exchange, abi: exchangeAbi, functionName: 'cancelOrder', args: [big(nonce)] });
 }
 
+/** Binds a trader to a referrer. The contract permits this only once per wallet. */
+export function bindReferrer(ctx, referrer) {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(referrer) || referrer.toLowerCase() === ctx.address.toLowerCase()) {
+    throw new Error('Choose a valid referral wallet other than your own.');
+  }
+  return confirmed(ctx, { address: ctx.contracts.exchange, abi: exchangeAbi, functionName: 'setReferrer', args: [referrer] });
+}
+
 // ---------------------------------------------------------------- the Counter (liquidity pool)
 
 /** Requests a Counter deposit with one signature. It settles after the next mark, at the worse of two prices. */

@@ -288,7 +288,7 @@ app.get('/v1/config', async () => {
     rung,
     chainTimeSec: await chainTimeSec(client),
     quoteTtlSec: QUOTE_TTL_SEC,
-    contracts: { exchange: dep.exchange, vault: dep.vault, usdg: dep.usdg, payoutDesk: dep.payoutDesk, oracle: dep.oracle },
+    contracts: { exchange: dep.exchange, vault: dep.vault, usdg: dep.usdg, payoutDesk: dep.payoutDesk, oracle: dep.oracle, feeRouter: dep.feeRouter },
     markets: markets.map((m) => ({ symbol: m.symbol, class: m.class, marketId: marketIdFor(m.symbol, m.stockToken as Address), stockToken: m.stockToken })),
   });
 });

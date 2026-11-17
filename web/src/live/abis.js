@@ -14,7 +14,13 @@ export const exchangeAbi = [...parseAbi([
   'function permitAndExecute(uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s, TradeQuote q, bytes quoteSig, uint128 marginUsdg)',
   'function closeAtMark(bytes32 marketId, uint16 sizeBps)',
   'function cancelOrder(uint64 nonce)',
+  'function setReferrer(address referrer)',
+  'function referrerOf(address trader) view returns (address)',
 ]), ...contractErrors];
+
+export const feeRouterAbi = parseAbi([
+  'function referralBps() view returns (uint16)',
+]);
 
 export const vaultAbi = [...parseAbi([
   'function requestDeposit(uint256 assets) returns (uint256 id)',

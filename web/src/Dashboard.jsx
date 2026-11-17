@@ -11,6 +11,7 @@ import Chart from './terminal/Chart.jsx';
 import Positions from './terminal/Positions.jsx';
 import Ticket from './terminal/Ticket.jsx';
 import { CounterView, LeaderboardView, LedgerView, RewardsView, TapeView } from './terminal/Views.jsx';
+import ReferralsView from './terminal/Referrals.jsx';
 import { AccountDialog, AlertDialog, CancelOrderDialog, CapacityDialog, CloseAtMarkDialog, CloseDialog, CommandMenu, MarginDialog, ProtectionDialog, RiskDialog, ShortcutsDialog, SourcesDialog, WalletDialog } from './terminal/Dialogs.jsx';
 import MarketTile, { CompanyMark } from './MarketRail';
 import { LangSwitch, useI18n } from './i18n';
@@ -18,7 +19,7 @@ import './dashboard.css';
 import './supporting-metal.css';
 import './terminal/live.css';
 
-const VIEWS = { counter: 'Counter', tape: 'Tape', ledger: 'Solvency', solvency: 'Solvency', leaderboard: 'Leaderboard', rewards: 'Rewards' };
+const VIEWS = { counter: 'Counter', tape: 'Tape', ledger: 'Solvency', solvency: 'Solvency', leaderboard: 'Leaderboard', rewards: 'Rewards', referrals: 'Referrals' };
 const params = () => new URLSearchParams(window.location.search);
 
 function TerminalApp() {
@@ -31,7 +32,8 @@ function TerminalApp() {
   const historyQuery = useAccountHistory(wallet.isConnected ? wallet.address : undefined);
   const trader = useTrader(configQuery.data);
 
-  const [view, setView] = useState(() => VIEWS[params().get('view')] || 'Trade');
+  const [view, setView] = useState(() => VIEWS[params().get('view')] || (params().has('ref') ? 'Referrals' : 'Trade'));
+  const [inviteAddress] = useState(() => params().get('ref') || '');
   const [selected, setSelected] = useState(() => params().get('market')?.toUpperCase() ?? '');
   const [search, setSearch] = useState('');
   const [dialog, setDialog] = useState(null);
@@ -60,8 +62,11 @@ function TerminalApp() {
   const changeView = useCallback((item) => {
     setView(item);
     const key = item === 'Solvency' ? 'ledger' : item.toLowerCase();
-    window.history.replaceState({}, '', item === 'Trade' ? '/trade' : `/trade?view=${key}`);
-  }, []);
+    const next = new URLSearchParams();
+    if (item !== 'Trade') next.set('view', key);
+    if (inviteAddress) next.set('ref', inviteAddress);
+    window.history.replaceState({}, '', next.size ? `/trade?${next}` : '/trade');
+  }, [inviteAddress]);
   const chooseMarket = useCallback((symbol) => { setSelected(symbol); changeView('Trade'); setDialog(null); }, [changeView]);
   const openWallet = useCallback(() => setDialog({ type: 'wallet' }), []);
   const toggleFavorite = useCallback((symbol) => setFavorites((prev) => (prev.includes(symbol) ? prev.filter((v) => v !== symbol) : [...prev, symbol])), [setFavorites]);
@@ -139,7 +144,7 @@ function TerminalApp() {
         <header className="term-nav">
           <a className="term-brand" href="/" aria-label={tr('PLANKTON homepage')}><img src="/assets/plankton-logo.png" alt="" /><span>PLANKTON</span></a>
           <nav aria-label={tr('Terminal navigation')}>
-            {['Trade', 'Counter', 'Tape', 'Leaderboard', 'Solvency', 'Rewards'].map((item) => <button key={item} className={view === item ? 'active' : ''} aria-current={view === item ? 'page' : undefined} onClick={() => changeView(item)}>{tr(item)}</button>)}
+            {['Trade', 'Counter', 'Tape', 'Leaderboard', 'Solvency', 'Rewards', 'Referrals'].map((item) => <button key={item} className={view === item ? 'active' : ''} aria-current={view === item ? 'page' : undefined} onClick={() => changeView(item)}>{tr(item)}</button>)}
             <a href="/docs">{tr('Guide')} <Arrow /></a>
             <LangSwitch className="lang-switch--terminal lang-switch--nav" />
           </nav>
@@ -234,6 +239,7 @@ function TerminalApp() {
         <div className="term-view-shell" hidden={view !== 'Leaderboard'}><LeaderboardView active={view === 'Leaderboard'} /></div>
         <div className="term-view-shell" hidden={view !== 'Solvency'}><LedgerView health={health} /></div>
         <div className="term-view-shell" hidden={view !== 'Rewards'}><RewardsView /></div>
+        <div className="term-view-shell" hidden={view !== 'Referrals'}><ReferralsView contracts={configQuery.data?.contracts} inviteAddress={inviteAddress} /></div>
 
         <footer className="term-footer"><span><i /> {tr(status.tone === 'good' ? 'LIVE' : 'OFFLINE')}</span><p>{tr('$PLKT is live on Robinhood Chain. Synthetic perpetuals confer no share ownership.')}</p><div><a href="/docs?topic=risk">{tr('Risk')}</a><a href="/docs?topic=terms">{tr('Terms')}</a><a href="/">{tr('Back to PLANKTON')} ↗</a></div></footer>
         {toast && <div className="term-toast" role="status"><span>✓</span>{tr(toast)}<button aria-label={tr('Dismiss notification')} onClick={() => setToast('')}>×</button></div>}

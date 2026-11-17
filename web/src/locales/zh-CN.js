@@ -193,6 +193,7 @@ export const site = {
   "Last on-chain update": "最近一次链上更新",
   "Launch the preview": "启动预览",
   "Leaderboard": "排行榜",
+  "Referrals": "推荐",
   "Ledger view of account activity": "账户活动的账本视图",
   "Live": "已上线",
   "Live solvency view and public Plankton price feed": "实时偿付能力视图和公开的 Plankton 价格源",

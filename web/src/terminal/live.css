@@ -125,6 +125,22 @@
 .term-share-pnl{white-space:nowrap;color:#c5ddcf!important;border-color:#a8cfba55!important}
 .term-share-pnl:hover:not(:disabled){border-color:#b7dec8!important;color:#e2f0e8!important}
 .term-share-status{padding:8px 14px}
+.term-referrals{max-width:1180px;margin:0 auto}
+.term-referral-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+.term-referral-stats>.term-large-panel{min-height:190px}
+.term-referral-stats>.term-large-panel>strong{display:block;margin:14px 0;font-size:clamp(30px,5vw,48px);font-weight:500;color:#d9e8df;font-variant-numeric:tabular-nums}
+.term-referral-stats>.term-large-panel>p,.term-referral-link-panel>div>p,.term-referral-status>p{color:#91a0a7;font-size:11px;line-height:1.6}
+.term-referral-stats ol{margin:18px 0 0;padding-left:20px;color:#b5c1c6;font-size:11px;line-height:1.9}
+.term-referral-link-panel{display:grid;grid-template-columns:minmax(180px,1fr) minmax(200px,2fr) auto;align-items:center;gap:14px;margin-top:12px}
+.term-referral-link-panel h2,.term-referral-status h2{margin:0 0 6px;font-size:15px;font-weight:500}
+.term-referral-link-panel>div>p{margin:0}
+.term-referral-url{display:block;min-width:0;padding:10px 12px;border:1px solid #ffffff16;border-radius:4px;background:#00000024;color:#bdc9c4;font-size:10px;line-height:1.5;overflow-wrap:anywhere;user-select:all}
+.term-referral-status{margin-top:12px}
+.term-referral-invite{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.term-referral-invite .term-overline{display:block;margin-bottom:7px}
+.term-referral-status .term-primary{width:auto;min-width:170px;margin-top:8px}
+.term-referral-status .term-history-export-status{color:#a8d2b7}
+@media(max-width:760px){.term-referral-stats{grid-template-columns:1fr}.term-referral-link-panel{grid-template-columns:1fr}.term-referral-link-panel>.term-secondary{width:100%}.term-referral-invite{align-items:flex-start;flex-direction:column}}
 @media(max-width:760px){.term-history-export{gap:7px;padding:10px}.term-history-export>div{flex-basis:100%}.term-history-export>button{flex:1 1 auto}.term-history-export>label{flex:1 0 auto;justify-content:flex-start}}
 
 .term-leaderboard-period{display:flex;align-items:center;gap:12px;padding:10px 13px;margin-bottom:14px;border:1px solid var(--term-line,#ffffff12);color:#a9b4ba;font-size:10px}
