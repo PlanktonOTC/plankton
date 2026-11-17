@@ -118,6 +118,24 @@ contract CounterVaultTest is Test {
         assertEq(vault.navUsdg(), 0);
     }
 
+    function test_optionReservationReducesLpNavAndClaimsReleaseIt() public {
+        _deposit(alice, 10_000e6);
+        vm.prank(owner);
+        vault.linkOptionsBook(address(this));
+
+        vault.reserveOptionPayout(2_000e6);
+        assertEq(vault.optionReserveUsdg(), 2_000e6);
+        assertEq(vault.navUsdg(), 8_000e6);
+        assertEq(vault.freeCash(), 8_000e6);
+
+        vault.settleOptionPayout(2_000e6, 500e6);
+        assertEq(vault.optionReserveUsdg(), 500e6);
+        vault.payOptionPayout(bob, 500e6);
+        assertEq(usdg.balanceOf(bob), 1_000_500e6);
+        assertEq(vault.optionReserveUsdg(), 0);
+        assertEq(vault.navUsdg(), 9_500e6);
+    }
+
     // ------------------------------------------------------------------ withdrawals
 
     function test_withdrawalIsFilledInFullWhenThereIsCash() public {

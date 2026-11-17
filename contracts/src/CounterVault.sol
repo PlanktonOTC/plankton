@@ -48,12 +48,20 @@ contract CounterVault is ICounterVault, ERC20Upgradeable, DelayedUpgrade {
     uint256 private _depositHead;
     uint256 private _withdrawHead;
 
+    // Appended for Bell's options reservation ledger; preserves existing proxy storage slots.
+    address public optionsBook;
+    uint256 public optionReserveUsdg;
+
     event DepositRequested(uint256 indexed id, address indexed owner, uint256 assets);
     event WithdrawRequested(uint256 indexed id, address indexed owner, uint256 shares);
     event Settled(uint256 indexed id, address indexed owner, bool deposit, uint256 assets, uint256 shares);
     event PartialFill(uint256 indexed id, uint256 filledShares, uint256 remainingShares);
     event DepositsPaused(bool paused);
     event Linked(address indexed exchange, address indexed payoutDesk);
+    event OptionsBookLinked(address indexed optionsBook);
+    event OptionPayoutReserved(uint256 amount, uint256 totalReserved);
+    event OptionPayoutSettled(uint256 released, uint256 liabilityAfter, uint256 totalReserved);
+    event OptionPayoutClaimed(address indexed to, uint256 amount, uint256 totalReserved);
 
     error AlreadyLinked();
     error NotLinked();
@@ -63,6 +71,8 @@ contract CounterVault is ICounterVault, ERC20Upgradeable, DelayedUpgrade {
     error ZeroAddress();
     error InsufficientCash();
     error TooSmall();
+    error OptionsBookAlreadyLinked();
+    error NotOptionsBook();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -86,6 +96,14 @@ contract CounterVault is ICounterVault, ERC20Upgradeable, DelayedUpgrade {
         emit Linked(address(exchange_), address(desk_));
     }
 
+    /// One-time link to the separate, capped Bell options engine.
+    function linkOptionsBook(address book_) external onlyOwner {
+        if (optionsBook != address(0)) revert OptionsBookAlreadyLinked();
+        if (book_ == address(0)) revert ZeroAddress();
+        optionsBook = book_;
+        emit OptionsBookLinked(book_);
+    }
+
     function decimals() public pure override returns (uint8) {
         return 6 + OFFSET;
     }
@@ -101,6 +119,7 @@ contract CounterVault is ICounterVault, ERC20Upgradeable, DelayedUpgrade {
         int256 nav = int256(cashUsdg());
         if (address(payoutDesk) != address(0)) nav -= int256(payoutDesk.outstanding());
         if (address(exchange) != address(0)) nav -= exchange.traderUnrealizedPnlUsdg();
+        nav -= int256(optionReserveUsdg);
         return nav > 0 ? uint256(nav) : 0;
     }
 
@@ -113,6 +132,7 @@ contract CounterVault is ICounterVault, ERC20Upgradeable, DelayedUpgrade {
         uint256 cash = cashUsdg();
         uint256 reserved = address(exchange) == address(0) ? 0 : exchange.counterReserveUsdg();
         if (address(payoutDesk) != address(0)) reserved += payoutDesk.outstanding();
+        reserved += optionReserveUsdg;
         return cash > reserved ? cash - reserved : 0;
     }
 
@@ -277,6 +297,32 @@ contract CounterVault is ICounterVault, ERC20Upgradeable, DelayedUpgrade {
         if (msg.sender != address(exchange) && msg.sender != address(payoutDesk)) revert NotAuthorized();
         if (amount > cashUsdg()) revert InsufficientCash();
         usdg.safeTransfer(to, amount);
+    }
+
+    /// Reserve maximum payout plus premium held for a possible at-the-strike refund.
+    function reserveOptionPayout(uint256 amount) external {
+        if (msg.sender != optionsBook) revert NotOptionsBook();
+        if (amount == 0 || amount > freeCash()) revert InsufficientCash();
+        optionReserveUsdg += amount;
+        emit OptionPayoutReserved(amount, optionReserveUsdg);
+    }
+
+    /// Replace a ticket's gross reservation with its final payout or tie-refund liability.
+    function settleOptionPayout(uint256 reservedAmount, uint256 liabilityAfter) external {
+        if (msg.sender != optionsBook) revert NotOptionsBook();
+        if (liabilityAfter > reservedAmount || reservedAmount > optionReserveUsdg) revert InsufficientCash();
+        uint256 released = reservedAmount - liabilityAfter;
+        optionReserveUsdg -= released;
+        emit OptionPayoutSettled(released, liabilityAfter, optionReserveUsdg);
+    }
+
+    /// Each claim pays independently so one failed recipient transfer cannot block other settled tickets.
+    function payOptionPayout(address to, uint256 amount) external {
+        if (msg.sender != optionsBook) revert NotOptionsBook();
+        if (to == address(0) || amount > optionReserveUsdg || amount > cashUsdg()) revert InsufficientCash();
+        optionReserveUsdg -= amount;
+        usdg.safeTransfer(to, amount);
+        emit OptionPayoutClaimed(to, amount, optionReserveUsdg);
     }
 
     // ---------------------------------------------------------------- admin (new entries only)

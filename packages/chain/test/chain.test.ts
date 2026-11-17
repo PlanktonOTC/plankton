@@ -4,6 +4,9 @@ import { privateKeyToAccount } from 'viem/accounts';
 import {
   attestationTypes,
   attestationWire,
+  bellOptionsDomain,
+  bellQuoteTypes,
+  bellQuoteWire,
   exchangeDomain,
   markDomain,
   marketIdFor,
@@ -56,6 +59,23 @@ describe('wire formats', () => {
     expect(quoteWire.safeParse({ ...wire(quote), trader: '0x123' }).success).toBe(false);
   });
 
+  test('Bell quote JSON preserves uint64 and uint256 fields', () => {
+    const bellQuote = {
+      trader: quote.trader,
+      marketId: quote.marketId,
+      expiry: 1_800_000_000n,
+      strikeE18: 123_456_789_000_000_000_000n,
+      optionType: 1,
+      payoutUsdg: 250_000_000n,
+      premiumUsdg: 25_000_000n,
+      markSequence: 77n,
+      validUntil: 1_799_999_999n,
+      nonce: 18_446_744_073_709_551_616n,
+    };
+    expect(bellQuoteWire.parse(JSON.parse(toJson(wire(bellQuote))))).toEqual(bellQuote);
+    expect(bellQuoteWire.safeParse({ ...wire(bellQuote), optionType: 2 }).success).toBe(false);
+  });
+
   test('an order checks its small fields', () => {
     const order = { marketId: quote.marketId, trader: quote.trader, kind: 3, sizeDeltaE18: '0', sizeBps: 10_000, triggerE18: '95000000000000000000', triggerAbove: false, reduceOnly: true, maxSlippageBps: 300, marginUsdg: '0', validAfter: '1', expiry: '2', nonce: '1' };
     expect(orderWire.safeParse(order).success).toBe(true);
@@ -92,6 +112,26 @@ describe('signatures', () => {
     // The same signature is worthless on another deployment or against a changed quote.
     expect(await verifyTypedData({ address: account.address, domain: exchangeDomain('0x0000000000000000000000000000000000000001'), types: quoteTypes, primaryType: 'TradeQuote', message, signature })).toBe(false);
     expect(await verifyTypedData({ address: account.address, domain: exchangeDomain(exchange), types: quoteTypes, primaryType: 'TradeQuote', message: { ...message, feeUsdg: 0n }, signature })).toBe(false);
+  });
+
+  test('Bell quote signatures use the Bell book domain and exact field ordering', async () => {
+    const book = '0x9301981F27950e6546033EADD046C86754263f2D';
+    const message = {
+      trader: account.address,
+      marketId: '0xa7ee273e3bde6fba91b0c7362bbcc83dc8fb25d278bacd6fb16d715fe2965178',
+      expiry: 1_800_000_000n,
+      strikeE18: 100n,
+      optionType: 0,
+      payoutUsdg: 100n,
+      premiumUsdg: 10n,
+      markSequence: 8n,
+      validUntil: 1_799_999_999n,
+      nonce: 9n,
+    } as const;
+    const domain = bellOptionsDomain(book);
+    const signature = await account.signTypedData({ domain, types: bellQuoteTypes, primaryType: 'BellQuote', message });
+    expect(await recoverTypedDataAddress({ domain, types: bellQuoteTypes, primaryType: 'BellQuote', message, signature })).toBe(account.address);
+    expect(await verifyTypedData({ address: account.address, domain: bellOptionsDomain('0x0000000000000000000000000000000000000001'), types: bellQuoteTypes, primaryType: 'BellQuote', message, signature })).toBe(false);
   });
 
   test('exchange and oracle domains differ, so a mark signature cannot be replayed as a quote', () => {

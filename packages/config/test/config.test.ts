@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { RUNGS, Status } from '@plankton/core';
-import { MIN_CALENDAR_HORIZON_DAYS, eligibilityMode, loadCalendar, loadEnv, loadMarketData, loadMarkets, need, urlList } from '../src/index.ts';
+import { MIN_CALENDAR_HORIZON_DAYS, eligibilityMode, loadCalendar, loadDeployment, loadEnv, loadMarketData, loadMarkets, need, urlList } from '../src/index.ts';
 
 describe('settings', () => {
   test('defaults work with an empty environment', () => {
@@ -37,6 +37,15 @@ describe('settings', () => {
     expect(need('x', 'A')).toBe('x');
     expect(urlList('http://a, ,http://b')).toEqual(['http://a', 'http://b']);
     expect(urlList(undefined)).toEqual([]);
+  });
+});
+
+describe('deployment addresses', () => {
+  test('the live address book validates Bell addresses and signer set', () => {
+    const deployment = loadDeployment();
+    expect(deployment.bell?.optionsBook).toBe('0xB6978b2244321917661aE39E9CfF300F6F6654C2');
+    expect(deployment.bell?.settlementSigners).toHaveLength(3);
+    expect(deployment.bell?.deployedAt).toBe(1794949689);
   });
 });
 

@@ -1,5 +1,17 @@
 {
   "backstop": "0x6Ea9c295873736c8Bd70379e3daa885Fb47eCce4",
+  "bell": {
+    "counterImplementation": "0x7C699557d0603a666DBd418839e7B2685FB096e8",
+    "deployedAt": 1794949689,
+    "optionsBook": "0xB6978b2244321917661aE39E9CfF300F6F6654C2",
+    "quoteSigner": "0x37114f06fd1cc17615c5c2db450cC6A0ce0A9Fc6",
+    "settlementOracle": "0x82CB073aCFa1De8F6AE4F644d667B0c3526b10FB",
+    "settlementSigners": [
+      "0x0C1dB4353843010dB4C82CE3DDD944509486cE41",
+      "0x14B2D2f037a28465AC705DdDb511b2338e87Ec1b",
+      "0x05B1EF930578c0DF09794E89E3c158A75BeeC51F"
+    ]
+  },
   "deployedAt": 1794896387,
   "exchange": "0xbeE6429a89D0DF77deE53d13EEF23027001b488F",
   "feeRouter": "0x05079a9a8496F6820E23B1DFCc5Aed8C256d3482",

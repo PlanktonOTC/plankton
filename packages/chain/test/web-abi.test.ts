@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { toFunctionSelector, type AbiFunction } from 'viem';
-import { exchangeAbi, exchangeDomain, orderTypes, payoutDeskAbi, permitTypes, usdgDomain, vaultAbi } from '../src/index.ts';
+import { bellOptionsBookAbi, bellOptionsDomain, bellQuoteTypes, exchangeAbi, exchangeDomain, orderTypes, payoutDeskAbi, permitTypes, usdgDomain, vaultAbi } from '../src/index.ts';
 
 // The website (web/src/live) keeps its own small copies of the contract functions and signed-message shapes it uses, so the
 // site builds without the backend packages. These tests are the tie between the two: if a contract or message changes
@@ -16,6 +16,7 @@ describe('the site calls the contracts with the signatures they really have', ()
     ['exchangeAbi', 'exchange', exchangeAbi],
     ['vaultAbi', 'vault', vaultAbi],
     ['payoutDeskAbi', 'payout desk', payoutDeskAbi],
+    ['bellOptionsBookAbi', 'Bell options book', bellOptionsBookAbi],
   ];
   for (const [exportName, label, backend] of cases) {
     test(`${label}: every function on the site exists on-chain with the same selector`, async () => {
@@ -37,6 +38,13 @@ describe('the site signs the messages the contracts verify', () => {
 
   test('Permit typed data is identical', async () => {
     expect((await web('orders.js')).permitTypes).toEqual(permitTypes as never);
+  });
+
+  test('Bell quote typed data and domain are identical', async () => {
+    const orders = await web('orders.js');
+    const book = '0x1111111111111111111111111111111111111111';
+    expect(orders.bellQuoteTypes).toEqual(bellQuoteTypes as never);
+    expect(orders.bellOptionsDomain(4663, book)).toEqual(bellOptionsDomain(book) as never);
   });
 
   test('the exchange and USDG domains are identical', async () => {

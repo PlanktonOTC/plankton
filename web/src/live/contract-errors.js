@@ -477,6 +477,16 @@ export const contractErrors = [
   },
   {
     "type": "error",
+    "name": "NotOptionsBook",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OptionsBookAlreadyLinked",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "TooSmall",
     "inputs": []
   },
@@ -575,6 +585,66 @@ export const contractErrors = [
   {
     "type": "error",
     "name": "TooOld",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AlreadyResolved",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BadQuote",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotReady",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OpensClosed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "QuoteUsed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RiskLimit",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AlreadySettled",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BadReference",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BadSettlement",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BadSignatures",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ReferenceExists",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ReferenceMissing",
     "inputs": []
   }
 ];

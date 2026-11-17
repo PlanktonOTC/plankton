@@ -79,8 +79,18 @@ interface ICounterVault {
     /// USDG held by the vault that is not escrowed deposits.
     function cashUsdg() external view returns (uint256);
     function payOut(address to, uint256 amount) external;
+    function reserveOptionPayout(uint256 amount) external;
+    function settleOptionPayout(uint256 reservedAmount, uint256 liabilityAfter) external;
+    function payOptionPayout(address to, uint256 amount) external;
     /// True when a withdrawal has waited past the hard maximum: opens stop until the queue clears.
     function deleveraging() external view returns (bool);
+}
+
+interface IExchangeMarketRisk {
+    function marketInfo(bytes32 marketId)
+        external
+        view
+        returns (uint128 longOI, uint128 shortOI, uint128 longSize, uint128 shortSize, uint128 badDebt);
 }
 
 /// What the vault needs to know about trader positions.

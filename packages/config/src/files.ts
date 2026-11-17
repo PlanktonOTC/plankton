@@ -18,6 +18,14 @@ const deploymentFile = z.object({
   firstLoss: typedAddress,
   feeRouter: typedAddress,
   payoutDesk: typedAddress,
+  bell: z.object({
+    counterImplementation: typedAddress,
+    settlementOracle: typedAddress,
+    optionsBook: typedAddress,
+    quoteSigner: typedAddress,
+    settlementSigners: z.array(typedAddress).length(3),
+    deployedAt: z.number().int().positive(),
+  }).optional(),
   /** Unix seconds of the deploy. The indexer finds the matching block from it. */
   deployedAt: z.number().int().positive(),
 });

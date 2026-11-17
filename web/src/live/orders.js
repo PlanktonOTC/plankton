@@ -46,7 +46,23 @@ export const permitTypes = {
   ],
 };
 
+export const bellQuoteTypes = {
+  BellQuote: [
+    { name: 'trader', type: 'address' },
+    { name: 'marketId', type: 'bytes32' },
+    { name: 'expiry', type: 'uint64' },
+    { name: 'strikeE18', type: 'uint256' },
+    { name: 'optionType', type: 'uint8' },
+    { name: 'payoutUsdg', type: 'uint256' },
+    { name: 'premiumUsdg', type: 'uint256' },
+    { name: 'markSequence', type: 'uint64' },
+    { name: 'validUntil', type: 'uint64' },
+    { name: 'nonce', type: 'uint256' },
+  ],
+};
+
 export const exchangeDomain = (chainId, exchange) => ({ name: 'PlanktonExchange', version: '1', chainId, verifyingContract: exchange });
+export const bellOptionsDomain = (chainId, book) => ({ name: 'Plankton Bell Options', version: '1', chainId, verifyingContract: book });
 /** USDG's own EIP-2612 domain. Its eip712Domain() reverts on-chain, so the name and version are fixed here. */
 export const usdgDomain = (chainId, usdg) => ({ name: 'Global Dollar', version: '1', chainId, verifyingContract: usdg });
 

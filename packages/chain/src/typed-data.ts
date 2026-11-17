@@ -49,6 +49,55 @@ export const attestationTypes = {
   ],
 } as const;
 
+export const bellQuoteTypes = {
+  BellQuote: [
+    { name: 'trader', type: 'address' },
+    { name: 'marketId', type: 'bytes32' },
+    { name: 'expiry', type: 'uint64' },
+    { name: 'strikeE18', type: 'uint256' },
+    { name: 'optionType', type: 'uint8' },
+    { name: 'payoutUsdg', type: 'uint256' },
+    { name: 'premiumUsdg', type: 'uint256' },
+    { name: 'markSequence', type: 'uint64' },
+    { name: 'validUntil', type: 'uint64' },
+    { name: 'nonce', type: 'uint256' },
+  ],
+} as const;
+
+export const seriesReferenceTypes = {
+  SeriesReference: [
+    { name: 'marketId', type: 'bytes32' },
+    { name: 'expiry', type: 'uint64' },
+    { name: 'sourcePriceA', type: 'uint256' },
+    { name: 'sourcePriceB', type: 'uint256' },
+    { name: 'sourceIdA', type: 'bytes32' },
+    { name: 'sourceIdB', type: 'bytes32' },
+    { name: 'observedAtA', type: 'uint64' },
+    { name: 'observedAtB', type: 'uint64' },
+    { name: 'nonce', type: 'uint64' },
+  ],
+} as const;
+
+export const bellSettlementTypes = {
+  Settlement: [
+    { name: 'marketId', type: 'bytes32' },
+    { name: 'expiry', type: 'uint64' },
+    { name: 'closingPriceE18', type: 'uint256' },
+    { name: 'markA', type: 'uint256' },
+    { name: 'markB', type: 'uint256' },
+    { name: 'markC', type: 'uint256' },
+    { name: 'twap30mE18', type: 'uint256' },
+    { name: 'marksObservedAt', type: 'uint64' },
+    { name: 'closeObservedAt', type: 'uint64' },
+    { name: 'twapStart', type: 'uint64' },
+    { name: 'twapEnd', type: 'uint64' },
+    { name: 'halted', type: 'bool' },
+    { name: 'fallbackMarkE18', type: 'uint256' },
+    { name: 'fallbackObservedAt', type: 'uint64' },
+    { name: 'nonce', type: 'uint64' },
+  ],
+} as const;
+
 export const permitTypes = {
   Permit: [
     { name: 'owner', type: 'address' },
@@ -64,6 +113,12 @@ export const exchangeDomain = (exchange: Address) =>
 
 export const markDomain = (oracle: Address) =>
   ({ name: 'PlanktonMark', version: '1', chainId: ROBINHOOD_CHAIN_ID, verifyingContract: oracle }) as const;
+
+export const bellOptionsDomain = (book: Address) =>
+  ({ name: 'Plankton Bell Options', version: '1', chainId: ROBINHOOD_CHAIN_ID, verifyingContract: book }) as const;
+
+export const bellSettlementDomain = (oracle: Address) =>
+  ({ name: 'Plankton Bell Settlement', version: '1', chainId: ROBINHOOD_CHAIN_ID, verifyingContract: oracle }) as const;
 
 export const usdgDomain = { name: 'Global Dollar', version: '1', chainId: ROBINHOOD_CHAIN_ID, verifyingContract: USDG_ADDRESS } as const;
 
@@ -104,6 +159,49 @@ export interface AttestationMsg {
   sequence: bigint;
   observedAt: bigint;
   expiry: bigint;
+}
+
+export interface BellQuoteMsg {
+  trader: Address;
+  marketId: Hex;
+  expiry: bigint;
+  strikeE18: bigint;
+  optionType: number;
+  payoutUsdg: bigint;
+  premiumUsdg: bigint;
+  markSequence: bigint;
+  validUntil: bigint;
+  nonce: bigint;
+}
+
+export interface SeriesReferenceMsg {
+  marketId: Hex;
+  expiry: bigint;
+  sourcePriceA: bigint;
+  sourcePriceB: bigint;
+  sourceIdA: Hex;
+  sourceIdB: Hex;
+  observedAtA: bigint;
+  observedAtB: bigint;
+  nonce: bigint;
+}
+
+export interface BellSettlementMsg {
+  marketId: Hex;
+  expiry: bigint;
+  closingPriceE18: bigint;
+  markA: bigint;
+  markB: bigint;
+  markC: bigint;
+  twap30mE18: bigint;
+  marksObservedAt: bigint;
+  closeObservedAt: bigint;
+  twapStart: bigint;
+  twapEnd: bigint;
+  halted: boolean;
+  fallbackMarkE18: bigint;
+  fallbackObservedAt: bigint;
+  nonce: bigint;
 }
 
 /** The ready-to-sign EIP-2612 permit for USDG, so the wallet shows one prompt for permit + deposit + open. */

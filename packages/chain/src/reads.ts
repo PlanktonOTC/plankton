@@ -13,6 +13,14 @@ export interface Deployment {
   firstLoss: Address;
   feeRouter: Address;
   payoutDesk: Address;
+  bell?: {
+    counterImplementation: Address;
+    settlementOracle: Address;
+    optionsBook: Address;
+    quoteSigner: Address;
+    settlementSigners: Address[];
+    deployedAt: number;
+  };
   /** Unix seconds of the deploy; the indexer finds its start block from this. */
   deployedAt: number;
 }

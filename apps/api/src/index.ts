@@ -7,6 +7,7 @@ import { z, ZodError } from 'zod';
 import { loadCalendar, loadDeployment, loadEnv, loadMarkets, need, requireDatabaseUrl, urlList } from '@plankton/config';
 import {
   ROBINHOOD_CHAIN_ID,
+  bellOptionsBookAbi,
   chainTimeSec,
   createChainClient,
   exchangeAbi,
@@ -297,8 +298,43 @@ app.get('/v1/config', async () => {
     rung,
     chainTimeSec: await chainTimeSec(client),
     quoteTtlSec: QUOTE_TTL_SEC,
-    contracts: { exchange: dep.exchange, vault: dep.vault, usdg: dep.usdg, payoutDesk: dep.payoutDesk, oracle: dep.oracle, feeRouter: dep.feeRouter },
+    contracts: { exchange: dep.exchange, vault: dep.vault, usdg: dep.usdg, payoutDesk: dep.payoutDesk, oracle: dep.oracle, feeRouter: dep.feeRouter, bell: dep.bell ?? null },
     markets: markets.map((m) => ({ symbol: m.symbol, class: m.class, marketId: marketIdFor(m.symbol, m.stockToken as Address), stockToken: m.stockToken })),
+  });
+});
+
+app.get('/v1/bell/status', async () => {
+  const { client, dep } = chain();
+  if (!dep.bell) return json({ deployed: false, linked: false, opensEnabled: false, tradeReady: false });
+
+  const [opensEnabled, quoteSigner, nextTicketId, totalExposureUsdg, linkedBook, optionReserveUsdg, counterUpgradeEta, pendingCounterImplementation] = await Promise.all([
+    client.readContract({ address: dep.bell.optionsBook, abi: bellOptionsBookAbi, functionName: 'opensEnabled' }),
+    client.readContract({ address: dep.bell.optionsBook, abi: bellOptionsBookAbi, functionName: 'quoteSigner' }),
+    client.readContract({ address: dep.bell.optionsBook, abi: bellOptionsBookAbi, functionName: 'nextTicketId' }),
+    client.readContract({ address: dep.bell.optionsBook, abi: bellOptionsBookAbi, functionName: 'totalExposureUsdg' }),
+    client.readContract({ address: dep.vault, abi: vaultAbi, functionName: 'optionsBook' }).catch(() => null),
+    client.readContract({ address: dep.vault, abi: vaultAbi, functionName: 'optionReserveUsdg' }).catch(() => null),
+    client.readContract({ address: dep.vault, abi: vaultAbi, functionName: 'upgradeEta' }).catch(() => null),
+    client.readContract({ address: dep.vault, abi: vaultAbi, functionName: 'pendingImplementation' }).catch(() => null),
+  ]);
+  const linked = typeof linkedBook === 'string' && linkedBook.toLowerCase() === dep.bell.optionsBook.toLowerCase();
+  return json({
+    deployed: true,
+    chainTimeSec: await chainTimeSec(client),
+    linked,
+    opensEnabled,
+    tradeReady: linked && opensEnabled,
+    counter: dep.vault,
+    counterImplementation: dep.bell.counterImplementation,
+    pendingCounterImplementation,
+    counterUpgradeEta,
+    optionsBook: dep.bell.optionsBook,
+    settlementOracle: dep.bell.settlementOracle,
+    quoteSigner,
+    settlementSigners: dep.bell.settlementSigners,
+    optionReserveUsdg,
+    totalExposureUsdg,
+    nextTicketId,
   });
 });
 
