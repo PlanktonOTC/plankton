@@ -124,6 +124,8 @@ async function liquidations(): Promise<void> {
 
 const quoteResponse = z.object({ quote: quoteWire, signature });
 const orderCooldown = new Map<string, number>();
+/** Mark statuses a price trigger may fire on: Open (1) and Extended (2). */
+const TRIGGER_STATUSES = new Set([1, 2]);
 
 async function triggerOrders(): Promise<void> {
   if (!(await isLeader('orders'))) return;
@@ -138,18 +140,25 @@ async function triggerOrders(): Promise<void> {
     return;
   }
   const markByMarket = new Map<string, bigint>();
+  const statusByMarket = new Map<string, number>();
   const marks = await client.multicall({
     allowFailure: false,
     contracts: ids.map((id) => ({ address: dep.oracle, abi: oracleAbi, functionName: 'markOf' as const, args: [id] as const })),
   });
-  ids.forEach((id, i) => markByMarket.set(id, marks[i]!.priceE18));
+  ids.forEach((id, i) => {
+    markByMarket.set(id, marks[i]!.priceE18);
+    statusByMarket.set(id, Number(marks[i]!.status));
+  });
 
   for (const row of open) {
     const mark = markByMarket.get(row.marketId) ?? 0n;
     const m = marketOf.get(row.marketId);
     if (!m || mark === 0n || row.validAfter.getTime() > chainNowMs) continue;
     const trigger = BigInt(row.triggerE18);
-    const fires = row.kind === 4 || trigger === 0n ? true : row.triggerAbove ? mark >= trigger : mark <= trigger;
+    // A price trigger fires only on a live mark (Open or Extended). A held mark (weekend, holiday) does not trade, so the
+    // step into a hold must not set off stops on its own; they wait for the next live mark.
+    const live = TRIGGER_STATUSES.has(statusByMarket.get(row.marketId) ?? 0);
+    const fires = row.kind === 4 || trigger === 0n ? true : live && (row.triggerAbove ? mark >= trigger : mark <= trigger);
     if (!fires) continue;
     const key = `${row.trader}:${row.nonce}`;
     if ((orderCooldown.get(key) ?? 0) > now) continue;

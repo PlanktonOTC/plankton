@@ -39,7 +39,7 @@ describe('sessions', () => {
   });
 
   test('the weekend runs from Saturday 02:00 to Monday 02:00 Berlin time', () => {
-    expect(sessionAt(at('2026-10-31T00:30:00Z'), cal).status).toBe(Status.Extended); // Sat 01:30 Berlin: not yet
+    expect(sessionAt(at('2026-10-31T00:30:00Z'), cal).status).toBe(Status.Weekend); // Fri 20:30 EDT: already held, see below
     expect(sessionAt(at('2026-10-31T01:00:00Z'), cal).status).toBe(Status.Weekend); // Sat 02:00 Berlin
     expect(sessionAt(at('2026-11-01T15:00:00Z'), cal).status).toBe(Status.Weekend); // Sunday
     expect(sessionAt(at('2026-11-02T00:30:00Z'), cal).status).toBe(Status.Weekend); // Mon 01:30 Berlin: still
@@ -58,7 +58,22 @@ describe('sessions', () => {
 
   test('an early close ends the regular session at 13:00 ET', () => {
     expect(sessionAt(at('2026-11-27T17:59:00Z'), cal).status).toBe(Status.Open); // 12:59 EST
-    expect(sessionAt(at('2026-11-27T18:00:00Z'), cal).status).toBe(Status.Extended);
+    expect(sessionAt(at('2026-11-27T18:00:00Z'), cal).status).toBe(Status.Weekend); // a Friday: held from the close
+  });
+
+  test('the weekend hold starts at the close on Friday and on the eve of a holiday, so the evening cannot step back', () => {
+    const c = buildCalendar([day('2026-10-29'), day('2026-10-30'), day('2026-11-25'), day('2026-11-26', { holiday: true })]);
+    // Friday 2026-10-30 (EDT): open until 16:00, then held at the close instead of trading after hours until 20:00.
+    expect(sessionAt(at('2026-10-30T19:59:00Z'), c).status).toBe(Status.Open);
+    expect(sessionAt(at('2026-10-30T20:00:00Z'), c)).toMatchObject({ status: Status.Weekend, reason: 'after the close before a weekend or holiday' });
+    expect(sessionAt(at('2026-10-30T23:30:00Z'), c).status).toBe(Status.Weekend);
+    // An ordinary Thursday evening still trades after hours.
+    expect(sessionAt(at('2026-10-29T21:00:00Z'), c).status).toBe(Status.Extended);
+    // Wednesday before Thanksgiving (EST): held from the close.
+    expect(sessionAt(at('2026-11-25T20:59:00Z'), c).status).toBe(Status.Open);
+    expect(sessionAt(at('2026-11-25T21:00:00Z'), c).status).toBe(Status.Weekend);
+    // Friday before the open is still the ordinary pre-market.
+    expect(sessionAt(at('2026-10-30T12:00:00Z'), c).status).toBe(Status.Extended);
   });
 
   test('a weekday missing from the calendar is Frozen, never guessed', () => {
@@ -66,8 +81,9 @@ describe('sessions', () => {
   });
 
   test('the mint window follows daylight saving time', () => {
-    // Saturday before the CET switch (Berlin is on summer time, UTC+2): 02:00 Berlin is 00:00Z.
-    const summer = buildCalendar([day('2026-10-23')]);
+    // Saturday before the CET switch (Berlin is on summer time, UTC+2): 02:00 Berlin is 00:00Z. The Friday is left out of
+    // the calendar so only the window decides (with it, the Friday close already holds the evening).
+    const summer = buildCalendar([]);
     expect(sessionAt(at('2026-10-24T00:30:00Z'), summer).status).toBe(Status.Weekend);
     expect(sessionAt(at('2026-10-23T23:30:00Z'), summer).status).not.toBe(Status.Weekend);
   });

@@ -81,6 +81,8 @@ export function zonedTimeToUtc(day: string, time: string, tz: string): number {
  * Session status at a timestamp.
  * - Weekend: Sat 02:00 to Mon 02:00 in the mint window timezone, plus exchange holidays.
  * - Open: US regular hours (early closes honoured).
+ * - Weekend also from the close on a Friday or on the eve of an exchange holiday: the held mark that follows is that
+ *   close, so trading the evening at live prices would let positions open at a price the hold then steps away from.
  * - Extended: any other weekday time (Chainlink equity feeds run 24/5).
  * A weekday missing from the calendar is Frozen: we never guess a session.
  * Whether Extended is really live depends on the feeds being fresh; the mark engine downgrades to Frozen otherwise.
@@ -111,7 +113,17 @@ export function sessionAt(ts: number, cal: Calendar, cfg: SessionCfg = DEFAULT_S
       reason: day.earlyClose ? 'regular session (early close)' : 'regular session',
     };
   }
+  if (et.minutes >= close && heldAfter(et.day, et.dow, cal)) {
+    return { status: Status.Weekend, openGuard: false, reason: 'after the close before a weekend or holiday' };
+  }
   return { status: Status.Extended, openGuard: reopenGuard, reason: 'outside regular hours' };
+}
+
+/** Whether the ET day after `day` is held (a Saturday, or an exchange holiday), so this day's close is the held mark. */
+function heldAfter(day: string, dow: number, cal: Calendar): boolean {
+  if (dow === 5) return true;
+  const next = new Date(Date.parse(`${day}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+  return cal.get(next)?.holiday === true;
 }
 
 /** Days of calendar coverage ahead of `now`. Fail a check when this drops under 400. */
