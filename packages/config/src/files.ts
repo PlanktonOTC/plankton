@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { z } from 'zod';
 import { buildCalendar, calendarHorizonDays, RUNGS, type Calendar, type CalendarDay, type MarketData, type Rung } from '@plankton/core';
 
@@ -96,6 +96,40 @@ export function loadMarketData(): Record<string, MarketData> {
   }
   return out;
 }
+const cachePath = () => process.env.MARKET_DATA_CACHE || resolve(CONFIG_DIR, 'market-data.live.json');
+
+/**
+ * Figures the mark service refreshed itself, kept so a restart does not fall back to a stale file. Missing, unreadable or
+ * invalid entries are skipped: the cache can only ever help, never stop the service.
+ */
+export function loadMarketDataCache(): Record<string, MarketData> {
+  try {
+    const raw = JSON.parse(readFileSync(cachePath(), 'utf8')) as Record<string, unknown>;
+    const out: Record<string, MarketData> = {};
+    for (const [symbol, row] of Object.entries(raw)) {
+      const parsed = marketDataRow.safeParse(row);
+      if (!symbol.startsWith('_') && parsed.success) out[symbol] = parsed.data;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** Best effort: a read-only disk just means the refresh starts from the file next time. Returns whether it was saved. */
+export function saveMarketDataCache(data: Record<string, MarketData>): boolean {
+  try {
+    const path = cachePath();
+    mkdirSync(dirname(path), { recursive: true });
+    const tmp = `${path}.tmp`;
+    writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`);
+    renameSync(tmp, path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const calendarFile = z.object({
   from: ymd,
   to: ymd,

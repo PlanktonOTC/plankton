@@ -26,3 +26,6 @@ deployments/local.json
 
 # Local-only private-to-public history rewriting utility
 scripts/sync-public.py
+
+# Figures the mark service refreshed itself (see MARKET_DATA_REFRESH)
+config/market-data.live.json

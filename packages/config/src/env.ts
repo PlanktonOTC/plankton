@@ -5,6 +5,12 @@ const schema = z.object({
   DATABASE_URL: z.string().optional(),
   RPC_URLS: z.string().default('https://rpc.mainnet.chain.robinhood.com'),
   RH_API_BASE: z.string().default('https://api.robinhood.com/rhj'),
+  /** Where the daily stock-data refresh reads market cap, average volume and the previous close (Robinhood's public, key-free stock API). */
+  RH_FUNDAMENTALS_BASE: z.string().default('https://api.robinhood.com'),
+  /** on: the mark service refreshes config/market-data.json's figures itself every few hours, so the 14-day rule never freezes a market. off: hand-maintained only. */
+  MARKET_DATA_REFRESH: z.enum(['on', 'off']).default('on'),
+  /** Where refreshed figures are kept between restarts. Default: config/market-data.live.json (git-ignored). */
+  MARKET_DATA_CACHE: z.string().optional(),
   NASDAQ_HALTS_URL: z.string().default('https://www.nasdaqtrader.com/rss.aspx?feed=tradehalts'),
   STOCK_TOKEN_WINDOW_TZ: z.string().default('Europe/Berlin'),
   /** enforce: a market failing the listing rule stops taking new positions. warn: only report it. off: ignore. Default: enforce in production, warn otherwise. */

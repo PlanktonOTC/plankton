@@ -116,6 +116,11 @@ every('chainlink', 5_000, () => runner.pollChainlink());
 every('halts', 30_000, () => runner.pollHalts());
 every('corporate-actions', 3_600_000, () => runner.pollCorporateActions());
 every('market-data', 300_000, () => runner.pollMarketData());
+// The figures behind the listing rule keep themselves current: once at start, then every six hours. A failure only logs; the
+// last good figures stay, and the rule's own 14-day limit is the backstop.
+every('market-data-refresh', 6 * 3_600_000, async () => {
+  await runner.refreshMarketData();
+});
 every('tick', 2_000, () => runner.tick());
 
 const json = (v: unknown, status = 200) =>

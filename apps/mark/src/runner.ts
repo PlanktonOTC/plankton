@@ -3,7 +3,9 @@ import {
   DEFAULT_PRICING_CONFIG,
   MAX_UNCHANGED_QUOTE_MS,
   SINGLE_SOURCE_PRICING,
+  buildMarketDataRow,
   checkEligibility,
+  mergeMarketData,
   newEngineState,
   sessionAt,
   statusName,
@@ -14,16 +16,18 @@ import {
   type MarketData,
   type MarkDecision,
   type MarketClass,
+  type RefreshReport,
   type Observation,
   type PricingConfig,
   type SourceName,
 } from '@plankton/core';
-import { eligibilityMode, loadMarketData, type Env, type MarketConfig } from '@plankton/config';
+import { eligibilityMode, loadMarketData, loadMarketDataCache, saveMarketDataCache, type Env, type MarketConfig } from '@plankton/config';
 import { readChainlink, ROBINHOOD_CHAIN_ID, type ChainClient } from '@plankton/chain';
 import {
   activeHalts,
   corporateActionFreeze,
   fetchHalts,
+  fetchStockFigures,
   fetchRhAssets,
   fetchRhCorpActions,
   fetchRhPrices,
@@ -79,6 +83,9 @@ export class MarkRunner {
   private halts = new Map<string, Halt>();
   private corp: RhCorpAction[] = [];
   private marketData: Record<string, MarketData> = {};
+  /** Figures this service refreshed itself (loaded from the cache at start). The newer of these and the file wins. */
+  private refreshed: Record<string, MarketData> = loadMarketDataCache();
+  private refreshReport: RefreshReport | null = null;
   readonly lastOk: Record<'robinhood' | 'chainlink' | 'halts' | 'corporateActions' | 'tick', number> = {
     robinhood: 0,
     chainlink: 0,
@@ -172,7 +179,40 @@ export class MarkRunner {
 
   /** Re-read config/market-data.json so an edit takes effect without a restart. */
   async pollMarketData(): Promise<void> {
-    this.marketData = loadMarketData();
+    this.marketData = mergeMarketData(loadMarketData(), this.refreshed);
+  }
+
+  /**
+   * Pulls fresh market cap, average volume and previous close from Robinhood and rebuilds each market's row, so the 14-day
+   * rule is met by the data keeping itself current. A row it cannot trust (missing figures, a 3x jump in market cap) is
+   * left as it was and reported; it never lists or delists anything by itself, it only updates figures for markets that
+   * are already configured. Returns null when switched off.
+   */
+  async refreshMarketData(now = Date.now()): Promise<RefreshReport | null> {
+    if (this.d.env.MARKET_DATA_REFRESH === 'off') return null;
+    const symbols = [...this.rt.keys()];
+    const { fundamentals, quotes } = await fetchStockFigures(this.d.env.RH_FUNDAMENTALS_BASE, symbols);
+    const base = mergeMarketData(loadMarketData(), this.refreshed);
+    const todayYmd = new Date(now).toISOString().slice(0, 10);
+    const report: RefreshReport = { at: now, updated: [], unchanged: [], failed: {} };
+    for (const symbol of symbols) {
+      const result = buildMarketDataRow({ fundamentals: fundamentals[symbol], quote: quotes[symbol], previous: base[symbol], todayYmd });
+      if (!result.ok) {
+        report.failed[symbol] = result.reason;
+        continue;
+      }
+      if (result.changed) {
+        this.refreshed[symbol] = result.row;
+        report.updated.push(symbol);
+      } else report.unchanged.push(symbol);
+    }
+    this.marketData = mergeMarketData(loadMarketData(), this.refreshed);
+    if (report.updated.length > 0) saveMarketDataCache(this.refreshed);
+    this.refreshReport = report;
+    const failed = Object.keys(report.failed);
+    if (failed.length > 0) this.d.log.warn({ failed: report.failed }, 'market data refresh could not rebuild some rows (they keep their old figures)');
+    this.d.log.info({ updated: report.updated, unchanged: report.unchanged.length, failed: failed.length }, 'market data refreshed');
+    return report;
   }
 
   eligibility() {
@@ -305,6 +345,7 @@ export class MarkRunner {
       haltsAgeMs: age(this.lastOk.halts),
       corporateActionsAgeMs: age(this.lastOk.corporateActions),
       tickAgeMs: age(this.lastOk.tick),
+      marketDataRefresh: this.refreshReport && { ageMs: now - this.refreshReport.at, updated: this.refreshReport.updated.length, failed: this.refreshReport.failed },
       markets: this.rt.size,
     };
   }
