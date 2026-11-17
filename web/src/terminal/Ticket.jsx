@@ -4,10 +4,10 @@ import { presetLevels } from '../live/presets.js';
 import { Arrow, Modal, TxProgress, useTerminal } from './shared.jsx';
 import RiskPanel from './Risk.jsx';
 import { friendlyError } from '../live/errors.js';
-import { ENTRY_SLIPPAGE_BPS, canGoGasless, entryOrder, marketOrder, newNonce, protectionOrder, protectionProblem } from '../live/orders.js';
+import { canGoGasless, ENTRY_SLIPPAGE_BPS, entryOrder, ladderProblem, ladderRungs, marketOrder, MAX_LADDER_STEPS, MIN_LADDER_STEPS, newNonce, protectionOrder, protectionProblem } from '../live/orders.js';
 import { previewView } from '../live/model.js';
 import { useDebounced, usePreview } from '../live/queries.js';
-import { depositCollateral, gaslessOrder, openTrade, placeOrder } from '../live/trade.js';
+import { depositCollateral, gaslessOrder, openTrade, placeLadder, placeOrder } from '../live/trade.js';
 import { money, parseE18, parseUsdg, priceDigits } from '../live/units.js';
 
 const DAY = 86_400n;
@@ -73,6 +73,9 @@ export default function Ticket({ market, account, orders }) {
   const [slEditCtx, setSlEditCtx] = useState(null);
   const { presets, update: savePreset, reset: resetPresets } = usePresets();
   const [days, setDays] = useState('7');
+  const [ladderFrom, setLadderFrom] = useState('');
+  const [ladderTo, setLadderTo] = useState('');
+  const [steps, setSteps] = useState(3);
   const [review, setReview] = useState(null);
   const [reviewError, setReviewError] = useState('');
   const limits = market.limits;
@@ -121,13 +124,36 @@ export default function Ticket({ market, account, orders }) {
   }
   const savePresetValues = (patch) => { savePreset(patch); setTpEditCtx(null); setSlEditCtx(null); };
 
+  // A new ladder starts just inside the price and spreads 4% away from it, on the side it waits for.
+  useEffect(() => {
+    if (type !== 'Ladder' || !(market.price > 0)) return;
+    const d = priceDigits(market.price);
+    const dir = side === 'long' ? -1 : 1;
+    setLadderFrom((market.price * (1 + dir * 0.01)).toFixed(d));
+    setLadderTo((market.price * (1 + dir * 0.05)).toFixed(d));
+  }, [type, side, symbol]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ladderFromNum = Number(ladderFrom);
+  const ladderToNum = Number(ladderTo);
+  const ladderIssue = type === 'Ladder' && marginValid ? ladderProblem({ side, fromPrice: ladderFromNum, toPrice: ladderToNum, markPrice: market.price, steps, marginUsdg: marginBig }) : null;
+  const rungs = useMemo(
+    () => (type === 'Ladder' && marginValid && !ladderIssue ? ladderRungs({ fromPrice: ladderFromNum, toPrice: ladderToNum, steps, marginUsdg: marginBig, leverage, headroom: ORDER_LEVERAGE_HEADROOM, digits: priceDigits(market.price) }) : null),
+    [type, marginValid, ladderIssue, ladderFromNum, ladderToNum, steps, marginBig, leverage, market.price],
+  );
+
   // The numbers the ticket shows. A market order's come from the API (the same rules the signed quote uses); a limit or
   // stop order's are an estimate from its trigger price, because the fill price is not known until it fills.
   const orderEstimate = useMemo(() => {
+    if (type === 'Ladder') {
+      if (!rungs) return null;
+      const notional = rungs.reduce((a, x) => a + Number(x.notionalUsdg) / 1e6, 0);
+      const quantity = rungs.reduce((a, x) => a + Number(x.sizeE18) / 1e18, 0);
+      const avg = notional / quantity;
+      return { notional, price: avg, quantity, fee: notional * feeRate, liquidation: estimateLiquidation(avg, leverage * ORDER_LEVERAGE_HEADROOM, side, limits?.maintenanceMarginBps ?? 500) };
+    }
     if (type === 'Market' || !marginValid || !(triggerNum > 0)) return null;
     const notional = (Number(margin) || 0) * leverage * ORDER_LEVERAGE_HEADROOM;
     return { notional, price: triggerNum, quantity: notional / triggerNum, fee: notional * feeRate, liquidation: estimateLiquidation(triggerNum, leverage * ORDER_LEVERAGE_HEADROOM, side, limits?.maintenanceMarginBps ?? 500) };
-  }, [type, marginValid, margin, triggerNum, leverage, side, feeRate, limits]);
+  }, [type, marginValid, margin, triggerNum, leverage, side, feeRate, limits, rungs]);
   const shown = type === 'Market' ? (preview?.ok ? { notional: preview.notional, price: preview.execPrice, fee: preview.fee, liquidation: preview.liquidation } : null) : orderEstimate;
 
   // Why the form cannot be submitted right now, most important first.
@@ -136,7 +162,8 @@ export default function Ticket({ market, account, orders }) {
   else if (oppositeOpen) problems.push(`Close or trim your ${existing.side} position before opening a ${side}.`);
   else if (!marginValid) problems.push('Enter a margin above 0 USDG.');
   else if (t.wallet.isConnected && marginValid && Number(margin) * (1 + leverage * feeRate) > funds + 0.005) problems.push(`Not enough USDG: you have ${money(funds)} between your wallet and the exchange.`);
-  else if (type !== 'Market' && !(triggerNum > 0)) problems.push('Enter a trigger price above 0.');
+  else if (type === 'Ladder' && ladderIssue) problems.push(ladderIssue);
+  else if ((type === 'Limit' || type === 'Stop') && !(triggerNum > 0)) problems.push('Enter a trigger price above 0.');
   else if (type === 'Limit' && (side === 'long' ? triggerNum >= market.price : triggerNum <= market.price)) problems.push(`A ${side === 'long' ? 'buy' : 'sell'} limit must be ${side === 'long' ? 'below' : 'above'} the current price. Use Market to trade now.`);
   else if (type === 'Stop' && (side === 'long' ? triggerNum <= market.price : triggerNum >= market.price)) problems.push(`A ${side === 'long' ? 'buy' : 'sell'} stop must be ${side === 'long' ? 'above' : 'below'} the current price.`);
   else if (type === 'Market' && previewParams && preview && !preview.ok) problems.push(friendlyError({ name: 'ApiError', status: 422, message: preview.code, body: { code: preview.code, message: preview.message } }));
@@ -164,7 +191,7 @@ export default function Ticket({ market, account, orders }) {
     if (type === 'Market' && !preview?.ok) return t.notify('Waiting for the price estimate. Try again in a moment.');
     setReviewError('');
     const gasless = type === 'Market' && canGoGasless(account.collateral, Number(margin), preview.fee);
-    setReview({ side, type, margin, leverage, trigger, tp: bracket ? tp : '', sl: bracket ? sl : '', days, preview, estimate: orderEstimate, gasless });
+    setReview({ side, type, margin, leverage, trigger, tp: bracket ? tp : '', sl: bracket ? sl : '', days, preview, estimate: orderEstimate, gasless, rungs });
   }
 
   async function confirm() {
@@ -183,6 +210,15 @@ export default function Ticket({ market, account, orders }) {
         if (r.sl) await protect('stopLoss', r.sl);
         return hash;
       }
+      if (r.type === 'Ladder') {
+        // One limit order per rung, all funded from deposited collateral: deposit any shortfall once, then sign each.
+        const feeOf = (n) => (n * BigInt(limits?.feeBps ?? 8)) / 10_000n;
+        const needed = r.rungs.reduce((a, x) => a + x.marginUsdg + feeOf(x.notionalUsdg), 0n) + 10_000n;
+        const have = BigInt(Math.floor(account.collateral * 1e6));
+        if (have < needed) await depositCollateral(ctx, needed - have);
+        const expiry = chainNow + BigInt(r.days) * DAY;
+        return placeLadder(ctx, r.rungs.map((x) => entryOrder({ type: 'limit', side: r.side, marketId: market.marketId, trader: address, sizeE18: x.sizeE18, triggerE18: x.triggerE18, marginUsdg: x.marginUsdg, validAfter: chainNow, expiry, nonce: newNonce(), maxSlippageBps: ENTRY_SLIPPAGE_BPS })));
+      }
       // Limit and stop: a signed instruction a keeper carries out later, funded from deposited collateral.
       const trig = parseE18(r.trigger);
       const notionalUsdg = (marginUsdg * BigInt(Math.round(r.leverage * ORDER_LEVERAGE_HEADROOM * 1000))) / 1000n;
@@ -197,7 +233,7 @@ export default function Ticket({ market, account, orders }) {
     if (result.ok) {
       setReview(null);
       t.setBottomTab(r.type === 'Market' ? 'Positions' : 'Open orders');
-      t.notify(r.type === 'Market' ? `${symbol} ${r.side} opened.${r.tp || r.sl ? ' Protection is set.' : ''}` : `${r.type} order placed. A keeper executes it when ${symbol} reaches ${money(Number(r.trigger), priceDigits(Number(r.trigger)))}.`);
+      t.notify(r.type === 'Market' ? `${symbol} ${r.side} opened.${r.tp || r.sl ? ' Protection is set.' : ''}` : r.type === 'Ladder' ? `Ladder placed: ${r.rungs.length} ${symbol} limit orders from ${money(r.rungs[0].price, priceDigits(r.rungs[0].price))} to ${money(r.rungs[r.rungs.length - 1].price, priceDigits(r.rungs[0].price))}.` : `${r.type} order placed. A keeper executes it when ${symbol} reaches ${money(Number(r.trigger), priceDigits(Number(r.trigger)))}.`);
     } else setReviewError(result.message);
   }
 
@@ -221,12 +257,38 @@ export default function Ticket({ market, account, orders }) {
             <button type="button" aria-pressed={side === 'short'} className={side === 'short' ? 'active short' : ''} onClick={() => setSide('short')}>Sell / Short <Arrow down /></button>
           </div>
           <div className="term-order-types">
-            {['Market', 'Limit', 'Stop'].map((item) => (
+            {['Market', 'Limit', 'Stop', 'Ladder'].map((item) => (
               <button type="button" key={item} className={type === item ? 'active' : ''} aria-pressed={type === item} onClick={() => setType(item)}>{item}</button>
             ))}
           </div>
           <div className="term-available"><span>Available</span><strong>{t.wallet.isConnected ? `${money(funds)} USDG` : '—'}</strong></div>
-          {type !== 'Market' && (
+          {type === 'Ladder' && (
+            <div className="term-ladder">
+              <div className="term-ladder-prices">
+                <label className="term-field">First step
+                  <div><input aria-label="Ladder first price" type="number" min="0" step="any" value={ladderFrom} onChange={(e) => setLadderFrom(e.target.value)} /><span>USDG</span></div>
+                </label>
+                <label className="term-field">Last step
+                  <div><input aria-label="Ladder last price" type="number" min="0" step="any" value={ladderTo} onChange={(e) => setLadderTo(e.target.value)} /><span>USDG</span></div>
+                </label>
+              </div>
+              <div className="term-ladder-steps" role="group" aria-label="Ladder steps">
+                <span>Steps</span>
+                {Array.from({ length: MAX_LADDER_STEPS - MIN_LADDER_STEPS + 1 }, (_, i) => i + MIN_LADDER_STEPS).map((n) => (
+                  <button type="button" key={n} className={steps === n ? 'active' : ''} aria-pressed={steps === n} onClick={() => setSteps(n)}>{n}</button>
+                ))}
+              </div>
+              {rungs && (
+                <ol className="term-ladder-rungs">
+                  {rungs.map((x, i) => (
+                    <li key={i}><span>{i + 1}</span><b>{money(x.price, priceDigits(x.price))}</b><i style={{ width: `${100 / rungs.length}%` }} /><small>{money(Number(x.marginUsdg) / 1e6)} USDG</small></li>
+                  ))}
+                </ol>
+              )}
+              <p className="term-ladder-note">{steps} limit orders, margin split evenly. One free signature each; a keeper fills every step the price reaches.</p>
+            </div>
+          )}
+          {(type === 'Limit' || type === 'Stop') && (
             <label className="term-field">{type} price
               <div><input aria-label={`${type} order price`} type="number" min="0" step="any" value={trigger} onChange={(e) => setTrigger(e.target.value)} /><span>USDG</span></div>
             </label>
@@ -297,7 +359,10 @@ function ReviewDialog({ review: r, market, account, error, busy, step, hash, onC
   const p = r.preview;
   const marginNum = Number(r.margin);
   const shortfall = isMarket ? p?.shortfall ?? 0 : Math.max(0, marginNum * (1 + r.leverage * ((limits?.feeBps ?? 8) / 10_000)) - account.collateral);
-  const rows = isMarket && p?.ok
+  const isLadder = r.type === 'Ladder';
+  const rows = isLadder
+    ? [['Total margin', `${money(marginNum)} USDG`], ['Leverage', `${r.leverage}× per step (sized to ${ORDER_LEVERAGE_HEADROOM * 100}% for fill headroom)`], ...r.rungs.map((x, i) => [`Step ${i + 1}`, `${money(x.price, priceDigits(x.price))} · ${money(Number(x.marginUsdg) / 1e6)} USDG`]), ['Active for', `${r.days} day${r.days === '1' ? '' : 's'}`]]
+    : isMarket && p?.ok
     ? [['Margin', `${money(marginNum)} USDG`], ['Notional', `${money(p.notional)} USDG`], ['Estimated entry', money(p.execPrice, priceDigits(p.execPrice))], ['Trade fee', `${money(p.fee)} USDG`], ['Spread', `${p.spreadBps} bps`], ['Estimated liquidation', p.liquidation ? money(p.liquidation, priceDigits(p.liquidation)) : '—']]
     : [['Margin reserved', `${money(marginNum)} USDG`], ['Leverage', `${r.leverage}× (sized to ${ORDER_LEVERAGE_HEADROOM * 100}% for fill headroom)`], ['Trigger price', money(Number(r.trigger), priceDigits(Number(r.trigger)))], ['Active for', `${r.days} day${r.days === '1' ? '' : 's'}`]];
   return (
@@ -317,12 +382,14 @@ function ReviewDialog({ review: r, market, account, error, busy, step, hash, onC
       <p className="term-modal-warning">
         {isMarket
           ? 'A fresh signed quote is fetched when you confirm and is valid for up to 60 seconds. Liquidation is an estimate; borrow charges accrue while the position is open.'
+          : isLadder
+          ? `No transaction is sent now: you sign ${r.rungs.length} orders, one per step, with no gas. A keeper fills each step when ${market.symbol} reaches it, and any step can be cancelled before then.`
           : 'No transaction is sent now: you sign an order that a keeper carries out when the trigger is reached. It can be cancelled any time before then. A gap in the price can fill beyond the trigger, within the order\'s slippage limit.'}
         {r.tp || r.sl ? ' Take-profit and stop-loss each need one more signature after the position opens.' : ''}
       </p>
       <TxProgress step={step} hash={hash} />
       {error && <p className="term-form-error" role="alert">{error}</p>}
-      <button className="term-primary" disabled={busy} onClick={onConfirm}>{busy ? 'Working…' : isMarket ? `${r.gasless ? 'Sign' : 'Confirm'} ${r.side}${r.gasless ? ' · no gas' : ''}` : 'Sign and place order'} <Arrow down={r.side === 'short'} /></button>
+      <button className="term-primary" disabled={busy} onClick={onConfirm}>{busy ? 'Working…' : isMarket ? `${r.gasless ? 'Sign' : 'Confirm'} ${r.side}${r.gasless ? ' · no gas' : ''}` : isLadder ? `Sign ${r.rungs.length} orders · no gas` : 'Sign and place order'} <Arrow down={r.side === 'short'} /></button>
     </Modal>
   );
 }

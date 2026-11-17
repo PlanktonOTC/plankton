@@ -132,3 +132,19 @@
 .term-leaderboard-wallet{color:#b8c6cc;text-decoration:underline!important;text-underline-offset:3px;font-variant-numeric:tabular-nums}
 .term-leaderboard-wallet:hover{color:#f3f5f6}
 @media(max-width:760px){.term-leaderboard-period{gap:8px;flex-wrap:wrap}.term-leaderboard-period small{flex-basis:100%;margin-left:0}}
+
+/* Ladder: two prices, a step picker and a preview of every rung. */
+.term-ladder{margin-bottom:6px}
+.term-ladder-prices{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.term-ladder-prices .term-field input{font-size:13px}
+.term-ladder-steps{display:flex;align-items:center;gap:5px;margin:-2px 0 12px;font-size:10px;color:#98a6af}
+.term-ladder-steps span{margin-right:auto}
+.term-ladder-steps button{min-width:30px;padding:5px 0;border:1px solid #ffffff12;border-radius:5px;background:#ffffff04;color:#9fb0bb;font-size:11px}
+.term-ladder-steps button.active{background:#d4dde21f;border-color:#d4dde259;color:#eef3f5}
+.term-ladder-rungs{list-style:none;margin:0 0 10px;padding:8px 10px;border:1px solid #ffffff0d;border-radius:7px;background:#0d1216}
+.term-ladder-rungs li{display:grid;grid-template-columns:16px 1fr 60px auto;align-items:center;gap:8px;padding:4px 0;font-size:10px;color:#9aabb6;font-variant-numeric:tabular-nums}
+.term-ladder-rungs li span{color:#647683}
+.term-ladder-rungs li b{font-weight:500;color:#dbe5ea}
+.term-ladder-rungs li i{display:block;height:3px;border-radius:3px;background:linear-gradient(90deg,#a9c8b6,#a9c8b633)}
+.term-ladder-rungs li small{color:#8aa0ad}
+.term-ladder-note{font-size:9px;line-height:1.55;color:#6f8593;margin:0 0 12px!important}

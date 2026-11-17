@@ -196,3 +196,40 @@ export function marketCloseOrder({ marketId, trader, sizeBps, validAfter, nonce,
     nonce,
   };
 }
+
+// ---------------------------------------------------------------- ladders
+
+/** A ladder is a set of ordinary limit orders: each needs its own signature, so the count stays small. */
+export const MAX_LADDER_STEPS = 5;
+export const MIN_LADDER_STEPS = 2;
+
+const priceE18 = (price) => BigInt(Math.round(price * 1e8)) * 10n ** 10n;
+
+/**
+ * Splits one entry into `steps` limit orders at evenly spaced prices from `fromPrice` to `toPrice`, sharing the margin
+ * equally. Each rung is sized like a single limit order: margin × leverage × headroom at its own price.
+ */
+export function ladderRungs({ fromPrice, toPrice, steps, marginUsdg, leverage, headroom = 0.98, digits = 4 }) {
+  if (!(Number.isInteger(steps) && steps >= MIN_LADDER_STEPS && steps <= MAX_LADDER_STEPS)) throw new Error(`a ladder has ${MIN_LADDER_STEPS} to ${MAX_LADDER_STEPS} steps`);
+  const per = marginUsdg / BigInt(steps);
+  return Array.from({ length: steps }, (_, i) => {
+    const price = Number((fromPrice + ((toPrice - fromPrice) * i) / (steps - 1)).toFixed(digits));
+    const triggerE18 = priceE18(price);
+    const notionalUsdg = (per * BigInt(Math.round(leverage * headroom * 1000))) / 1000n;
+    const sizeE18 = triggerE18 > 0n ? (notionalUsdg * 10n ** 30n) / triggerE18 : 0n;
+    return { price, triggerE18, marginUsdg: per, notionalUsdg, sizeE18 };
+  });
+}
+
+/** Why a ladder cannot be placed, or null. A buy ladder sits wholly below the price, a sell ladder wholly above it. */
+export function ladderProblem({ side, fromPrice, toPrice, markPrice, steps, marginUsdg }) {
+  if (!(fromPrice > 0) || !(toPrice > 0)) return 'Enter both ladder prices above 0.';
+  if (fromPrice === toPrice) return 'The ladder needs two different prices.';
+  if (!(steps >= MIN_LADDER_STEPS && steps <= MAX_LADDER_STEPS)) return `Choose ${MIN_LADDER_STEPS} to ${MAX_LADDER_STEPS} steps.`;
+  if (marginUsdg / BigInt(steps) < 100_000n) return 'Each step needs at least 0.10 USDG of margin.';
+  const hi = Math.max(fromPrice, toPrice);
+  const lo = Math.min(fromPrice, toPrice);
+  if (side === 'long' && hi >= markPrice) return 'A buy ladder must sit below the current price. Use Market to trade now.';
+  if (side === 'short' && lo <= markPrice) return 'A sell ladder must sit above the current price. Use Market to trade now.';
+  return null;
+}

@@ -182,6 +182,25 @@ export async function gaslessOrder(ctx, order, { timeoutMs = 60_000, pollMs = 1_
   }
 }
 
+/**
+ * Places a ladder: one signed limit order per rung, in order. If the trader stops part-way, the rungs already placed
+ * stay live and the error says how many, so they can be kept or cancelled from Open orders.
+ */
+export async function placeLadder(ctx, orders) {
+  for (let i = 0; i < orders.length; i++) {
+    step(ctx, `ladder:${i + 1}/${orders.length}`);
+    let sig;
+    try {
+      sig = await ctx.signTypedData(orderTypedData(ctx.chainId, ctx.contracts.exchange, orders[i]));
+    } catch (err) {
+      if (i === 0) throw err;
+      throw new Error(`${i} of ${orders.length} ladder orders were placed before signing stopped. Keep them, or cancel them in Open orders.`);
+    }
+    await ctx.api.post('/v1/orders', orderBody(orders[i], sig));
+  }
+  return null;
+}
+
 /** Cancels off-chain with a signed message. The response also has the on-chain cancel call for a stronger guarantee. */
 export async function cancelOrderRequest(ctx, nonce) {
   step(ctx, 'sign-cancel');

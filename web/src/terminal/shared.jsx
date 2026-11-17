@@ -50,7 +50,7 @@ export function TxProgress({ step, hash }) {
   return (
     <p className="term-tx-progress" role="status" aria-live="polite">
       <i aria-hidden="true" />
-      {STEP_TEXT[step] ?? 'Working…'}
+      {STEP_TEXT[step] ?? (step.startsWith('ladder:') ? `Sign ladder order ${step.slice(7).replace('/', ' of ')} in your wallet (no gas)…` : 'Working…')}
       {hash ? <> <a href={explorerTx(hash)} target="_blank" rel="noreferrer">View transaction <Arrow /></a></> : null}
     </p>
   );
