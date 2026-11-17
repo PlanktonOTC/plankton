@@ -106,7 +106,7 @@ export const roadmapWeeks = [
     'Production workflows confirmed during November', '', 'Live'),
   weekly(2, '16–22 NOV 2026', '2026-11-16', '2026-11-22', 'Ship clearer controls and records',
     'Recent releases add position planning, solvency visibility, public price data and tools for reviewing activity.',
-    ['Editable take-profit and stop-loss presets', 'Live solvency view and public Plankton price feed', 'Trade history CSV and tax report exports', 'Weekly public leaderboard ranked by realized P&L after fees', '$PLKT deployed on 16 November'],
+    ['Editable take-profit and stop-loss presets', 'Live solvency view and public Plankton price feed', 'Trade history CSV and tax report exports', 'Weekly public leaderboard ranked by realized P&L after fees', '$PLKT deployed on 16 November', 'The Tape: runner scanner, trading halts, SEC filing flags and an earnings calendar', 'Public market-data routes and a read-only MCP server for agents and bots'],
     'The leaderboard ranks weekly realized P&L after recorded fees; it does not include open P&L or borrow.',
     'November 2026 product releases', '', 'Shipped'),
   weekly(3, '23–29 NOV 2026', '2026-11-23', '2026-11-29', 'Gather product feedback',

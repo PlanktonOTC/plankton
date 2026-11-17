@@ -41,3 +41,15 @@
 .feed-facts dt{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
 .feed-facts dd{margin:0;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
 @media(max-width:700px){.feed-main{padding-top:120px}.feed-facts{grid-template-columns:1fr}.feed-table th,.feed-table td{padding:12px}}
+
+/* More market data and the MCP server */
+.feed-more{margin-top:80px}
+.feed-routes dt{text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink)}
+.feed-routes dt code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.feed-routes dd{color:var(--muted)}
+.feed-more .feed-code{margin-top:16px}
+.feed-code-label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:8px 4px}
+.feed-tools{list-style:none;display:flex;flex-wrap:wrap;gap:8px;padding:0;margin:22px 0 0}
+.feed-tools li code{display:inline-block;padding:6px 10px;border:1px solid var(--line);background:var(--panel);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
+
+.feed-more .feed-note{margin-top:18px}

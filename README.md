@@ -11,7 +11,7 @@ Perpetuals on small-cap Robinhood Stock Tokens, on Robinhood Chain (4663), settl
 | `contracts/` | Solidity (Foundry): `MarkOracle`, `Exchange` + `ExchangeLib`, `CounterVault`, `FeeRouter`, `PayoutDesk`, Backstop Fund and First-Loss tranche |
 | `apps/mark` | Mark service: aggregates the sources and publishes signed marks |
 | `apps/signer` | Signer service, one per key (quote or mark role) |
-| `apps/api` | Public API: quotes, orders, `closeAtMark` calldata |
+| `apps/api` | Public API: quotes, orders, `closeAtMark` calldata, the price feed, the Tape's market context and the MCP server |
 | `apps/keeper` | Executes trader-signed orders, liquidations and vault settlement |
 | `apps/indexer` | Indexes contract events into Postgres |
 | `packages/` | Shared code: `core` (pricing, risk, sessions), `chain` (ABIs, typed data, reads), `db`, `ingest`, `config` |
@@ -50,6 +50,22 @@ bun run dev:keeper
 bun run dev:indexer
 bun run dev:web
 ```
+
+## Public market data
+
+Read-only routes that need no key and allow any origin:
+
+| Route | What it returns |
+| --- | --- |
+| `GET /v1/feed`, `/v1/feed/:symbol` | The on-chain mark for each market, with its age and an ETag |
+| `GET /v1/scanner` | Runner scanner: change, gap, extended-hours move, volume against the 30-day average, float turnover, 52-week range and signal tags |
+| `GET /v1/halts` | Nasdaq trading halts over the last three days with reasons in words; `?listed=1` for our markets only |
+| `GET /v1/filings`, `/v1/filings/:symbol` | SEC EDGAR filings for listed companies, tagged (offering, shelf, dilution, charter change, listing notice...); `?flagged=1` keeps medium and high importance |
+| `GET /v1/catalysts` | Next earnings date, timing and estimate, the last quarter's surprise, and Stock Token corporate actions |
+
+Each Tape source is cached in the API and refreshed in the background, so a slow upstream shows as an older `updatedAt` rather than an error. Filings need each market's `secCik` in `config/markets.json`.
+
+`POST /mcp` is a read-only Model Context Protocol server (HTTP, JSON answers, no sessions). Its tools (`list_markets`, `get_prices`, `get_price_sources`, `get_scanner`, `get_halts`, `get_filings`, `get_catalysts`, `preview_trade`, `get_account`, `get_leaderboard`, `get_solvency`, `get_listing_rules`) read the routes above in-process under the caller's rate limit. It signs nothing and sends no transactions.
 
 ## Contracts
 

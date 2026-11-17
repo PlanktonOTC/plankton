@@ -76,6 +76,17 @@ function Snippets({ data, symbol }) {
   );
 }
 
+// The rest of the public API: the Tape's market context. Paths are relative to the site's /api.
+const MORE_ROUTES = [
+  ['/v1/scanner', 'Runner scanner: each listed stock’s change, gap, extended-hours move, volume against its average, float turnover and 52-week range.'],
+  ['/v1/halts', 'Trading halts in every US-listed stock over the last three days, with the reason in words. Add ?listed=1 for Plankton markets only.'],
+  ['/v1/filings', 'SEC filings for listed companies, tagged: offering, shelf, dilution, charter change, listing notice and more. Add ?flagged=1 for the serious ones.'],
+  ['/v1/catalysts', 'Upcoming earnings with timing and estimates, the last quarter’s surprise, and Stock Token corporate actions.'],
+];
+const MCP_TOOLS = ['list_markets', 'get_prices', 'get_price_sources', 'get_scanner', 'get_halts', 'get_filings', 'get_catalysts', 'preview_trade', 'get_account', 'get_leaderboard', 'get_solvency', 'get_listing_rules'];
+const mcpConfig = (origin) => JSON.stringify({ mcpServers: { plankton: { url: `${origin}/api/mcp` } } }, null, 2);
+const mcpCurl = (origin) => `curl -s ${origin}/api/mcp \\\n  -H 'content-type: application/json' \\\n  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_halts","arguments":{"active_only":true}}}'`;
+
 export default function Feed() {
   const { t } = useI18n();
   const { data, error, loading } = useFeed();
@@ -138,6 +149,33 @@ export default function Feed() {
             </dl>
           </section>
         )}
+
+        <section className="feed-use feed-more" id="developers">
+          <h2>{t('More market data')}</h2>
+          <p>{t('The same API serves the market context behind the Tape. Every route is public, needs no key and accepts requests from any website.')}</p>
+          <dl className="feed-facts feed-routes">
+            {MORE_ROUTES.map(([path, what]) => <div key={path}><dt><code>GET /api{path}</code></dt><dd>{t(what)}</dd></div>)}
+          </dl>
+        </section>
+
+        <section className="feed-use feed-more" id="mcp">
+          <h2>{t('Connect an agent')}</h2>
+          <p>{t('Plankton runs a read-only MCP server. Agents and bots can read prices, marks, the scanner, halts, filings and the earnings calendar, and preview a trade. It signs nothing and sends no transactions.')}</p>
+          <div className="feed-endpoint">
+            <code>POST {origin}/api/mcp</code>
+            <CopyButton text={`${origin}/api/mcp`} label="Copy URL" />
+          </div>
+          <div className="feed-code">
+            <div className="feed-code-tabs"><span className="feed-code-label">{t('MCP client settings')}</span><CopyButton text={mcpConfig(origin)} label="Copy" /></div>
+            <pre><code>{mcpConfig(origin)}</code></pre>
+          </div>
+          <div className="feed-code">
+            <div className="feed-code-tabs"><span className="feed-code-label">{t('Try it from a terminal')}</span><CopyButton text={mcpCurl(origin)} label="Copy" /></div>
+            <pre><code>{mcpCurl(origin)}</code></pre>
+          </div>
+          <ul className="feed-tools">{MCP_TOOLS.map((name) => <li key={name}><code>{name}</code></li>)}</ul>
+          <p className="feed-note">{t('Any client that speaks MCP over HTTP can connect: it answers JSON, keeps no session and follows the same rate limit as the website. Leveraged trading carries risk; a preview is not a quote.')}</p>
+        </section>
       </main>
       <Footer />
     </div>

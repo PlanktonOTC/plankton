@@ -38,6 +38,8 @@ import { collateralShortfall, liquidationPriceE18, positionAfterOpen, positionVa
 import { clientIp, corsOrigins, createRateLimiter, isInternal } from './limits.ts';
 import { FRESH_WITHIN_SEC, feedRow, type FeedRow, type RawMark } from './feed.ts';
 import { createTape, latestFilings } from './tape.ts';
+import { handleMcp, RPC } from './mcp.ts';
+import { MCP_INSTRUCTIONS, planktonTools } from './mcp-tools.ts';
 
 const env = loadEnv();
 const log = pino({ level: env.LOG_LEVEL });
@@ -1010,6 +1012,38 @@ app.get('/v1/halts', async (c) => {
   const listedOnly = c.req.query('listed') === '1';
   return json({ updatedAt: body.updatedAt ? new Date(body.updatedAt).toISOString() : null, halts: listedOnly ? body.halts.filter((h) => h.listed) : body.halts });
 });
+
+// ---------------------------------------------------------------- MCP server for agents (read only)
+
+// POST /mcp speaks the Model Context Protocol (Streamable HTTP, JSON answers, no sessions). Each tool reads one of the
+// public routes above in-process, carrying the caller's address so the caller's own rate limit applies.
+const MCP_INFO = { name: 'plankton', title: 'Plankton market data', version: '1.0.0', instructions: MCP_INSTRUCTIONS };
+const FORWARDED = ['x-forwarded-for', 'x-real-ip', 'x-visitor-ip', 'x-web-proxy-token', 'x-internal-token'];
+app.post('/mcp', async (c) => {
+  let message: unknown;
+  try {
+    message = await c.req.json();
+  } catch {
+    return json({ jsonrpc: '2.0', id: null, error: { code: RPC.parse, message: 'parse error: the body must be JSON' } }, 400);
+  }
+  const outer = c.req.raw;
+  const ip = c.env?.ip;
+  const get = async (path: string) => {
+    const headers = new Headers({ accept: 'application/json' });
+    for (const h of FORWARDED) {
+      const v = outer.headers.get(h);
+      if (v) headers.set(h, v);
+    }
+    const res = await app.fetch(new Request(`http://mcp.internal${path}`, { headers }), { ip });
+    const body = (await res.json().catch(() => null)) as { error?: string; message?: string } | null;
+    if (!res.ok) throw new Error(body?.error ? `${body.error}${body.message ? `: ${body.message}` : ''}` : `HTTP ${res.status}`);
+    return body;
+  };
+  const answer = await handleMcp(message, planktonTools(get), MCP_INFO);
+  if (answer === null) return new Response(null, { status: 202 });
+  return json(answer);
+});
+app.get('/mcp', () => json({ error: 'this MCP server answers POST requests with JSON; it does not open an event stream' }, 405));
 
 // ---------------------------------------------------------------- errors
 
