@@ -234,7 +234,7 @@ function TerminalApp() {
             </main>
           </>
         )}
-        <div className="term-view-shell" hidden={view !== 'Counter'}><CounterView account={account} /></div>
+        <div className="term-view-shell" hidden={view !== 'Counter'}><CounterView account={account} contracts={configQuery.data?.contracts} /></div>
         <div className="term-view-shell" hidden={view !== 'Tape'}><TapeView markets={markets} alerts={alerts} removeAlert={(id) => setAlerts((prev) => prev.filter((a) => a.id !== id))} favorites={favorites} toggleFavorite={toggleFavorite} /></div>
         <div className="term-view-shell" hidden={view !== 'Leaderboard'}><LeaderboardView active={view === 'Leaderboard'} /></div>
         <div className="term-view-shell" hidden={view !== 'Solvency'}><LedgerView health={health} /></div>

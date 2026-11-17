@@ -26,6 +26,10 @@ export const vaultAbi = [...parseAbi([
   'function requestDeposit(uint256 assets) returns (uint256 id)',
   'function requestDepositWithPermit(uint256 assets, uint256 deadline, uint8 v, bytes32 r, bytes32 s) returns (uint256 id)',
   'function requestWithdraw(uint256 shares) returns (uint256 id)',
+  'function requests(uint256 id) view returns (address owner, bool isDeposit, bool done, uint64 requestedAt, uint128 amount, uint128 filled, uint256 epoch, uint256 npsE18)',
+  'event DepositRequested(uint256 indexed id, address indexed owner, uint256 assets)',
+  'event WithdrawRequested(uint256 indexed id, address indexed owner, uint256 shares)',
+  'event Settled(uint256 indexed id, address indexed owner, bool deposit, uint256 assets, uint256 shares)',
 ]), ...contractErrors];
 
 export const payoutDeskAbi = [...parseAbi(['function claim(uint256 id)']), ...contractErrors];

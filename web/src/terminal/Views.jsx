@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
-import { Arrow, TxProgress, useTerminal } from './shared.jsx';
+import React, { useEffect, useRef, useState } from 'react';
+import { parseEventLogs, zeroAddress } from 'viem';
+import { usePublicClient, useReadContract } from 'wagmi';
+import { Arrow, TxProgress, useStored, useTerminal } from './shared.jsx';
 import { useCounter, useLedger, useLeaderboard } from '../live/queries.js';
 import { relativeTime } from '../live/model.js';
 import { counterDeposit, counterWithdraw } from '../live/trade.js';
+import { vaultAbi } from '../live/abis.js';
 import { explorerAddress, explorerTx } from '../live/wagmi.js';
 import { big, formatUnits, money, parseUnits, parseUsdg, shortAddress, usdgNum } from '../live/units.js';
 import { useI18n } from '../i18n';
@@ -11,6 +14,24 @@ const SHARE_DECIMALS = 9;
 const usd0 = (v) => `$${money(usdgNum(v), 0)}`;
 const usd2 = (v) => `$${money(usdgNum(v))}`;
 
+function CounterRequestWatcher({ request, vault, onSettled, onPartial }) {
+  const query = useReadContract({
+    address: vault || zeroAddress,
+    abi: vaultAbi,
+    functionName: 'requests',
+    args: [BigInt(request.requestId)],
+    query: { enabled: Boolean(vault && request.requestId), refetchInterval: 15_000 },
+  });
+  const row = query.data;
+  const done = row?.done ?? row?.[2] ?? false;
+  const filled = String(row?.filled ?? row?.[5] ?? 0n);
+  useEffect(() => {
+    if (done && request.status !== 'settled') onSettled(request.key);
+    else if (request.action === 'Withdraw' && BigInt(filled) > BigInt(request.observedFilled || '0')) onPartial(request.key, filled);
+  }, [done, filled, onPartial, onSettled, request.action, request.key, request.observedFilled, request.status]);
+  return null;
+}
+
 function Unavailable({ what, error }) {
   const { t: tr } = useI18n();
   return <div className="term-info-banner" role="status">{tr(`${what} is unavailable right now${error?.status === 503 ? ': the exchange contracts are not reachable.' : '.'}`)} {tr('It reloads on its own.')}</div>;
@@ -18,16 +39,39 @@ function Unavailable({ what, error }) {
 
 // ---------------------------------------------------------------- the Counter
 
-export function CounterView({ account }) {
+export function CounterView({ account, contracts }) {
   const t = useTerminal();
   const { t: tr } = useI18n();
   const counter = useCounter();
+  const publicClient = usePublicClient();
   const c = counter.data;
   const [action, setAction] = useState('Deposit');
   const [amount, setAmount] = useState('100');
   const [error, setError] = useState('');
-  const [requests, setRequests] = useState([]);
+  const [requests, setRequests] = useStored('plankton.counter.requests', []);
+  const notified = useRef(new Set());
   const connected = t.wallet.isConnected;
+  const trackedRequests = Array.isArray(requests) ? requests : [];
+  const visibleRequests = trackedRequests.filter((request) => request.owner === t.wallet.address?.toLowerCase());
+
+  function markSettled(key) {
+    const request = trackedRequests.find((item) => item.key === key);
+    const notificationKey = `${key}:settled`;
+    if (!request || notified.current.has(notificationKey)) return;
+    notified.current.add(notificationKey);
+    setRequests((prev) => Array.isArray(prev) ? prev.map((item) => item.key === key ? { ...item, status: 'settled' } : item) : prev);
+    t.notify(request.action === 'Deposit'
+      ? 'Your Counter deposit request has settled on-chain.'
+      : 'Your Counter withdrawal request has settled on-chain.');
+  }
+
+  function markPartial(key, filled) {
+    const notificationKey = `${key}:filled:${filled}`;
+    if (notified.current.has(notificationKey)) return;
+    notified.current.add(notificationKey);
+    setRequests((prev) => Array.isArray(prev) ? prev.map((item) => item.key === key ? { ...item, status: 'partial', observedFilled: filled } : item) : prev);
+    t.notify('Your Counter withdrawal request has a partial on-chain fill. The remaining shares are still queued.');
+  }
 
   async function request(event) {
     event.preventDefault();
@@ -35,13 +79,24 @@ export function CounterView({ account }) {
     if (!connected) return t.openWallet();
     const isDeposit = action === 'Deposit';
     const value = isDeposit ? parseUsdg(amount) : parseUnits(amount, SHARE_DECIMALS);
+    const requestAction = isDeposit ? 'Deposit' : 'Withdraw';
     if (value === null || value <= 0n) return setError('Enter an amount above 0.');
     if (isDeposit && usdgNum(value) > account.wallet + 1e-9) return setError(`Your wallet holds ${money(account.wallet)} USDG.`);
     if (!isDeposit && value > account.shares) return setError(`You hold ${formatUnits(account.shares, SHARE_DECIMALS, 4)} Counter shares.`);
     const result = await t.trader.run((ctx) => (isDeposit ? counterDeposit(ctx, value) : counterWithdraw(ctx, value)));
     if (result.ok) {
-      setRequests((prev) => [{ id: Date.now(), action, text: isDeposit ? `${money(usdgNum(value))} USDG` : `${formatUnits(value, SHARE_DECIMALS, 4)} shares`, hash: result.hash, at: Date.now() }, ...prev]);
-      t.notify(`${action} requested. It settles after the next mark, at the worse of two prices.`);
+      let requestId = '';
+      try {
+        const receipt = await publicClient.getTransactionReceipt({ hash: result.hash });
+        const eventName = isDeposit ? 'DepositRequested' : 'WithdrawRequested';
+        const logs = parseEventLogs({ abi: vaultAbi, eventName, logs: receipt.logs, strict: false });
+        const event = logs.find((log) => log.address.toLowerCase() === contracts?.vault?.toLowerCase()
+          && log.args.owner?.toLowerCase() === t.wallet.address?.toLowerCase());
+        if (event) requestId = String(event.args.id);
+      } catch { /* Keep the transaction visible if this RPC cannot return its receipt logs. */ }
+      const key = requestId ? `${t.wallet.address?.toLowerCase()}:${requestId}` : `tx:${result.hash}`;
+      setRequests((prev) => [{ key, requestId, owner: t.wallet.address?.toLowerCase(), action: requestAction, text: isDeposit ? `${money(usdgNum(value))} USDG` : `${formatUnits(value, SHARE_DECIMALS, 4)} shares`, hash: result.hash, at: Date.now(), status: requestId ? 'pending' : 'untracked' }, ...(Array.isArray(prev) ? prev : [])].slice(0, 50));
+      t.notify(`${requestAction} requested. It settles after the next mark, at the worse of two prices.`);
     } else setError(result.message);
   }
 
@@ -86,10 +141,14 @@ export function CounterView({ account }) {
         </form>
       </div>
       <div className="term-large-panel">
-        <h2>{tr('Your requests')} <span>{tr('{n} THIS SESSION', { n: requests.length })}</span></h2>
-        {requests.length ? (
+        <h2>{tr('Your requests')} <span>{tr('{n} TRACKED', { n: visibleRequests.length })}</span></h2>
+        <p className="term-fineprint">{tr('Pending Counter requests are saved in this browser. Settlement alerts appear here while the terminal is open.')}</p>
+        {visibleRequests.filter((r) => r.requestId && r.status !== 'settled').map((request) => (
+          <CounterRequestWatcher key={request.key} request={request} vault={contracts?.vault} onSettled={markSettled} onPartial={markPartial} />
+        ))}
+        {visibleRequests.length ? (
           <div className="term-table-wrap"><table><thead><tr><th>{tr('Request')}</th><th>{tr('Amount')}</th><th>{tr('Status')}</th><th>{tr('When')}</th></tr></thead><tbody>
-            {requests.map((r) => <tr key={r.id}><td>{tr(r.action)}</td><td>{tr(r.text)}</td><td>{r.hash ? <a className="term-table-tag" href={explorerTx(r.hash)} target="_blank" rel="noreferrer">{tr('Submitted · pending next mark')} ↗</a> : tr('Submitted')}</td><td>{tr(relativeTime(r.at))}</td></tr>)}
+            {visibleRequests.map((r) => <tr key={r.key}><td>{tr(r.action)}</td><td>{tr(r.text)}</td><td>{r.status === 'settled' ? <>{tr('Settled on-chain')} · {r.hash && <a className="term-text-link" href={explorerTx(r.hash)} target="_blank" rel="noreferrer">{tr('Request transaction')} ↗</a>}</> : r.hash ? <a className="term-table-tag" href={explorerTx(r.hash)} target="_blank" rel="noreferrer">{tr(r.status === 'untracked' ? 'Submitted · settlement tracking unavailable' : r.status === 'partial' ? 'Partially settled · remaining queued' : 'Submitted · pending next mark')} ↗</a> : tr('Submitted')}</td><td>{tr(relativeTime(r.at))}</td></tr>)}
           </tbody></table></div>
         ) : <div className="term-empty">{tr('Requests you make appear here.')}<small>{tr('Two-step settlement keeps the request separate from the mark; your share balance updates when it settles.')}</small></div>}
       </div>
