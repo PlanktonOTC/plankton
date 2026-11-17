@@ -238,6 +238,44 @@ export function CounterView({ account, contracts }) {
 
 // ---------------------------------------------------------------- the Tape
 
+export function HeatmapView({ markets }) {
+  const t = useTerminal();
+  const { t: tr } = useI18n();
+  const sorted = [...markets].sort((a, b) => {
+    const ac = a.change === null ? -Infinity : Number(a.change);
+    const bc = b.change === null ? -Infinity : Number(b.change);
+    return bc - ac;
+  });
+  const maxMove = sorted.reduce((max, market) => market.change === null ? max : Math.max(max, Math.abs(Number(market.change))), 0);
+
+  return (
+    <section className="term-secondary-view term-market-heatmap">
+      <div className="term-view-title">
+        <div><p className="term-overline">{tr('ALL LISTINGS')}</p><h1>{tr('Market heatmap')}</h1><p>{tr('Compare each listing’s mark with its on-chain reference close. Tile size is equal; color shows the direction and size of the move.')}</p></div>
+        <span className="term-small-badge">{tr('{n} MARKETS', { n: markets.length })}</span>
+      </div>
+      <div className="term-heatmap-legend"><span><i className="is-negative" />{tr('Down')}</span><span><i className="is-neutral" />{tr('Flat or no reference')}</span><span><i className="is-positive" />{tr('Up')}</span></div>
+      {sorted.length ? <div className="term-heatmap-grid" aria-label={tr('All listed markets heatmap')}>
+        {sorted.map((market) => {
+          const change = market.change === null ? null : Number(market.change);
+          const intensity = change === null || maxMove === 0 ? 0 : Math.min(3, Math.max(1, Math.ceil(Math.abs(change) / maxMove * 3)));
+          const color = change === null || Math.abs(change) < 0.01 ? 'flat' : change > 0 ? `up-${intensity}` : `down-${intensity}`;
+          const price = Number(market.price);
+          const priceText = price > 0 ? price.toLocaleString('en-US', { minimumFractionDigits: price >= 100 ? 2 : price >= 1 ? 3 : 4, maximumFractionDigits: price >= 100 ? 2 : price >= 1 ? 3 : 4 }) : '—';
+          const changeText = change === null ? tr(market.statusLabel) : `${change > 0 ? '+' : change < 0 ? '−' : ''}${Math.abs(change).toFixed(2)}%`;
+          return <button type="button" key={market.symbol} className={`term-heatmap-tile is-${color}`} onClick={() => t.chooseMarket(market.symbol)} aria-label={tr('Open {symbol} market, mark {price} USDG, change {change}', { symbol: market.symbol, price: priceText, change: changeText })}>
+            <span className="term-heatmap-tile-top"><strong>{market.symbol}</strong><small>{tr(market.classLabel)}</small></span>
+            <span className="term-heatmap-tile-change">{changeText}</span>
+            <span className="term-heatmap-tile-price">{priceText} <small>USDG</small></span>
+            <span className="term-heatmap-tile-status">{tr(market.statusLabel)}</span>
+          </button>;
+        })}
+      </div> : <div className="term-empty">{tr('No listings are available right now.')}</div>}
+      <p className="term-counter-footnote">{tr('Moves compare the current on-chain mark with its reference close; they are not rolling 24-hour returns.')}</p>
+    </section>
+  );
+}
+
 export function TapeView({ markets, alerts, removeAlert, favorites, toggleFavorite, active = true }) {
   const t = useTerminal();
   const { t: tr } = useI18n();

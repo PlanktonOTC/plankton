@@ -164,6 +164,26 @@
 .term-counter-exposure-row>b{text-align:right;color:#b9c8c0;font-weight:500;white-space:nowrap}
 .term-counter-exposure-bar{height:4px;background:#ffffff0d;border-radius:4px;overflow:hidden}
 .term-counter-exposure-bar i{display:block;height:100%;background:#9fc8b1;border-radius:4px}
+.term-market-heatmap{max-width:1400px;margin:0 auto}
+.term-heatmap-legend{display:flex;align-items:center;gap:14px;margin:18px 0 12px;color:#909da3;font-size:10px}
+.term-heatmap-legend span{display:inline-flex;align-items:center;gap:6px}
+.term-heatmap-legend i{display:block;width:10px;height:10px;border-radius:2px;background:#ffffff12}
+.term-heatmap-legend i.is-negative{background:#bd777733}
+.term-heatmap-legend i.is-positive{background:#83b59a33}
+.term-heatmap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+.term-heatmap-tile{display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;gap:11px;min-height:136px;padding:13px 14px;text-align:left;border:1px solid #ffffff0c;border-radius:5px;background:#ffffff04;transition:filter .15s,transform .15s}
+.term-heatmap-tile:hover{filter:brightness(1.22);transform:translateY(-1px)}
+.term-heatmap-tile.is-up-1{background:#77a98d12}.term-heatmap-tile.is-up-2{background:#77a98d20}.term-heatmap-tile.is-up-3{background:#77a98d30}
+.term-heatmap-tile.is-down-1{background:#bd777712}.term-heatmap-tile.is-down-2{background:#bd777720}.term-heatmap-tile.is-down-3{background:#bd777730}
+.term-heatmap-tile-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.term-heatmap-tile-top strong{color:#e1e8e8;font-size:15px;letter-spacing:.03em}
+.term-heatmap-tile-top small,.term-heatmap-tile-price small{color:#89969b;font-size:9px}
+.term-heatmap-tile-change{color:#c5d0d1;font-size:19px;font-variant-numeric:tabular-nums}
+.term-heatmap-tile.is-up-1 .term-heatmap-tile-change,.term-heatmap-tile.is-up-2 .term-heatmap-tile-change,.term-heatmap-tile.is-up-3 .term-heatmap-tile-change{color:#aed6be}
+.term-heatmap-tile.is-down-1 .term-heatmap-tile-change,.term-heatmap-tile.is-down-2 .term-heatmap-tile-change,.term-heatmap-tile.is-down-3 .term-heatmap-tile-change{color:#d59a9b}
+.term-heatmap-tile-price{color:#c8d0d2;font-size:11px;font-variant-numeric:tabular-nums}
+.term-heatmap-tile-price small{display:inline;color:#849096}
+.term-heatmap-tile-status{color:#818d93;font-size:9px}
 @media(max-width:760px){.term-referral-stats{grid-template-columns:1fr}.term-referral-link-panel{grid-template-columns:1fr}.term-referral-link-panel>.term-secondary{width:100%}.term-referral-invite{align-items:flex-start;flex-direction:column}}
 @media(max-width:760px){.term-history-export{gap:7px;padding:10px}.term-history-export>div{flex-basis:100%}.term-history-export>button{flex:1 1 auto}.term-history-export>label{flex:1 0 auto;justify-content:flex-start}}
 @media(max-width:760px){.term-counter-analytics{grid-template-columns:1fr}.term-counter-exposure-row{grid-template-columns:48px 1fr auto;gap:7px}.term-counter-exposure-row>.term-counter-exposure-bar{grid-column:2;grid-row:2}.term-counter-exposure-row>span{grid-column:2/4;grid-row:1}.term-counter-exposure-row>b{grid-column:3;grid-row:2}}
