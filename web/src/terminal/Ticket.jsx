@@ -8,7 +8,8 @@ import { friendlyError } from '../live/errors.js';
 import { canGoGasless, ENTRY_SLIPPAGE_BPS, entryOrder, ladderProblem, ladderRungs, marketOrder, MAX_LADDER_STEPS, MIN_LADDER_STEPS, newNonce, protectionOrder, protectionProblem } from '../live/orders.js';
 import { previewView } from '../live/model.js';
 import { borrowEstimate } from '../live/borrow.js';
-import { useDebounced, usePreview } from '../live/queries.js';
+import { useCatalysts, useDebounced, usePreview } from '../live/queries.js';
+import { earningsModeFor } from '../live/earnings-mode.js';
 import { depositCollateral, gaslessOrder, openTrade, placeLadder, placeOrder } from '../live/trade.js';
 import { money, parseE18, parseUsdg, priceDigits } from '../live/units.js';
 import { useI18n } from '../i18n';
@@ -88,8 +89,10 @@ export default function Ticket({ market, account, orders }) {
   const [review, setReview] = useState(null);
   const [reviewError, setReviewError] = useState('');
   const limits = market.limits;
-  const maxLev = limits?.maxLeverage ?? 1;
   const symbol = market.symbol;
+  const catalysts = useCatalysts(true);
+  const earningsMode = earningsModeFor(catalysts.data?.earnings, symbol);
+  const maxLev = Math.min(limits?.maxLeverage ?? 1, earningsMode.active ? 1 : Infinity);
 
   // A new market starts from its own price; leverage never sits above what the market allows right now.
   useEffect(() => setTrigger(market.price ? market.price.toFixed(priceDigits(market.price)) : ''), [symbol]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -335,7 +338,7 @@ export default function Ticket({ market, account, orders }) {
             {[50, 100, 200].map((amount) => <button type="button" key={amount} onClick={() => setMargin(String(amount))}>{amount}</button>)}
             <button type="button" onClick={setMax} disabled={!t.wallet.isConnected}>{tr('Max')}</button>
           </div>
-          <LeverageControl value={leverage} onChange={setLeverage} max={maxLev} locked={!market.canOpen || maxLev <= 0} margin={margin} reason={!market.canOpen ? market.blockers[0] : limits && limits.maxLeverage < 3 ? `${market.statusLabel}: leverage is capped at ${limits.maxLeverage}×.` : undefined} />
+          <LeverageControl value={leverage} onChange={setLeverage} max={maxLev} locked={!market.canOpen || maxLev <= 0} margin={margin} reason={earningsMode.active ? tr('Earnings mode is active; new positions are limited to 1× leverage.') : !market.canOpen ? market.blockers[0] : limits && limits.maxLeverage < 3 ? `${market.statusLabel}: leverage is capped at ${limits.maxLeverage}×.` : undefined} />
           {(type === 'Limit' || type === 'Stop') && (
             <label className="term-field">{tr('Order stays active for')}
               <div><select aria-label={tr('Order expiry')} value={days} onChange={(e) => setDays(e.target.value)}>{EXPIRIES.map(([v, l]) => <option key={v} value={v}>{tr(l)}</option>)}</select></div>

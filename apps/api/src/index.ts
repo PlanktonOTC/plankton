@@ -34,6 +34,7 @@ import {
 import { and, asc, counterActivity, counterNavSnapshots, createDb, desc, eq, gte, indexerCursor, lt, or, orders, positions, sql, trades, type Db } from '@plankton/db';
 import { closeSizeDeltaE18, sessionAt, stressNavUsdg } from '@plankton/core';
 import { marketLimits, quoteFromChain, type MarketLimits } from './quote.ts';
+import { earningsModeFor } from './earnings-mode.ts';
 import { collateralShortfall, liquidationPriceE18, positionAfterOpen, positionValue, solveOpenSize, targetNotional } from './views.ts';
 import { clientIp, corsOrigins, createRateLimiter, isInternal } from './limits.ts';
 import { FRESH_WITHIN_SEC, feedRow, type FeedRow, type RawMark } from './feed.ts';
@@ -339,6 +340,7 @@ async function issueQuote(symbol: string, trader: Address, sizeDeltaE18: bigint,
   // Chain time, not the server clock: the quote's expiry and the mark's age are judged against block.timestamp.
   const nowSec = await chainTimeSec(client);
   const nowMs = Number(nowSec) * 1000;
+  const earnings = earningsModeFor((await tape.catalysts()).earnings, m.cfg.symbol, nowMs);
   const { result, maxLeverageE18 } = quoteFromChain({
     snap,
     trader: tr,
@@ -350,6 +352,7 @@ async function issueQuote(symbol: string, trader: Address, sizeDeltaE18: bigint,
     calendar,
     windowTz: env.STOCK_TOKEN_WINDOW_TZ,
     minOpenSpreadBps: live?.get(m.cfg.symbol)?.minOpenSpreadBps ?? 5,
+    maxLeverageCapE18: earnings.maxLeverageE18 ?? undefined,
   });
   if (!result.ok) throw new HttpError(422, result.code, { message: result.message });
 
@@ -418,11 +421,12 @@ app.get('/v1/quote/preview', async (c) => {
   const q = previewQuery.parse(c.req.query());
   const m = market(q.market);
   const { client, dep } = chain();
-  const [rawSnap, tr, nowSec, live]: [MarketSnapshot, TraderSnapshot, bigint, Map<string, LiveMark> | null] = await Promise.all([
+  const [rawSnap, tr, nowSec, live, catalysts]: [MarketSnapshot, TraderSnapshot, bigint, Map<string, LiveMark> | null, Awaited<ReturnType<typeof tape.catalysts>>] = await Promise.all([
     readMarket(client, dep, m.marketId),
     q.trader ? readTrader(client, dep, m.marketId, q.trader) : Promise.resolve({ position: EMPTY_POSITION, collateralUsdg: 0n, walletNotionalUsdg: 0n }),
     chainTimeSec(client),
     liveMarks(),
+    tape.catalysts(),
   ]);
   // Price the ticket against the live mark: a real quote publishes it on-chain first (see ensureFreshMark).
   const snap = withLiveMark(rawSnap, live?.get(m.cfg.symbol), nowSec);
@@ -431,8 +435,9 @@ app.get('/v1/quote/preview', async (c) => {
 
   const nowMs = Number(nowSec) * 1000;
   const marginUsdg = q.marginUsdg ?? 0n;
+  const earnings = earningsModeFor(catalysts.earnings, m.cfg.symbol, Number(nowSec) * 1000);
   const run = (sizeDeltaE18: bigint) =>
-    quoteFromChain({ snap, trader: tr, cls: m.cfg.class, rung, sizeDeltaE18, marginUsdg, nowMs, calendar, windowTz: env.STOCK_TOKEN_WINDOW_TZ, minOpenSpreadBps: live?.get(m.cfg.symbol)?.minOpenSpreadBps ?? 5 });
+    quoteFromChain({ snap, trader: tr, cls: m.cfg.class, rung, sizeDeltaE18, marginUsdg, nowMs, calendar, windowTz: env.STOCK_TOKEN_WINDOW_TZ, minOpenSpreadBps: live?.get(m.cfg.symbol)?.minOpenSpreadBps ?? 5, maxLeverageCapE18: earnings.maxLeverageE18 ?? undefined });
 
   let sizeDeltaE18: bigint;
   let outcome: ReturnType<typeof run>;

@@ -8,6 +8,7 @@ export default {
   "Est. borrow for 1 day": "预计持仓 1 天的借款成本",
   "Est. borrow for 1 week": "预计持仓 1 周的借款成本",
   "Holding-cost estimates use the current side-specific borrow rate; open interest can change the rate over time.": "持仓成本按当前方向的借款利率估算；未平仓量变化会改变利率。",
+  "Earnings mode is active; new positions are limited to 1× leverage.": "财报模式已启用；新仓位杠杆限制为 1 倍。",
   "News and filing context for {symbol}": "{symbol} 新闻与申报信息",
   "COMPANY UPDATES": "公司动态",
   "News and sentiment": "新闻与情绪",

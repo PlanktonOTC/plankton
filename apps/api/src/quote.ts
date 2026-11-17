@@ -33,6 +33,8 @@ export interface ChainQuoteInput {
   calendar: Calendar;
   windowTz: string;
   minOpenSpreadBps?: number;
+  /** Optional temporary cap enforced by the signed max-leverage field already checked on-chain. */
+  maxLeverageCapE18?: bigint;
 }
 
 export interface ChainQuote {
@@ -46,10 +48,13 @@ export interface ChainQuote {
 const LIQUIDATION_BY_STATUS = ['none', 'two_source', 'two_source', 'margin_only', 'none', 'none'] as const;
 
 /** The market's rules at this moment, as the quote builder wants them. Shared by quotes and the website's market board. */
-function modelOf(snap: MarketSnapshot, cls: MarketClass, rung: Rung) {
+function modelOf(snap: MarketSnapshot, cls: MarketClass, rung: Rung, maxLeverageCapE18?: bigint) {
   const cfg = snap.cfg;
   const status = snap.mark.status as Status;
-  const chainProfile = cfg.profiles[status]!;
+  const originalProfile = cfg.profiles[status]!;
+  const chainProfile = maxLeverageCapE18 !== undefined && maxLeverageCapE18 < originalProfile.maxLeverageE18
+    ? { ...originalProfile, maxLeverageE18: maxLeverageCapE18 }
+    : originalProfile;
   const lev = Number(chainProfile.maxLeverageE18) / 1e18;
   const profile: SessionProfileCfg = {
     opensAllowed: chainProfile.opensAllowed,
@@ -160,7 +165,7 @@ export function marketLimits(snap: MarketSnapshot, cls: MarketClass, rung: Rung)
 export function quoteFromChain(i: ChainQuoteInput): ChainQuote {
   const { snap, trader } = i;
   const cfg = snap.cfg;
-  const { status, chainProfile, profile, market } = modelOf(snap, i.cls, i.rung);
+  const { status, chainProfile, profile, market } = modelOf(snap, i.cls, i.rung, i.maxLeverageCapE18);
   const mark: QuoteMark = {
     priceE18: snap.mark.priceE18,
     confidenceBps: snap.mark.confidenceBps,
