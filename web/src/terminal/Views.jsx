@@ -242,7 +242,7 @@ export function RewardsView() {
   const [tab, setTab] = useState('Pennies');
   return (
     <section className="term-secondary-view">
-      <div className="term-view-title"><div><p className="term-overline">POINTS FIRST. NO TOKEN YET.</p><h1>Participation with published rules.</h1><p>Pennies and the Penny Cup are planned features. They are not live: no points are issued and no competition is open.</p></div><span className="term-small-badge">PLANNED</span></div>
+      <div className="term-view-title"><div><p className="term-overline">PLKT IS LIVE. PENNIES ARE NOT.</p><h1>Participation with published rules.</h1><p>Pennies and the Penny Cup are planned features. They are not live: no points are issued and no competition is open.</p></div><span className="term-small-badge">PLANNED</span></div>
       <div className="term-inline-tabs">{['Pennies', 'Penny Cup'].map((item) => <button key={item} aria-pressed={tab === item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item}</button>)}</div>
       <div className="term-counter-grid term-rewards-grid">
         <div className="term-large-panel">
@@ -253,7 +253,7 @@ export function RewardsView() {
         <div className="term-large-panel">
           <h2>{tab === 'Pennies' ? 'No points balance.' : 'No live round is open.'}</h2>
           <div className="term-empty"><strong className="term-reward-number">—</strong><small>{tab === 'Pennies' ? 'A verified account and points indexer are required.' : 'The leaderboard requires indexed, verified trades.'}</small></div>
-          <p>There is no PLANKTON token. Points do not guarantee a token or an airdrop.</p>
+          <p>$PLKT is live. Pennies are a separate planned points feature and are not currently active.</p>
           <a className="term-text-link" href="/#roadmap">Read the dated roadmap ↗</a>
         </div>
       </div>

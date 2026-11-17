@@ -231,7 +231,7 @@ function TerminalApp() {
         <div className="term-view-shell" hidden={view !== 'Solvency'}><LedgerView health={health} /></div>
         <div className="term-view-shell" hidden={view !== 'Rewards'}><RewardsView /></div>
 
-        <footer className="term-footer"><span><i /> {status.tone === 'good' ? 'LIVE' : 'OFFLINE'}</span><p>No token yet. Synthetic perpetuals. No share ownership.</p><div><a href="/docs?topic=risk">Risk</a><a href="/docs?topic=terms">Terms</a><a href="/">Back to PLANKTON ↗</a></div></footer>
+        <footer className="term-footer"><span><i /> {status.tone === 'good' ? 'LIVE' : 'OFFLINE'}</span><p>$PLKT is live on Robinhood Chain. Synthetic perpetuals confer no share ownership.</p><div><a href="/docs?topic=risk">Risk</a><a href="/docs?topic=terms">Terms</a><a href="/">Back to PLANKTON ↗</a></div></footer>
         {toast && <div className="term-toast" role="status"><span>✓</span>{toast}<button aria-label="Dismiss notification" onClick={() => setToast('')}>×</button></div>}
 
         {dialog?.type === 'command' && <CommandMenu markets={markets} />}
