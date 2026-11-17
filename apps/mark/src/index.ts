@@ -133,6 +133,7 @@ const app = new Hono();
 app.get('/health', () => json({ ok: true, rung, ...runner.health() }));
 app.get('/marks', () => json(runner.marks()));
 app.get('/eligibility', () => json(runner.eligibility()));
+app.get('/halts', () => json(runner.haltBoard()));
 
 // On demand (Float's rule): the API calls this right before quoting, so the oracle holds a current price only when
 // someone is about to trade. Internal only: same bearer token the signers use.

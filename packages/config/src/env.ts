@@ -12,6 +12,10 @@ const schema = z.object({
   /** Where refreshed figures are kept between restarts. Default: config/market-data.live.json (git-ignored). */
   MARKET_DATA_CACHE: z.string().optional(),
   NASDAQ_HALTS_URL: z.string().default('https://www.nasdaqtrader.com/rss.aspx?feed=tradehalts'),
+  /** EDGAR's public submissions API, read for the Tape's filings feed. */
+  SEC_API_BASE: z.string().default('https://data.sec.gov'),
+  /** EDGAR asks automated clients to identify themselves; set a contact here if the SEC asks for one. */
+  SEC_USER_AGENT: z.string().default('PlanktonOTC market-data feed'),
   STOCK_TOKEN_WINDOW_TZ: z.string().default('Europe/Berlin'),
   /** enforce: a market failing the listing rule stops taking new positions. warn: only report it. off: ignore. Default: enforce in production, warn otherwise. */
   ELIGIBILITY_MODE: z.enum(['enforce', 'warn', 'off']).optional(),

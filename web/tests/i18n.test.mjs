@@ -109,7 +109,7 @@ test('contexts: one English word, two meanings', () => {
 });
 
 test('every plain tr(...) / t(...) sentence in the terminal source has a Chinese entry', () => {
-  const files = ['src/Docs.jsx', 'src/Dashboard.jsx', 'src/terminal/Chart.jsx', 'src/terminal/Dialogs.jsx', 'src/terminal/Positions.jsx', 'src/terminal/Presets.jsx', 'src/terminal/Risk.jsx', 'src/terminal/Ticket.jsx', 'src/terminal/Views.jsx', 'src/terminal/shared.jsx'];
+  const files = ['src/Docs.jsx', 'src/Dashboard.jsx', 'src/terminal/Chart.jsx', 'src/terminal/Dialogs.jsx', 'src/terminal/Positions.jsx', 'src/terminal/Presets.jsx', 'src/terminal/Risk.jsx', 'src/terminal/Ticket.jsx', 'src/terminal/Views.jsx', 'src/terminal/Tape.jsx', 'src/terminal/shared.jsx'];
   const patterns = compilePatterns(zh);
   const covered = (text) => Object.prototype.hasOwnProperty.call(zh, text) || patterns.some((p) => p.regex.test(text));
   const call = /\btr\(\s*(?:'((?:\\.|[^'\\])*)'|"((?:\\.|[^"\\])*)")/g;

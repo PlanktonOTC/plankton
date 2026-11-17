@@ -3,6 +3,7 @@
   "markets": [
     {
       "symbol": "WYFI",
+      "secCik": 2042022,
       "class": "small",
       "stockToken": "0x9e7ABD3C9139D14E4c86DcE0e455AAB7A0C2FB3E",
       "enabled": true,
@@ -10,6 +11,7 @@
     },
     {
       "symbol": "NNE",
+      "secCik": 1923891,
       "class": "small",
       "stockToken": "0xBEF75684C43c4ea7BD18Dd532a2244674Ee8b926",
       "enabled": true,
@@ -17,6 +19,7 @@
     },
     {
       "symbol": "RCAT",
+      "secCik": 748268,
       "class": "small",
       "stockToken": "0xFDE6b5d9BB419B10C23268c74e369AbFF39C0460",
       "enabled": true,
@@ -24,6 +27,7 @@
     },
     {
       "symbol": "TE",
+      "secCik": 1992243,
       "class": "small",
       "stockToken": "0xb1969f6604CA1AE7a2cD3F1827876e914594CA2D",
       "enabled": true,
@@ -31,6 +35,7 @@
     },
     {
       "symbol": "XNDU",
+      "secCik": 2097163,
       "class": "small",
       "stockToken": "0xA8eB3BCcbf2017eE7CBfb652eB51CF2E1B153289",
       "enabled": true,
@@ -38,6 +43,7 @@
     },
     {
       "symbol": "POET",
+      "secCik": 1437424,
       "class": "small",
       "stockToken": "0xcf6B2D875361be807EAfa57458c80f28521F9333",
       "enabled": true,
@@ -45,6 +51,7 @@
     },
     {
       "symbol": "FLNC",
+      "secCik": 1868941,
       "class": "small",
       "stockToken": "0x282e87451E10fA6679BC7D76C69BE44cD3fC777C",
       "enabled": true,
@@ -52,6 +59,7 @@
     },
     {
       "symbol": "QUBT",
+      "secCik": 1758009,
       "class": "small",
       "stockToken": "0x59818904ab4cE163b3cE4FfB64f2D6Ca02c434B4",
       "enabled": true,
@@ -59,6 +67,7 @@
     },
     {
       "symbol": "DJT",
+      "secCik": 1849635,
       "class": "small",
       "stockToken": "0x1D11f0496982706C5e14A514D4E79F2e6BdE4516",
       "enabled": true,
@@ -66,6 +75,7 @@
     },
     {
       "symbol": "RUN",
+      "secCik": 1469367,
       "class": "small",
       "stockToken": "0x756Bc80af765C82da966a788858d65aDF14f3793",
       "enabled": true,
@@ -73,6 +83,7 @@
     },
     {
       "symbol": "SLS",
+      "secCik": 1390478,
       "class": "small",
       "stockToken": "0x285b231728c7E4333799183DF1094d775246a535",
       "enabled": true,
@@ -80,6 +91,7 @@
     },
     {
       "symbol": "CLSK",
+      "secCik": 827876,
       "class": "small",
       "stockToken": "0xcBB95BBF36099d34dA091dc6Fa6F49EfA257Cee3",
       "enabled": true,

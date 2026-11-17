@@ -199,3 +199,49 @@
 .term-twap-fields label{display:grid;gap:6px;font-size:10px;letter-spacing:.06em;color:#8e9ba3;text-transform:uppercase}
 .term-twap-fields select{background:#0b0e10;border:1px solid #ffffff22;border-radius:5px;color:#e4eae6;padding:9px 10px;font:inherit;font-size:13px;letter-spacing:0;text-transform:none}
 .term-twap .term-fineprint{margin:10px 0 0}
+
+/* The Tape: section tabs, runner scanner, halts, filings and catalysts */
+.term-tape-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:-12px 0 22px}
+.term-tape-tabs button{border:1px solid #ffffff12;border-radius:5px;background:#ffffff04;color:#8fa3b0;padding:8px 13px;font-size:11px;letter-spacing:.02em}
+.term-tape-tabs button:hover{color:#d7e6ef;border-color:#ffffff22}
+.term-tape-tabs button.active{background:#d4dde21a;border-color:#d4dde24d;color:#eef3f5}
+.term-tape-panel h2 .term-small-badge{font-size:8px;padding:5px 8px;margin:0}
+.term-tape-panel>p{margin-bottom:16px}
+.term-tape-panel .term-info-banner{margin-bottom:14px}
+.term-tape-panel .term-table-wrap table{min-width:860px}
+.term-tape-market{display:block;border:0;background:none;padding:0;text-align:left;color:inherit;cursor:pointer}
+.term-tape-market strong{color:#e4ecf0;text-decoration:underline;text-decoration-color:#ffffff2a;text-underline-offset:3px}
+.term-tape-market:hover strong{text-decoration-color:#d7e6ef}
+.term-tape-market small{max-width:190px;overflow:hidden;text-overflow:ellipsis}
+.term-sort-btn{border:0;background:none;padding:0;color:inherit;font:inherit;letter-spacing:inherit;cursor:pointer;white-space:nowrap}
+.term-sort-btn:hover{color:#d7e6ef}
+.term-tape-hot{color:#e3c58d!important}
+.term-range{position:relative;display:block;width:74px;height:3px;margin:6px 0 2px;border-radius:3px;background:linear-gradient(90deg,#cc969766,#aed6be66)}
+.term-range i{position:absolute;top:-3px;width:2px;height:9px;margin-left:-1px;border-radius:1px;background:#eef3f5}
+.term-tape-tags{display:flex;flex-wrap:wrap;gap:4px;white-space:normal;max-width:260px}
+.term-tape-tag{display:inline-block;font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:#93a6b2;border:1px solid #ffffff16;border-radius:3px;padding:3px 5px;white-space:nowrap}
+.term-tape-tag.is-hot{color:#e3c58d;border-color:#e3c58d4a;background:#e3c58d0d}
+td .term-tape-tag{margin-top:6px}
+.term-tape-filters{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:6px}
+.term-tape-filters .term-inline-tabs{margin-bottom:0;border-bottom:0}
+.term-tape-filters .term-inline-tabs button{padding-bottom:10px}
+.term-tape-check{display:flex;align-items:center;gap:7px;font-size:10px;color:#9fb0bb;cursor:pointer}
+.term-tape-check small{display:inline!important;color:#6f8593}
+.term-tape-check input{accent-color:#a9c8b6}
+.term-tape-select{display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#8e9ba3}
+.term-tape-select select{background:#0b0e10;border:1px solid #ffffff22;border-radius:5px;color:#e4eae6;padding:7px 9px;font:inherit;font-size:12px;letter-spacing:0;text-transform:none}
+.term-tape-listed td{background:#e3c58d07}
+.term-tape-filing{border-bottom:1px solid #ffffff0c;padding:18px 0 18px 14px;border-left:2px solid transparent}
+.term-tape-filing.is-high{border-left-color:#e3c58d99}
+.term-tape-filing.is-medium{border-left-color:#a8c6dc55}
+.term-tape-filing-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:9px}
+.term-tape-filing-head .term-tape-market{display:flex;align-items:baseline;gap:8px}
+.term-tape-filing-head .term-tape-market small{margin:0;font-size:10px}
+.term-tape-form{font-size:10px;color:#b9c8d1;font-variant-numeric:tabular-nums}
+.term-tape-filing-head time{margin-left:auto;font-size:10px;color:#7c96a7}
+.term-tape-filing p{font-size:11px;color:#849dad;line-height:1.6;margin:9px 0 0;max-width:620px}
+.term-tape-filing .term-tape-desc{font-size:10px;color:#6f8593;margin-top:4px}
+.term-tape-filing a{display:inline-block;margin-top:10px;font-size:10px;color:#b2c8d7}
+.term-tape-subhead{font-size:13px;margin:26px 0 8px;color:#d7e6ef}
+.term-tape-link{border:0;background:none;padding:0;margin-top:13px;font-size:10px;color:#b2c8d7;cursor:pointer}
+@media(max-width:760px){.term-tape-tabs{margin-top:0}.term-tape-tabs button{padding:7px 10px}.term-tape-filing{padding-left:10px}.term-tape-filing-head time{margin-left:0}}

@@ -49,6 +49,8 @@ const marketsFile = z.object({
       agreeBps: z.number().int().positive().optional(),
       /** Chainlink staleness limit; set to this feed's heartbeat plus margin. Default 25 h. */
       chainlinkMaxAgeSec: z.number().int().positive().optional(),
+      /** The issuer's SEC Central Index Key, for the Tape's filings feed. Omit when the company does not file with EDGAR. */
+      secCik: z.number().int().positive().optional(),
       note: z.string().optional(),
     }),
   ),

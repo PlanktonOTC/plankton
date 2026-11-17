@@ -2,7 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { parseEventLogs, zeroAddress } from 'viem';
 import { usePublicClient, useReadContract } from 'wagmi';
 import { Arrow, TxProgress, useStored, useTerminal } from './shared.jsx';
-import { useCounter, useCounterHistory, useLedger, useLeaderboard } from '../live/queries.js';
+import { useCatalysts, useCounter, useCounterHistory, useFilings, useLedger, useLeaderboard } from '../live/queries.js';
+import { TAPE_TABS, contextEvents, tapeTabFrom } from '../live/tape.js';
+import { CatalystsPanel, FilingsPanel, HaltsPanel, ScannerPanel } from './Tape.jsx';
 import { relativeTime } from '../live/model.js';
 import { counterDeposit, counterWithdraw } from '../live/trade.js';
 import { vaultAbi } from '../live/abis.js';
@@ -236,10 +238,21 @@ export function CounterView({ account, contracts }) {
 
 // ---------------------------------------------------------------- the Tape
 
-export function TapeView({ markets, alerts, removeAlert, favorites, toggleFavorite }) {
+export function TapeView({ markets, alerts, removeAlert, favorites, toggleFavorite, active = true }) {
   const t = useTerminal();
   const { t: tr } = useI18n();
+  const [tab, setTab] = useState(() => tapeTabFrom(window.location.search));
   const [filter, setFilter] = useState('All');
+  const filings = useFilings(active && tab === 'Conditions');
+  const catalysts = useCatalysts(active && tab === 'Conditions');
+  const changeTab = (next) => {
+    setTab(next);
+    const q = new URLSearchParams(window.location.search);
+    if (next === 'Conditions') q.delete('tape');
+    else q.set('tape', next.toLowerCase());
+    window.history.replaceState({}, '', `${window.location.pathname}${q.size ? `?${q}` : ''}`);
+  };
+  const names = new Map(markets.map((m) => [m.symbol, m.name]));
   const events = markets.flatMap((m) => {
     const list = [];
     const base = { symbol: m.symbol, name: m.name };
@@ -254,26 +267,39 @@ export function TapeView({ markets, alerts, removeAlert, favorites, toggleFavori
     if (!list.length) list.push({ ...base, type: 'Session', title: 'Open and quoting', body: `Mark ${money(m.price, 2)} USDG${m.confidenceBps !== null ? ` · confidence ±${m.confidenceBps} bps` : ''}${m.dispersionBps !== null ? ` · sources ${m.dispersionBps} bps apart` : ''}.` });
     return list;
   });
-  const shown = events.filter((e) => filter === 'All' || e.type === filter);
+  // Recent flagged filings and earnings this week sit beside the market-state cards, newest context first.
+  const context = contextEvents({ filings: filings.data?.filings, earnings: catalysts.data?.earnings }).map((e) => ({ ...e, name: names.get(e.symbol) ?? e.symbol }));
+  const shown = [...context, ...events].filter((e) => filter === 'All' || e.type === filter);
   return (
     <section className="term-secondary-view">
       <div className="term-view-title">
-        <div><p className="term-overline">{tr('MARKET CONDITIONS')}</p><h1>{tr('Keep an eye on the Tape.')}</h1><p>{tr('The state of every market right now, and price alerts that run in this browser.')}</p></div>
+        <div><p className="term-overline">{tr('MARKET CONDITIONS')}</p><h1>{tr('Keep an eye on the Tape.')}</h1><p>{tr('Market state, a runner scanner, trading halts, SEC filings and the earnings calendar for every market, with price alerts that run in this browser.')}</p></div>
         <button className="term-primary term-auto" onClick={() => t.setDialog({ type: 'alert' })}>{tr('Create price alert')} <Arrow /></button>
       </div>
-      <div className="term-tape-grid">
+      <nav className="term-tape-tabs" aria-label={tr('Tape sections')}>
+        {TAPE_TABS.map((item) => <button key={item} type="button" className={tab === item ? 'active' : ''} aria-current={tab === item ? 'page' : undefined} onClick={() => changeTab(item)}>{tr(item, null, 'tape')}</button>)}
+      </nav>
+      {tab === 'Scanner' && <ScannerPanel active={active} markets={markets} />}
+      {tab === 'Halts' && <HaltsPanel active={active} />}
+      {tab === 'Filings' && <FilingsPanel active={active} markets={markets} />}
+      {tab === 'Catalysts' && <CatalystsPanel active={active} markets={markets} />}
+      {tab === 'Conditions' && <div className="term-tape-grid">
         <div className="term-large-panel">
-          <div className="term-inline-tabs">{['All', 'Halt', 'Session', 'Limit', 'Feed'].map((item) => <button key={item} className={filter === item ? 'active' : ''} aria-pressed={filter === item} onClick={() => setFilter(item)}>{tr(item, null, 'tape')}</button>)}</div>
+          <div className="term-inline-tabs">{['All', 'Halt', 'Session', 'Limit', 'Feed', 'Filing', 'Earnings'].map((item) => <button key={item} className={filter === item ? 'active' : ''} aria-pressed={filter === item} onClick={() => setFilter(item)}>{tr(item, null, 'tape')}</button>)}</div>
           {shown.map((event, i) => (
-            <article className="term-tape-event" key={`${event.symbol}-${i}`}>
+            <article className="term-tape-event" key={`${event.symbol}-${event.type}-${i}`}>
               <div>
                 <span className="term-symbol-square">{event.symbol.slice(0, 1)}</span>
-                <div><strong>{event.symbol}</strong><small>{tr(event.type, null, 'tape')} · {tr('LIVE')}</small></div>
+                <div><strong>{event.symbol}</strong><small>{tr(event.type, null, 'tape')}{event.form ? ` · ${event.form}` : ''} · {tr(event.at ? relativeTime(event.at) : 'LIVE')}</small></div>
                 <button className="term-icon-btn" aria-label={tr(`${favorites.includes(event.symbol) ? 'Remove' : 'Add'} ${event.symbol} ${favorites.includes(event.symbol) ? 'from' : 'to'} watchlist`)} aria-pressed={favorites.includes(event.symbol)} onClick={() => toggleFavorite(event.symbol)}>{favorites.includes(event.symbol) ? '★' : '☆'}</button>
               </div>
-              <h3>{tr(event.title)}</h3>
-              <p>{tr(event.body)}</p>
-              <a href={`https://www.sec.gov/edgar/search/#/q=${encodeURIComponent(event.symbol)}`} target="_blank" rel="noreferrer">{tr('Search SEC EDGAR for {name}', { name: event.name })} <Arrow /></a>
+              <h3>{tr(event.title, event.vars)}</h3>
+              <p>{tr(event.body)}{event.note ? <> {tr(event.note)}</> : null}</p>
+              {event.link
+                ? <a href={event.link} target="_blank" rel="noreferrer">{tr('Read the filing on SEC.gov')} <Arrow /></a>
+                : event.type === 'Earnings'
+                  ? <button type="button" className="term-tape-link" onClick={() => changeTab('Catalysts')}>{tr('Open the catalyst calendar')} <Arrow /></button>
+                  : <a href={`https://www.sec.gov/edgar/search/#/q=${encodeURIComponent(event.symbol)}`} target="_blank" rel="noreferrer">{tr('Search SEC EDGAR for {name}', { name: event.name })} <Arrow /></a>}
             </article>
           ))}
           {!shown.length && <div className="term-empty">{tr('Nothing in this category right now.')}</div>}
@@ -287,7 +313,7 @@ export function TapeView({ markets, alerts, removeAlert, favorites, toggleFavori
           <button className="term-secondary" onClick={() => t.setDialog({ type: 'alert' })}>{tr('Add a rule')} +</button>
           <div className="term-watchlist"><h3>{tr('Watchlist')}</h3>{favorites.map((symbol) => <span key={symbol}>{symbol}</span>)}{!favorites.length && <small>{tr('Star a market to keep it here.')}</small>}</div>
         </aside>
-      </div>
+      </div>}
     </section>
   );
 }

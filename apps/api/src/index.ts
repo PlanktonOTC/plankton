@@ -37,12 +37,14 @@ import { marketLimits, quoteFromChain, type MarketLimits } from './quote.ts';
 import { collateralShortfall, liquidationPriceE18, positionAfterOpen, positionValue, solveOpenSize, targetNotional } from './views.ts';
 import { clientIp, corsOrigins, createRateLimiter, isInternal } from './limits.ts';
 import { FRESH_WITHIN_SEC, feedRow, type FeedRow, type RawMark } from './feed.ts';
+import { createTape, latestFilings } from './tape.ts';
 
 const env = loadEnv();
 const log = pino({ level: env.LOG_LEVEL });
 const { markets, rung } = loadMarkets();
 const { calendar } = loadCalendar();
 
+const tape = createTape(env, markets, log);
 const byId = new Map(markets.map((m) => [marketIdFor(m.symbol, m.stockToken as Address).toLowerCase(), m]));
 const bySymbol = new Map(markets.map((m) => [m.symbol, { cfg: m, marketId: marketIdFor(m.symbol, m.stockToken as Address) }]));
 
@@ -947,6 +949,66 @@ app.get('/v1/ledger', async () => {
   const nets = perMarket.map((r) => r.longOiUsdg - r.shortOiUsdg);
   const stress = stressNavUsdg(counter.navUsdg, nets, 2_500);
   return json({ counter, stress25: stress, markets: perMarket });
+});
+
+// ---------------------------------------------------------------- the Tape: market context beside the chart
+
+// Public like the price feed: any website, bot or script may read these (CORS *). Each source is cached and refreshed in
+// the background (see tape.ts), so a slow or failing upstream shows as an older `updatedAt`, not an error.
+const TAPE_PATHS = ['/v1/scanner', '/v1/catalysts', '/v1/filings', '/v1/filings/*', '/v1/halts'];
+for (const path of TAPE_PATHS) {
+  app.use(path, async (c, next) => {
+    await next();
+    c.header('access-control-allow-origin', '*');
+    if (c.res.ok) c.header('cache-control', 'public, max-age=15');
+  });
+}
+const fromTape = async <T>(what: string, load: () => Promise<T>): Promise<T> => {
+  try {
+    return await load();
+  } catch (err) {
+    log.warn({ err: (err as Error).message }, `${what} unavailable`);
+    throw new HttpError(503, `${what} is unavailable right now, try again shortly`);
+  }
+};
+const listLimit = (raw: string | undefined, max: number, fallback: number) => {
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 ? Math.min(n, max) : fallback;
+};
+
+// How each listed stock is trading: change, gap, extended-hours move, relative volume, float turnover, 52-week range.
+app.get('/v1/scanner', async () => json(await fromTape('the scanner', tape.scanner)));
+
+// Upcoming earnings, the last reported quarter, and Stock Token corporate actions for listed markets.
+app.get('/v1/catalysts', async () => json(await fromTape('the catalyst calendar', tape.catalysts)));
+
+// SEC filings for listed markets, tagged (offering, shelf, dilution, charter change...). ?flagged=1 keeps medium/high only.
+app.get('/v1/filings', async (c) => {
+  const body = await fromTape('the filings feed', tape.filings);
+  const flaggedOnly = c.req.query('flagged') === '1';
+  return json({
+    updatedAt: body.updatedAt,
+    lookbackDays: body.lookbackDays,
+    unavailable: body.unavailable,
+    filings: latestFilings(body, { flaggedOnly, limit: listLimit(c.req.query('limit'), 200, 100) }),
+  });
+});
+app.get('/v1/filings/:symbol', async (c) => {
+  const { cfg } = market(c.req.param('symbol'));
+  if (!cfg.secCik) throw new HttpError(404, 'no SEC filer is configured for this market');
+  const body = await fromTape('the filings feed', tape.filings);
+  const entry = body.markets.find((m) => m.symbol === cfg.symbol);
+  if (!entry) throw new HttpError(503, 'filings for this market are unavailable right now, try again shortly');
+  const flaggedOnly = c.req.query('flagged') === '1';
+  const filings = entry.filings.filter((f) => !flaggedOnly || f.importance !== 'low').slice(0, listLimit(c.req.query('limit'), 100, 25));
+  return json({ updatedAt: body.updatedAt, lookbackDays: body.lookbackDays, symbol: entry.symbol, cik: entry.cik, company: entry.company, filings });
+});
+
+// Market-wide trading halts from Nasdaq over the last three days, newest first. ?listed=1 keeps Plankton markets only.
+app.get('/v1/halts', async (c) => {
+  const body = await fromTape('the halts board', () => fromMark<{ updatedAt: number | null; halts: Array<{ listed: boolean }> }>('/halts'));
+  const listedOnly = c.req.query('listed') === '1';
+  return json({ updatedAt: body.updatedAt ? new Date(body.updatedAt).toISOString() : null, halts: listedOnly ? body.halts.filter((h) => h.listed) : body.halts });
 });
 
 // ---------------------------------------------------------------- errors

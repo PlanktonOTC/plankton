@@ -14,6 +14,12 @@ export const useCounterHistory = () => useQuery({ queryKey: ['counter-history'],
 export const useLedger = () => useQuery({ queryKey: ['ledger'], queryFn: () => apiGet('/v1/ledger'), refetchInterval: 15_000, retry: noRetryOn([503]) });
 export const useLeaderboard = (enabled = true) => useQuery({ queryKey: ['leaderboard'], queryFn: () => apiGet('/v1/leaderboard'), enabled, refetchInterval: 30_000, retry: noRetryOn([503]) });
 
+// The Tape's market context. Polled only while the Tape is on screen; the API caches each source, so these are cheap.
+export const useScanner = (enabled) => useQuery({ queryKey: ['scanner'], queryFn: () => apiGet('/v1/scanner'), enabled, refetchInterval: 30_000, retry: noRetryOn([503]), placeholderData: keepPreviousData });
+export const useHalts = (enabled) => useQuery({ queryKey: ['halts'], queryFn: () => apiGet('/v1/halts'), enabled, refetchInterval: 30_000, retry: noRetryOn([503]), placeholderData: keepPreviousData });
+export const useFilings = (enabled) => useQuery({ queryKey: ['filings'], queryFn: () => apiGet('/v1/filings?limit=200'), enabled, refetchInterval: 5 * 60_000, retry: noRetryOn([503]), placeholderData: keepPreviousData });
+export const useCatalysts = (enabled) => useQuery({ queryKey: ['catalysts'], queryFn: () => apiGet('/v1/catalysts'), enabled, refetchInterval: 30 * 60_000, retry: noRetryOn([503]), placeholderData: keepPreviousData });
+
 export const useAccountState = (address) =>
   useQuery({ queryKey: ['account-state', address], queryFn: () => apiGet(`/v1/accounts/${address}/state`), enabled: Boolean(address), refetchInterval: 5_000, placeholderData: keepPreviousData });
 

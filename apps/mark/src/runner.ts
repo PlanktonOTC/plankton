@@ -31,6 +31,8 @@ import {
   fetchRhAssets,
   fetchRhCorpActions,
   fetchRhPrices,
+  haltBoard,
+  HaltLog,
   rhReading,
   type Halt,
   type RhCorpAction,
@@ -81,6 +83,8 @@ export interface RunnerDeps {
 export class MarkRunner {
   private readonly rt = new Map<string, Runtime>();
   private halts = new Map<string, Halt>();
+  /** Every halt seen over the last three days, listed market or not, for the Tape's halts board. */
+  private readonly haltLog = new HaltLog();
   private corp: RhCorpAction[] = [];
   private marketData: Record<string, MarketData> = {};
   /** Figures this service refreshed itself (loaded from the cache at start). The newer of these and the file wins. */
@@ -173,8 +177,19 @@ export class MarkRunner {
   }
 
   async pollHalts(): Promise<void> {
-    this.halts = activeHalts(await fetchHalts(this.d.env.NASDAQ_HALTS_URL), Date.now());
-    this.lastOk.halts = Date.now();
+    const now = Date.now();
+    const all = await fetchHalts(this.d.env.NASDAQ_HALTS_URL);
+    this.halts = activeHalts(all, now);
+    this.haltLog.merge(all, now);
+    this.lastOk.halts = now;
+  }
+
+  /** Market-wide halts, newest first, with listed markets flagged. `updatedAt` is null before the first good poll. */
+  haltBoard(now = Date.now()) {
+    return {
+      updatedAt: this.lastOk.halts || null,
+      halts: haltBoard(this.haltLog.all(), new Set(this.rt.keys()), now),
+    };
   }
 
   /** Re-read config/market-data.json so an edit takes effect without a restart. */
