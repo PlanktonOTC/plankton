@@ -96,6 +96,8 @@ export interface MarketLimits {
   frozenSpreadBps: number;
   feeBps: number;
   borrowBaseBpsPerHour: number;
+  borrowLongBpsPerHour: number;
+  borrowShortBpsPerHour: number;
   maintenanceMarginBps: number;
   minHoldSec: number;
   /** Largest single position in USDG notional. */
@@ -108,11 +110,30 @@ export interface MarketLimits {
   shortOiUsdg: bigint;
 }
 
+/** Match ExchangeLib._accrue using current open interest and NAV; amounts are basis points per hour. */
+export function borrowRates(input: { nav: bigint; longOi: bigint; shortOi: bigint; baseBps: bigint; netSkewBpsOfV: bigint; grossOiBpsOfV: bigint; absOiCapUsdg: bigint }) {
+  const { nav, longOi, shortOi, baseBps, netSkewBpsOfV, grossOiBpsOfV, absOiCapUsdg } = input;
+  const scale = 1_000_000n;
+  const baseScaled = baseBps * scale;
+  const netAbs = longOi > shortOi ? longOi - shortOi : shortOi - longOi;
+  const maxNet = nav * netSkewBpsOfV / 10_000n;
+  const grossCap = nav * grossOiBpsOfV / 10_000n;
+  const cap = absOiCapUsdg !== 0n && absOiCapUsdg < grossCap ? absOiCapUsdg : grossCap;
+  const minApplies = (longOi + shortOi) * 10n > cap * 8n;
+  const dominantRaw = maxNet === 0n ? baseScaled : baseScaled * (netAbs < maxNet ? netAbs : maxNet) ** 2n / maxNet ** 2n;
+  const dominant = minApplies && dominantRaw < baseScaled ? baseScaled : dominantRaw;
+  const other = minApplies ? baseScaled : 0n;
+  const long = longOi > shortOi ? dominant : shortOi > longOi ? other : minApplies ? baseScaled : 0n;
+  const short = shortOi > longOi ? dominant : longOi > shortOi ? other : minApplies ? baseScaled : 0n;
+  return { long: Number(long) / Number(scale), short: Number(short) / Number(scale) };
+}
+
 export function marketLimits(snap: MarketSnapshot, cls: MarketClass, rung: Rung): MarketLimits {
   const { chainProfile, profile, caps, market } = modelOf(snap, cls, rung);
   const cfg = snap.cfg;
   const room = capacity(market.oi, caps, market.globalNetRoomUsdg);
   const byProfile = (snap.navUsdg * BigInt(chainProfile.maxPositionBpsOfV)) / 10_000n;
+  const borrow = borrowRates({ nav: snap.navUsdg, longOi: snap.longOI, shortOi: snap.shortOI, baseBps: BigInt(cfg.borrowBaseBpsPerHour), netSkewBpsOfV: BigInt(cfg.netSkewBpsOfV), grossOiBpsOfV: BigInt(cfg.grossOiBpsOfV), absOiCapUsdg: cfg.absOiCapUsdg });
   return {
     state: cfg.state,
     opensAllowed: chainProfile.opensAllowed,
@@ -121,6 +142,8 @@ export function marketLimits(snap: MarketSnapshot, cls: MarketClass, rung: Rung)
     frozenSpreadBps: cfg.frozenSpreadBps,
     feeBps: cfg.feeBps,
     borrowBaseBpsPerHour: cfg.borrowBaseBpsPerHour,
+    borrowLongBpsPerHour: borrow.long,
+    borrowShortBpsPerHour: borrow.short,
     maintenanceMarginBps: cfg.maintenanceMarginBps,
     minHoldSec: cfg.minHoldSec,
     positionCapUsdg: chainProfile.perWallet ? byProfile : caps.positionUsdg < byProfile ? caps.positionUsdg : byProfile,

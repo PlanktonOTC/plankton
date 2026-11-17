@@ -78,6 +78,8 @@ export function marketView(m) {
       frozenSpreadBps: t.frozenSpreadBps,
       feeBps: t.feeBps,
       borrowBaseBpsPerHour: t.borrowBaseBpsPerHour,
+      borrowLongBpsPerHour: t.borrowLongBpsPerHour ?? t.borrowBaseBpsPerHour,
+      borrowShortBpsPerHour: t.borrowShortBpsPerHour ?? t.borrowBaseBpsPerHour,
       maintenanceMarginBps: t.maintenanceMarginBps,
       positionCap: usdgNum(t.positionCapUsdg),
       longRoom: usdgNum(t.longRoomUsdg),

@@ -7,6 +7,7 @@ import RiskPanel from './Risk.jsx';
 import { friendlyError } from '../live/errors.js';
 import { canGoGasless, ENTRY_SLIPPAGE_BPS, entryOrder, ladderProblem, ladderRungs, marketOrder, MAX_LADDER_STEPS, MIN_LADDER_STEPS, newNonce, protectionOrder, protectionProblem } from '../live/orders.js';
 import { previewView } from '../live/model.js';
+import { borrowEstimate } from '../live/borrow.js';
 import { useDebounced, usePreview } from '../live/queries.js';
 import { depositCollateral, gaslessOrder, openTrade, placeLadder, placeOrder } from '../live/trade.js';
 import { money, parseE18, parseUsdg, priceDigits } from '../live/units.js';
@@ -170,6 +171,9 @@ export default function Ticket({ market, account, orders }) {
     [type, side, marginBig, leverage, slices, intervalSec, market.price, limits],
   );
   const shown = type === 'Market' ? (preview?.ok ? { notional: preview.notional, price: preview.execPrice, fee: preview.fee, liquidation: preview.liquidation } : null) : orderEstimate;
+  const borrowBpsPerHour = side === 'long' ? limits?.borrowLongBpsPerHour : limits?.borrowShortBpsPerHour;
+  const borrowDay = shown && borrowBpsPerHour !== undefined ? borrowEstimate(shown.notional, borrowBpsPerHour, 24) : null;
+  const borrowWeek = shown && borrowBpsPerHour !== undefined ? borrowEstimate(shown.notional, borrowBpsPerHour, 168) : null;
 
   // Why the form cannot be submitted right now, most important first.
   const problems = [];
@@ -362,7 +366,10 @@ export default function Ticket({ market, account, orders }) {
             <div><span>{tr('Trade fee · {pct}%', { pct: money((limits?.feeBps ?? 8) / 100, 2) })}</span><strong>{shown ? money(previewFee) : '0.00'} USDG</strong></div>
             <div><span>{tr('Est. liquidation')}</span><strong>{shown?.liquidation ? money(shown.liquidation, priceDigits(shown.liquidation)) : '—'}</strong></div>
             <div><span>{tr('Borrow / hour')}</span><strong>{limits ? `${money((limits.borrowBaseBpsPerHour ?? 0) / 100, 3)}%` : '—'} <small>{tr('base rate')}</small></strong></div>
+            <div><span>{tr('Est. borrow for 1 day')}</span><strong>{borrowDay === null ? '—' : `${money(borrowDay)} USDG`}</strong></div>
+            <div><span>{tr('Est. borrow for 1 week')}</span><strong>{borrowWeek === null ? '—' : `${money(borrowWeek)} USDG`}</strong></div>
           </div>
+          <p className="term-ticket-note">{tr('Holding-cost estimates use the current side-specific borrow rate; open interest can change the rate over time.')}</p>
           <ReviewActions primary={primary} side={side} location="mobile" />
         </form>
         <div className="term-capacity">
