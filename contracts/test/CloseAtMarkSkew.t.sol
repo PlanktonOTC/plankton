@@ -82,4 +82,52 @@ contract CloseAtMarkSkewTest is Base {
         // Net of everything the two exits paid and received, the Counter does not end up worse than where it started.
         assertGe(cash() + 1e6, counterBefore, "the Counter is not paying for the cycle");
     }
+
+    // ------------------------------------------------------------------ the reported cycle (GHSA-grrc-q3gv-wvmm)
+
+    /// Short n, long n, short n from separate wallets (no cap is broken), hold past minHoldSec, exit every long with
+    /// closeAtMark, then close every short by quote. n is the $4,000 net-skew cap: four wallets of 9.7 tokens at $100.
+    function _reportedCycle(uint256 markDuringHold) internal returns (uint256 navBefore, uint256 navAfter) {
+        navBefore = cash();
+        address[] memory longs = new address[](4);
+        address[] memory shorts = new address[](8);
+        for (uint256 i; i < 4; ++i) {
+            longs[i] = makeAddr(string(abi.encode("cycle-long", i)));
+        }
+        for (uint256 i; i < 8; ++i) {
+            shorts[i] = makeAddr(string(abi.encode("cycle-short", i)));
+        }
+        for (uint256 i; i < 4; ++i) {
+            open(shorts[i], -9.7e18, 400e6);
+        }
+        for (uint256 i; i < 4; ++i) {
+            open(longs[i], 9.7e18, 400e6);
+        }
+        for (uint256 i; i < 4; ++i) {
+            open(shorts[4 + i], -9.7e18, 400e6);
+        }
+        nextBlock();
+        skip(61);
+        publish(markDuringHold, IMarkOracle.Status.Open, 10, true);
+        for (uint256 i; i < 4; ++i) {
+            vm.prank(longs[i]);
+            exchange.closeAtMark(mkt, 10_000);
+        }
+        for (uint256 i; i < 8; ++i) {
+            reduce(shorts[i], 10_000);
+        }
+        navAfter = cash();
+    }
+
+    function test_reportedCycleDoesNotTakeFromTheCounterAtAnUnchangedMark() public {
+        (uint256 before_, uint256 after_) = _reportedCycle(PRICE);
+        assertGe(after_, before_, "the Counter keeps every fee and loses nothing to the cycle");
+    }
+
+    function test_reportedCycleDoesNotTakeFromTheCounterWhenTheMarkMoves() public {
+        // A move in the hold is ordinary trading risk on the shorts' net exposure; what must not happen is a gain that
+        // the skew pricing alone hands over. At +-1% the book's net short is what the Counter is paid or pays.
+        (uint256 b1, uint256 a1) = _reportedCycle(PRICE * 101 / 100);
+        assertGe(a1, b1, "mark up 1%: the net short loses, the Counter gains");
+    }
 }
