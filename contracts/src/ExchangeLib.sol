@@ -89,6 +89,10 @@ library ExchangeLib {
         int256 delta = M.fractionClose(p.size, sizeBps);
         (uint256 price, uint256 spread, bool stale) = _fallbackPrice(s, marketId, d);
         uint256 exec = price * (p.size > 0 ? BPS - spread : BPS + spread) / BPS;
+        // Never better for the trader than the skew-impact price a quote must pay (_checkPrice). Otherwise this exit moves
+        // the skew at the flat spread, and the other side of the book is then closed by quote at the skew discount.
+        uint256 skewBound = _skewBound(d, price, delta, spread);
+        if (delta > 0 ? skewBound > exec : skewBound < exec) exec = skewBound;
         uint256 fee = M.notional(M.abs(delta), exec) * d.cfg.feeBps / BPS;
         _applyTrade(s, Trade(trader, marketId, delta, exec, fee, 0, 0, 0, 2, false, stale));
     }
@@ -423,10 +427,7 @@ library ExchangeLib {
 
         // The quote may never be better for the trader than the skew-impact price (SIP-279 style), moved against the
         // trader by the session spread. So the spreads are charged, not just allowed.
-        int256 skewBefore = (int256(uint256(d.longOI)) - int256(uint256(d.shortOI))) * int256(USDG_SCALE);
-        int256 tradeE18 = int256(M.notional(absDelta, mark) * USDG_SCALE) * (t.delta > 0 ? int256(1) : int256(-1));
-        uint256 fill = M.skewFill(mark, skewBefore, skewBefore + tradeE18, d.cfg.skewScaleE18);
-        fill = t.delta > 0 ? fill * (BPS + spread) / BPS : fill * (BPS - spread) / BPS;
+        uint256 fill = _skewBound(d, mark, t.delta, spread);
         if (t.delta > 0 ? t.exec < fill : t.exec > fill) revert BetterThanSkew();
 
         uint256 notional = M.notional(absDelta, t.exec);
@@ -435,6 +436,19 @@ library ExchangeLib {
         ) {
             revert BadFee();
         }
+    }
+
+    /// The skew-impact fill for a trade of `delta` at `mark`, moved against the trader by `spread`: the best price any
+    /// trade may get, quoted or not.
+    function _skewBound(Market storage d, uint256 mark, int256 delta, uint256 spread)
+        private
+        view
+        returns (uint256 fill)
+    {
+        int256 skewBefore = (int256(uint256(d.longOI)) - int256(uint256(d.shortOI))) * int256(USDG_SCALE);
+        int256 tradeE18 = int256(M.notional(M.abs(delta), mark) * USDG_SCALE) * (delta > 0 ? int256(1) : int256(-1));
+        fill = M.skewFill(mark, skewBefore, skewBefore + tradeE18, d.cfg.skewScaleE18);
+        fill = delta > 0 ? fill * (BPS + spread) / BPS : fill * (BPS - spread) / BPS;
     }
 
     function _checkOpenPre(

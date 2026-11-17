@@ -104,7 +104,8 @@ contract ConfigureMarkets is Script {
 
     function _contracts() internal view returns (MarkOracle oracle, Exchange exchange) {
         // DEPLOYMENT_FILE (e.g. deployments/local.json) points a private test chain at its own address book.
-        string memory dep = vm.readFile(string.concat("../", vm.envOr("DEPLOYMENT_FILE", string("deployments/4663.json"))));
+        string memory dep =
+            vm.readFile(string.concat("../", vm.envOr("DEPLOYMENT_FILE", string("deployments/4663.json"))));
         oracle = MarkOracle(vm.parseJsonAddress(dep, ".oracle"));
         exchange = Exchange(vm.parseJsonAddress(dep, ".exchange"));
     }
