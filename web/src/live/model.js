@@ -175,6 +175,8 @@ export function tradeView(t) {
     price,
     fee: usdgNum(t.feeUsdg),
     pnl: usdgNum(t.realizedPnlUsdg),
+    feeUsdg: String(t.feeUsdg ?? 0),
+    realizedPnlUsdg: String(t.realizedPnlUsdg ?? 0),
     path: PATH_LABEL[t.path] ?? 'Trade',
     liquidation: t.path === 3,
   };

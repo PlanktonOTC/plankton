@@ -5,6 +5,7 @@ import { explorerTx } from '../live/wagmi.js';
 import { money, priceDigits, signed } from '../live/units.js';
 import { downloadTaxReport, downloadTradeHistory, fetchTradeExport } from '../live/tradeExport.js';
 import { useI18n } from '../i18n';
+import { hasRealizedPnl, sharePnlCard } from '../live/pnlCard.js';
 
 export default function Positions({ account, orders, trades, historyError, tab, setTab }) {
   const t = useTerminal();
@@ -13,6 +14,8 @@ export default function Positions({ account, orders, trades, historyError, tab, 
   const [exportYear, setExportYear] = useState(currentYear);
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState('');
+  const [sharingTrade, setSharingTrade] = useState('');
+  const [shareMessage, setShareMessage] = useState('');
   const connected = t.wallet.isConnected;
   const counts = { Positions: account.positions.length, 'Open orders': orders.length, History: trades.length };
   const empty = !connected
@@ -115,7 +118,7 @@ export default function Positions({ account, orders, trades, historyError, tab, 
         )}
         {connected && tab === 'History' && trades.length > 0 && (
           <table>
-            <thead><tr><th>{tr('Market')}</th><th>{tr('Event')}</th><th>{tr('Notional')}</th><th>{tr('Price')}</th><th>{tr('Realised PnL')}</th><th>{tr('When')}</th></tr></thead>
+            <thead><tr><th>{tr('Market')}</th><th>{tr('Event')}</th><th>{tr('Notional')}</th><th>{tr('Price')}</th><th>{tr('Realised PnL')}</th><th>{tr('When / proof')}</th><th>{tr('Share')}</th></tr></thead>
             <tbody>
               {trades.map((x) => (
                 <tr key={x.id}>
@@ -124,13 +127,20 @@ export default function Positions({ account, orders, trades, historyError, tab, 
                   <td>{money(x.notional)}</td>
                   <td>{money(x.price, priceDigits(x.price))}</td>
                   <td className={x.pnl > 0 ? 'term-positive' : x.pnl < 0 ? 'term-negative' : ''}>{x.pnl === 0 ? '—' : signed(x.pnl)}</td>
-                  <td><a className="term-table-tag" href={explorerTx(x.txHash)} target="_blank" rel="noreferrer">{tr(relativeTime(x.at))} ↗</a></td>
+                  <td><a className="term-table-tag" href={explorerTx(x.txHash)} target="_blank" rel="noreferrer" title={tr('View on-chain transaction proof')}>{tr(relativeTime(x.at))} ↗</a></td>
+                  <td>{hasRealizedPnl(x) ? <button className="term-mini-btn term-share-pnl" disabled={sharingTrade === x.id} onClick={async () => {
+                    setSharingTrade(x.id); setShareMessage('');
+                    try { setShareMessage(await sharePnlCard(x, t.wallet.address)); }
+                    catch (error) { if (error?.name !== 'AbortError') setShareMessage(error.message || 'Could not create the share card.'); }
+                    finally { setSharingTrade(''); }
+                  }}>{sharingTrade === x.id ? tr('Preparing…') : tr('Share card')} ↗</button> : '—'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
+      {shareMessage && tab === 'History' && <small className="term-history-export-status term-share-status" role="status">{shareMessage}</small>}
       {empty && <div className="term-empty">{tr(empty.text)}<small>{tr(empty.hint)}</small>{empty.action}</div>}
     </div>
   );
