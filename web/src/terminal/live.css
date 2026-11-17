@@ -148,3 +148,10 @@
 .term-ladder-rungs li i{display:block;height:3px;border-radius:3px;background:linear-gradient(90deg,#a9c8b6,#a9c8b633)}
 .term-ladder-rungs li small{color:#8aa0ad}
 .term-ladder-note{font-size:9px;line-height:1.55;color:#6f8593;margin:0 0 12px!important}
+
+/* TWAP / DCA */
+.term-twap{margin:6px 0 10px}
+.term-twap-fields{display:grid;grid-template-columns:1fr 1.4fr;gap:10px}
+.term-twap-fields label{display:grid;gap:6px;font-size:10px;letter-spacing:.06em;color:#8e9ba3;text-transform:uppercase}
+.term-twap-fields select{background:#0b0e10;border:1px solid #ffffff22;border-radius:5px;color:#e4eae6;padding:9px 10px;font:inherit;font-size:13px;letter-spacing:0;text-transform:none}
+.term-twap .term-fineprint{margin:10px 0 0}

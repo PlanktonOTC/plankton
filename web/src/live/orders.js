@@ -157,9 +157,10 @@ export function protectionProblem(side, reference, takeProfit, stopLoss) {
 
 /**
  * A gasless market order: the trader signs it (no gas) and the keeper fills it at once, paying the gas. Opens draw the
- * margin and fee from collateral already deposited in the exchange. `sizeDeltaE18` is signed (negative is short).
+ * margin and fee from collateral already deposited in the exchange. `sizeDeltaE18` is signed (negative is short). `lifetimeSec`
+ * is how long the order stays valid once `validAfter` passes (a scheduled TWAP slice uses a longer window than an instant order).
  */
-export function marketOrder({ marketId, trader, sizeDeltaE18, marginUsdg, validAfter, nonce, maxSlippageBps = MARKET_SLIPPAGE_BPS }) {
+export function marketOrder({ marketId, trader, sizeDeltaE18, marginUsdg, validAfter, nonce, maxSlippageBps = MARKET_SLIPPAGE_BPS, lifetimeSec = MARKET_ORDER_LIFETIME_SEC }) {
   return {
     marketId,
     trader,
@@ -172,7 +173,7 @@ export function marketOrder({ marketId, trader, sizeDeltaE18, marginUsdg, validA
     maxSlippageBps,
     marginUsdg,
     validAfter,
-    expiry: validAfter + MARKET_ORDER_LIFETIME_SEC,
+    expiry: validAfter + BigInt(lifetimeSec),
     nonce,
   };
 }

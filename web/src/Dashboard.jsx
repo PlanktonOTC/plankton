@@ -13,6 +13,7 @@ import Ticket from './terminal/Ticket.jsx';
 import { CounterView, LeaderboardView, LedgerView, RewardsView, TapeView } from './terminal/Views.jsx';
 import { AccountDialog, AlertDialog, CancelOrderDialog, CapacityDialog, CloseAtMarkDialog, CloseDialog, CommandMenu, MarginDialog, ProtectionDialog, RiskDialog, ShortcutsDialog, SourcesDialog, WalletDialog } from './terminal/Dialogs.jsx';
 import MarketTile, { CompanyMark } from './MarketRail';
+import { LangSwitch, useI18n } from './i18n';
 import './dashboard.css';
 import './supporting-metal.css';
 import './terminal/live.css';
@@ -21,6 +22,7 @@ const VIEWS = { counter: 'Counter', tape: 'Tape', ledger: 'Solvency', solvency: 
 const params = () => new URLSearchParams(window.location.search);
 
 function TerminalApp() {
+  const { t: tr } = useI18n();
   const workspace = useRef(null);
   const wallet = useWallet();
   const configQuery = useConfig();
@@ -135,52 +137,54 @@ function TerminalApp() {
     <Terminal.Provider value={ctx}>
       <div className={`terminal ${focusMode ? 'term-focus' : ''}`} ref={workspace}>
         <header className="term-nav">
-          <a className="term-brand" href="/" aria-label="PLANKTON homepage"><img src="/assets/plankton-logo.png" alt="" /><span>PLANKTON</span></a>
-          <nav aria-label="Terminal navigation">
-            {['Trade', 'Counter', 'Tape', 'Leaderboard', 'Solvency', 'Rewards'].map((item) => <button key={item} className={view === item ? 'active' : ''} aria-current={view === item ? 'page' : undefined} onClick={() => changeView(item)}>{item}</button>)}
-            <a href="/docs">Guide <Arrow /></a>
+          <a className="term-brand" href="/" aria-label={tr('PLANKTON homepage')}><img src="/assets/plankton-logo.png" alt="" /><span>PLANKTON</span></a>
+          <nav aria-label={tr('Terminal navigation')}>
+            {['Trade', 'Counter', 'Tape', 'Leaderboard', 'Solvency', 'Rewards'].map((item) => <button key={item} className={view === item ? 'active' : ''} aria-current={view === item ? 'page' : undefined} onClick={() => changeView(item)}>{tr(item)}</button>)}
+            <a href="/docs">{tr('Guide')} <Arrow /></a>
+            <LangSwitch className="lang-switch--terminal lang-switch--nav" />
           </nav>
           <div className="term-workspace-controls">
-            <button aria-label="Search markets and commands" title="Search (Ctrl K)" onClick={() => setDialog({ type: 'command' })}>⌕ <kbd>⌘ K</kbd></button>
-            <button className={focusMode ? 'active' : ''} aria-pressed={focusMode} aria-label={focusMode ? 'Exit focus layout' : 'Enter focus layout'} title="Focus layout (F)" onClick={() => setFocusMode((v) => !v)}>▣</button>
-            <button className={fullscreen ? 'active' : ''} aria-pressed={fullscreen} aria-label={fullscreen ? 'Exit browser full screen' : 'Enter browser full screen'} onClick={toggleFullscreen}>⛶</button>
-            <button aria-label="Keyboard shortcuts" onClick={() => setDialog({ type: 'shortcuts' })}>?</button>
+            <LangSwitch className="lang-switch--terminal" />
+            <button aria-label={tr('Search markets and commands')} title={tr('Search (Ctrl K)')} onClick={() => setDialog({ type: 'command' })}>⌕ <kbd>⌘ K</kbd></button>
+            <button className={focusMode ? 'active' : ''} aria-pressed={focusMode} aria-label={focusMode ? tr('Exit focus layout') : tr('Enter focus layout')} title={tr('Focus layout (F)')} onClick={() => setFocusMode((v) => !v)}>▣</button>
+            <button className={fullscreen ? 'active' : ''} aria-pressed={fullscreen} aria-label={fullscreen ? tr('Exit browser full screen') : tr('Enter browser full screen')} onClick={toggleFullscreen}>⛶</button>
+            <button aria-label={tr('Keyboard shortcuts')} onClick={() => setDialog({ type: 'shortcuts' })}>?</button>
             {wallet.isConnected
-              ? <button className={`term-demo-account-button term-wallet-button ${wallet.wrongNetwork ? 'is-wrong' : ''}`} onClick={() => (wallet.wrongNetwork ? wallet.switchNetwork().catch((e) => notify(friendlyError(e))) : setDialog({ type: 'account' }))}><i />{wallet.wrongNetwork ? 'Switch network' : shortAddress(wallet.address)}</button>
-              : <button className="term-demo-account-button term-wallet-button is-cta" onClick={openWallet}><i />{PRIVY_APP_ID ? 'Sign in' : 'Connect wallet'}</button>}
+              ? <button className={`term-demo-account-button term-wallet-button ${wallet.wrongNetwork ? 'is-wrong' : ''}`} onClick={() => (wallet.wrongNetwork ? wallet.switchNetwork().catch((e) => notify(friendlyError(e))) : setDialog({ type: 'account' }))}><i />{wallet.wrongNetwork ? tr('Switch network') : shortAddress(wallet.address)}</button>
+              : <button className="term-demo-account-button term-wallet-button is-cta" onClick={openWallet}><i />{PRIVY_APP_ID ? tr('Sign in') : tr('Connect wallet')}</button>}
           </div>
         </header>
-        <div className={`term-preview-strip term-status-${status.tone}`}><span><i /> {status.tone === 'good' ? 'LIVE' : status.tone === 'muted' ? 'CONNECTING' : 'ATTENTION'}</span><p>{status.text}</p><a href="/docs?topic=risk">Know the risks ↗</a></div>
+        <div className={`term-preview-strip term-status-${status.tone}`}><span><i /> {tr(status.tone === 'good' ? 'LIVE' : status.tone === 'muted' ? 'CONNECTING' : 'ATTENTION')}</span><p>{tr(status.text)}</p><a href="/docs?topic=risk">{tr('Know the risks')} ↗</a></div>
 
         {view === 'Trade' && (
           <>
             <div className="term-account-strip">
-              <span>Account equity <b>{wallet.isConnected ? money(account.equity) : '—'}<small>USDG</small></b></span>
-              <span>Available USDG <b>{wallet.isConnected ? money(account.available) : '—'}</b></span>
-              <span>Position PnL <b className={account.pnl >= 0 ? 'term-positive' : 'term-negative'}>{wallet.isConnected ? signed(account.pnl) : '—'}</b></span>
-              <span>Gross exposure <b>{wallet.isConnected ? money(account.exposure) : '—'}</b></span>
-              <span>Reserved margin <b>{wallet.isConnected ? money(account.reserved) : '—'}</b></span>
-              <button onClick={() => (wallet.isConnected ? setDialog({ type: 'account' }) : openWallet())}>{wallet.isConnected ? 'Account & deposits' : 'Connect wallet'} <Arrow /></button>
+              <span>{tr('Account equity')} <b>{wallet.isConnected ? money(account.equity) : '—'}<small>USDG</small></b></span>
+              <span>{tr('Available USDG')} <b>{wallet.isConnected ? money(account.available) : '—'}</b></span>
+              <span>{tr('Position PnL')} <b className={account.pnl >= 0 ? 'term-positive' : 'term-negative'}>{wallet.isConnected ? signed(account.pnl) : '—'}</b></span>
+              <span>{tr('Gross exposure')} <b>{wallet.isConnected ? money(account.exposure) : '—'}</b></span>
+              <span>{tr('Reserved margin')} <b>{wallet.isConnected ? money(account.reserved) : '—'}</b></span>
+              <button onClick={() => (wallet.isConnected ? setDialog({ type: 'account' }) : openWallet())}>{wallet.isConnected ? tr('Account & deposits') : tr('Connect wallet')} <Arrow /></button>
             </div>
             <main className="term-workspace">
               <aside className="term-markets">
-                <div className="term-panel-heading"><h2>Markets</h2><span>{String(markets.length).padStart(2, '0')}</span></div>
-                <label className="term-search"><span aria-hidden="true">⌕</span><input aria-label="Search markets" placeholder="Search markets" value={search} onChange={(e) => setSearch(e.target.value)} /></label>
+                <div className="term-panel-heading"><h2>{tr('Markets')}</h2><span>{String(markets.length).padStart(2, '0')}</span></div>
+                <label className="term-search"><span aria-hidden="true">⌕</span><input aria-label={tr('Search markets')} placeholder={tr('Search markets')} value={search} onChange={(e) => setSearch(e.target.value)} /></label>
                 <div className="term-watch-tabs">
-                  <button aria-pressed={!favoritesOnly} className={!favoritesOnly ? 'active' : ''} onClick={() => setFavoritesOnly(false)}>All markets</button>
-                  <button aria-pressed={favoritesOnly} className={favoritesOnly ? 'active' : ''} onClick={() => setFavoritesOnly(true)}>★ Watchlist <span>{favorites.length}</span></button>
+                  <button aria-pressed={!favoritesOnly} className={!favoritesOnly ? 'active' : ''} onClick={() => setFavoritesOnly(false)}>{tr('All markets')}</button>
+                  <button aria-pressed={favoritesOnly} className={favoritesOnly ? 'active' : ''} onClick={() => setFavoritesOnly(true)}>★ {tr('Watchlist')} <span>{favorites.length}</span></button>
                 </div>
-                <div className="term-market-labels"><span>PERPETUALS</span><span>MARK / VS CLOSE</span></div>
+                <div className="term-market-labels"><span>{tr('PERPETUALS')}</span><span>{tr('MARK / VS CLOSE')}</span></div>
                 <div className="term-market-list">
                   {visibleMarkets.map((m) => <MarketTile key={m.symbol} market={m} selected={market?.symbol === m.symbol} favorite={favorites.includes(m.symbol)} onSelect={setSelected} onFavorite={toggleFavorite} />)}
-                  {!visibleMarkets.length && <div className="term-empty">{marketsQuery.isLoading ? 'Loading markets…' : apiDown ? 'Markets unavailable.' : favoritesOnly ? 'No matching favorites.' : 'No markets found.'}{(favoritesOnly || search) && <button className="term-text-button" onClick={() => { setSearch(''); setFavoritesOnly(false); }}>Show all markets</button>}</div>}
+                  {!visibleMarkets.length && <div className="term-empty">{tr(marketsQuery.isLoading ? 'Loading markets…' : apiDown ? 'Markets unavailable.' : favoritesOnly ? 'No matching favorites.' : 'No markets found.')}{(favoritesOnly || search) && <button className="term-text-button" onClick={() => { setSearch(''); setFavoritesOnly(false); }}>{tr('Show all markets')}</button>}</div>}
                 </div>
                 <div className="term-market-foot">
-                  <span className="term-overline">SOURCE STATUS</span>
-                  <div className="term-feed-state"><i className={feedDown || apiDown ? 'is-off' : 'is-on'} />{apiDown ? 'Service unreachable' : feedDown ? 'Feeds not answering' : 'Feeds connected'}</div>
-                  <p>Every mark is signed by independent signers. Where Chainlink has a feed it must agree with Robinhood's quote before a new position can open.</p>
-                  <button className="term-text-button" disabled={!market} onClick={() => setDialog({ type: 'sources', symbol: market?.symbol })}>Inspect pricing sources ↗</button>
-                  <a href="/#roadmap">Explore the roadmap <Arrow /></a>
+                  <span className="term-overline">{tr('SOURCE STATUS')}</span>
+                  <div className="term-feed-state"><i className={feedDown || apiDown ? 'is-off' : 'is-on'} />{tr(apiDown ? 'Service unreachable' : feedDown ? 'Feeds not answering' : 'Feeds connected')}</div>
+                  <p>{tr("Every mark is signed by independent signers. Where Chainlink has a feed it must agree with Robinhood's quote before a new position can open.")}</p>
+                  <button className="term-text-button" disabled={!market} onClick={() => setDialog({ type: 'sources', symbol: market?.symbol })}>{tr('Inspect pricing sources')} ↗</button>
+                  <a href="/#roadmap">{tr('Explore the roadmap')} <Arrow /></a>
                 </div>
               </aside>
               {market ? (
@@ -189,37 +193,37 @@ function TerminalApp() {
                     <div className="term-market-header">
                       <div>
                         <CompanyMark symbol={market.symbol} name={market.name} className="term-selected-company" />
-                        <div><h1>{market.symbol}<small>/ USDG</small></h1><p>{market.name} <span>{market.classLabel}</span></p></div>
+                        <div><h1>{market.symbol}<small>/ USDG</small></h1><p>{market.name} <span>{tr(market.classLabel)}</span></p></div>
                       </div>
                       <div className="term-mark-price">
                         <strong>{market.price ? money(market.price, priceDigits(market.price)) : '—'}</strong>
-                        {market.change !== null ? <span className={market.change >= 0 ? 'term-positive' : 'term-negative'}>{market.change >= 0 ? '+' : ''}{market.change.toFixed(2)}% vs close <Arrow down={market.change < 0} /></span> : <span className="term-muted">{market.statusLabel}</span>}
+                        {market.change !== null ? <span className={market.change >= 0 ? 'term-positive' : 'term-negative'}>{market.change >= 0 ? '+' : ''}{market.change.toFixed(2)}% {tr('vs close')} <Arrow down={market.change < 0} /></span> : <span className="term-muted">{tr(market.statusLabel)}</span>}
                       </div>
-                      <div className="term-market-stat"><span>State</span><strong>{market.statusLabel}</strong></div>
-                      <div className="term-market-stat"><span>Max leverage</span><strong>{market.limits && market.limits.maxLeverage > 0 ? `${market.limits.maxLeverage}×` : '—'}</strong></div>
-                      <div className="term-market-stat"><span>Open interest</span><strong>{market.limits ? compact(market.limits.longOi + market.limits.shortOi) : '—'}</strong></div>
+                      <div className="term-market-stat"><span>{tr('State')}</span><strong>{tr(market.statusLabel)}</strong></div>
+                      <div className="term-market-stat"><span>{tr('Max leverage')}</span><strong>{market.limits && market.limits.maxLeverage > 0 ? `${market.limits.maxLeverage}×` : '—'}</strong></div>
+                      <div className="term-market-stat"><span>{tr('Open interest')}</span><strong>{market.limits ? compact(market.limits.longOi + market.limits.shortOi) : '—'}</strong></div>
                     </div>
                     <div className="term-chart-tools">
-                      <span className="term-overline">LEVELS · 1H CHART</span>
-                      <button className="term-text-button" onClick={() => setDialog({ type: 'alert' })}>♧ Alert</button>
-                      <span className={`term-state-badge state-${market.status}`}><i />{market.statusLabel}</span>
+                      <span className="term-overline">{tr('LEVELS · 1H CHART')}</span>
+                      <button className="term-text-button" onClick={() => setDialog({ type: 'alert' })}>♧ {tr('Alert')}</button>
+                      <span className={`term-state-badge state-${market.status}`}><i />{tr(market.statusLabel)}</span>
                     </div>
                     <Chart market={market} position={selectedPosition} orders={orders} />
                     <div className="term-source-bar">
-                      <span><i className={market.status === 'open' || market.status === 'extended' ? 'good' : 'muted'} />{market.status === 'open' || market.status === 'extended' ? (market.sources.length > 1 ? 'Two-source mark' : 'Robinhood-quote mark') : `${market.statusLabel} mark`}{market.dispersionBps !== null && market.sources.length > 1 ? ` · ${market.dispersionBps} bps apart` : ''}</span>
-                      <span>Spread <b>{market.limits ? `${market.limits.openSpreadBps} bps` : '—'}</b></span>
-                      <span>{market.canOpen ? 'Max position' : 'New opens'} <b>{market.canOpen ? `${money(market.limits.positionCap, 0)} USDG` : 'Unavailable'}</b></span>
-                      <button onClick={() => setDialog({ type: 'sources', symbol: market.symbol })}>Why this mark? ↗</button>
+                      <span><i className={market.status === 'open' || market.status === 'extended' ? 'good' : 'muted'} />{market.status === 'open' || market.status === 'extended' ? tr(market.sources.length > 1 ? 'Two-source mark' : 'Robinhood-quote mark') : tr('{state} mark', { state: tr(market.statusLabel) })}{market.dispersionBps !== null && market.sources.length > 1 ? ` · ${tr('{bps} bps apart', { bps: market.dispersionBps })}` : ''}</span>
+                      <span>{tr('Spread')} <b>{market.limits ? `${market.limits.openSpreadBps} bps` : '—'}</b></span>
+                      <span>{tr(market.canOpen ? 'Max position' : 'New opens')} <b>{market.canOpen ? `${money(market.limits.positionCap, 0)} USDG` : tr('Unavailable')}</b></span>
+                      <button onClick={() => setDialog({ type: 'sources', symbol: market.symbol })}>{tr('Why this mark?')} ↗</button>
                     </div>
-                    {market.status !== 'open' && <div className="term-session-notice">{market.blockers[0] ?? market.statusNote}</div>}
-                    {market.status === 'open' && market.blockers.length > 0 && <div className="term-session-notice">{market.blockers[0]}</div>}
+                    {market.status !== 'open' && <div className="term-session-notice">{tr(market.blockers[0] ?? market.statusNote)}</div>}
+                    {market.status === 'open' && market.blockers.length > 0 && <div className="term-session-notice">{tr(market.blockers[0])}</div>}
                     <Positions account={account} orders={orders} trades={trades} historyError={historyError} tab={bottomTab} setTab={setBottomTab} />
                   </section>
                   <Ticket market={market} account={account} orders={orders} />
                 </>
               ) : (
                 <section className="term-center term-center-empty">
-                  <div className="term-empty">{marketsQuery.isLoading ? 'Loading markets…' : apiDown ? 'The PlanktonOTC service is not answering.' : 'No markets are listed yet.'}<small>{apiDown ? 'Check that the API is running and the site points at it (see web/.env.example).' : 'Markets appear here as soon as they are enabled.'}</small></div>
+                  <div className="term-empty">{tr(marketsQuery.isLoading ? 'Loading markets…' : apiDown ? 'The PlanktonOTC service is not answering.' : 'No markets are listed yet.')}<small>{tr(apiDown ? 'Check that the API is running and the site points at it (see web/.env.example).' : 'Markets appear here as soon as they are enabled.')}</small></div>
                 </section>
               )}
             </main>
@@ -231,8 +235,8 @@ function TerminalApp() {
         <div className="term-view-shell" hidden={view !== 'Solvency'}><LedgerView health={health} /></div>
         <div className="term-view-shell" hidden={view !== 'Rewards'}><RewardsView /></div>
 
-        <footer className="term-footer"><span><i /> {status.tone === 'good' ? 'LIVE' : 'OFFLINE'}</span><p>$PLKT is live on Robinhood Chain. Synthetic perpetuals confer no share ownership.</p><div><a href="/docs?topic=risk">Risk</a><a href="/docs?topic=terms">Terms</a><a href="/">Back to PLANKTON ↗</a></div></footer>
-        {toast && <div className="term-toast" role="status"><span>✓</span>{toast}<button aria-label="Dismiss notification" onClick={() => setToast('')}>×</button></div>}
+        <footer className="term-footer"><span><i /> {tr(status.tone === 'good' ? 'LIVE' : 'OFFLINE')}</span><p>{tr('$PLKT is live on Robinhood Chain. Synthetic perpetuals confer no share ownership.')}</p><div><a href="/docs?topic=risk">{tr('Risk')}</a><a href="/docs?topic=terms">{tr('Terms')}</a><a href="/">{tr('Back to PLANKTON')} ↗</a></div></footer>
+        {toast && <div className="term-toast" role="status"><span>✓</span>{tr(toast)}<button aria-label={tr('Dismiss notification')} onClick={() => setToast('')}>×</button></div>}
 
         {dialog?.type === 'command' && <CommandMenu markets={markets} />}
         {dialog?.type === 'shortcuts' && <ShortcutsDialog />}

@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { DEFAULT_PRESETS, LIMITS, loadPresets, marginPercent, savePresets, sanitizePresets } from '../live/presets.js';
+import { useI18n } from '../i18n';
 
 /** The saved take-profit / stop-loss defaults. Kept in this browser; every change is saved at once. */
 export function usePresets() {
@@ -23,6 +24,7 @@ export function usePresets() {
  * which only reminds and re-applies; the ticket also edits.
  */
 export function PresetControls({ presets, update, reset, leverage, onApply, canEdit = true }) {
+  const { t: tr } = useI18n();
   const [open, setOpen] = useState(false);
   const [tp, setTp] = useState(String(presets.tpPct));
   const [sl, setSl] = useState(String(presets.slPct));
@@ -41,19 +43,19 @@ export function PresetControls({ presets, update, reset, leverage, onApply, canE
     <div className="term-presets">
       <div className="term-presets-row">
         <span>
-          Defaults: <b>TP +{presets.tpPct}%</b> · <b>SL −{presets.slPct}%</b>
-          {leverage ? <small> ≈ {marginPercent(presets.tpPct, leverage)}% / {marginPercent(presets.slPct, leverage)}% of margin at {leverage}×</small> : null}
+          {tr('Defaults:')} <b>{tr('TP')} +{presets.tpPct}%</b> · <b>{tr('SL')} −{presets.slPct}%</b>
+          {leverage ? <small> {tr('≈ {tp}% / {sl}% of margin at {lev}×', { tp: marginPercent(presets.tpPct, leverage), sl: marginPercent(presets.slPct, leverage), lev: leverage })}</small> : null}
         </span>
-        <button type="button" onClick={onApply}>Use defaults</button>
-        {canEdit && <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Done' : 'Edit defaults'}</button>}
+        <button type="button" onClick={onApply}>{tr('Use defaults')}</button>
+        {canEdit && <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? tr('Done') : tr('Edit defaults')}</button>}
       </div>
       {canEdit && open && (
         <div className="term-presets-edit">
-          <label>Take profit % <input type="number" inputMode="decimal" min={LIMITS.tpPct[0]} max={LIMITS.tpPct[1]} step="0.5" value={tp} onChange={(e) => setTp(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }} aria-label="Default take profit percent" /></label>
-          <label>Stop loss % <input type="number" inputMode="decimal" min={LIMITS.slPct[0]} max={LIMITS.slPct[1]} step="0.5" value={sl} onChange={(e) => setSl(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }} aria-label="Default stop loss percent" /></label>
-          <label className="term-checkbox"><input type="checkbox" checked={presets.auto} onChange={(e) => update({ auto: e.target.checked })} />Turn on TP / SL for every new market trade</label>
-          <button type="button" className="term-presets-reset" onClick={onReset}>Reset to defaults</button>
-          <p className="term-fineprint">Percent is the move in the price from your entry, not from your margin. Saved in this browser only.</p>
+          <label>{tr('Take profit %')} <input type="number" inputMode="decimal" min={LIMITS.tpPct[0]} max={LIMITS.tpPct[1]} step="0.5" value={tp} onChange={(e) => setTp(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }} aria-label={tr('Default take profit percent')} /></label>
+          <label>{tr('Stop loss %')} <input type="number" inputMode="decimal" min={LIMITS.slPct[0]} max={LIMITS.slPct[1]} step="0.5" value={sl} onChange={(e) => setSl(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }} aria-label={tr('Default stop loss percent')} /></label>
+          <label className="term-checkbox"><input type="checkbox" checked={presets.auto} onChange={(e) => update({ auto: e.target.checked })} />{tr('Turn on TP / SL for every new market trade')}</label>
+          <button type="button" className="term-presets-reset" onClick={onReset}>{tr('Reset to defaults')}</button>
+          <p className="term-fineprint">{tr('Percent is the move in the price from your entry, not from your margin. Saved in this browser only.')}</p>
         </div>
       )}
     </div>

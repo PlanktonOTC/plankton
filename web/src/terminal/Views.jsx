@@ -5,19 +5,22 @@ import { relativeTime } from '../live/model.js';
 import { counterDeposit, counterWithdraw } from '../live/trade.js';
 import { explorerAddress, explorerTx } from '../live/wagmi.js';
 import { big, formatUnits, money, parseUnits, parseUsdg, shortAddress, usdgNum } from '../live/units.js';
+import { useI18n } from '../i18n';
 
 const SHARE_DECIMALS = 9;
 const usd0 = (v) => `$${money(usdgNum(v), 0)}`;
 const usd2 = (v) => `$${money(usdgNum(v))}`;
 
 function Unavailable({ what, error }) {
-  return <div className="term-info-banner" role="status">{what} is unavailable right now{error?.status === 503 ? ': the exchange contracts are not reachable.' : '.'} It reloads on its own.</div>;
+  const { t: tr } = useI18n();
+  return <div className="term-info-banner" role="status">{tr(`${what} is unavailable right now${error?.status === 503 ? ': the exchange contracts are not reachable.' : '.'}`)} {tr('It reloads on its own.')}</div>;
 }
 
 // ---------------------------------------------------------------- the Counter
 
 export function CounterView({ account }) {
   const t = useTerminal();
+  const { t: tr } = useI18n();
   const counter = useCounter();
   const c = counter.data;
   const [action, setAction] = useState('Deposit');
@@ -50,45 +53,45 @@ export function CounterView({ account }) {
   return (
     <section className="term-secondary-view">
       <div className="term-view-title">
-        <div><p className="term-overline">THE COUNTER · LIQUIDITY POOL</p><h1>One pool. A visible risk budget.</h1><p>The Counter is the other side of every trade. Liquidity providers can lose capital. All figures below are read from the contracts.</p></div>
-        <span className={`term-small-badge ${c ? '' : 'is-off'}`}>{c ? 'LIVE' : counter.isError ? 'UNAVAILABLE' : 'LOADING'}</span>
+        <div><p className="term-overline">{tr('THE COUNTER · LIQUIDITY POOL')}</p><h1>{tr('One pool. A visible risk budget.')}</h1><p>{tr('The Counter is the other side of every trade. Liquidity providers can lose capital. All figures below are read from the contracts.')}</p></div>
+        <span className={`term-small-badge ${c ? '' : 'is-off'}`}>{tr(c ? 'LIVE' : counter.isError ? 'UNAVAILABLE' : 'LOADING')}</span>
       </div>
       {counter.isError && !c && <Unavailable what="The Counter" error={counter.error} />}
-      <div className="term-stat-grid">{stats.map(([label, value, note]) => <div key={label}><span>{label}</span><strong>{value}</strong><small>{note}</small></div>)}</div>
+      <div className="term-stat-grid">{stats.map(([label, value, note]) => <div key={label}><span>{tr(label)}</span><strong>{value}</strong><small>{tr(note)}</small></div>)}</div>
       <div className="term-counter-grid">
         <div className="term-large-panel">
-          <h2>The loss waterfall <span>01 → 05</span></h2>
-          <p>Each layer is used before the next. Counter LPs can lose capital.</p>
-          <div className="term-waterfall">{['Market bad-debt bucket', 'Backstop Fund', 'First-Loss tranche', 'Counter LPs', 'Affected-market auto-deleveraging'].map((label, i) => <div key={label}><span>0{i + 1}</span><strong>{label}</strong><i style={{ width: `${84 - i * 11}%` }} /></div>)}</div>
-          <div className="term-detail"><span>Withdrawal queue</span><b className={c?.deleveraging ? 'term-negative' : ''}>{!c ? '—' : c.deleveraging ? 'Deleveraging: opens stopped' : oldest > 0 ? `Oldest request waiting ${Math.round(oldest / 3600)}h` : 'No requests waiting'}</b></div>
-          <a className="term-text-link" href="/docs?topic=mechanics">Read the settlement mechanics ↗</a>
+          <h2>{tr('The loss waterfall')} <span>01 → 05</span></h2>
+          <p>{tr('Each layer is used before the next. Counter LPs can lose capital.')}</p>
+          <div className="term-waterfall">{['Market bad-debt bucket', 'Backstop Fund', 'First-Loss tranche', 'Counter LPs', 'Affected-market auto-deleveraging'].map((label, i) => <div key={label}><span>0{i + 1}</span><strong>{tr(label)}</strong><i style={{ width: `${84 - i * 11}%` }} /></div>)}</div>
+          <div className="term-detail"><span>{tr('Withdrawal queue')}</span><b className={c?.deleveraging ? 'term-negative' : ''}>{!c ? '—' : tr(c.deleveraging ? 'Deleveraging: opens stopped' : oldest > 0 ? `Oldest request waiting ${Math.round(oldest / 3600)}h` : 'No requests waiting')}</b></div>
+          <a className="term-text-link" href="/docs?topic=mechanics">{tr('Read the settlement mechanics')} ↗</a>
         </div>
         <form className="term-large-panel term-counter-form" onSubmit={request}>
-          <h2>{connected ? 'Provide or withdraw liquidity' : 'Connect to provide liquidity'}</h2>
-          <div className="term-switch">{['Deposit', 'Withdraw'].map((item) => <button key={item} type="button" aria-pressed={action === item} className={action === item ? 'active' : ''} onClick={() => { setAction(item); setError(''); }}>{item}</button>)}</div>
-          <label className="term-field">{action === 'Deposit' ? 'USDG amount' : 'Share amount'}
-            <div><input type="number" min="0" step="any" aria-label={action === 'Deposit' ? 'Deposit amount in USDG' : 'Withdraw amount in shares'} value={amount} onChange={(e) => setAmount(e.target.value)} required /><span>{action === 'Deposit' ? 'USDG' : 'SHARES'}</span></div>
+          <h2>{tr(connected ? 'Provide or withdraw liquidity' : 'Connect to provide liquidity')}</h2>
+          <div className="term-switch">{['Deposit', 'Withdraw'].map((item) => <button key={item} type="button" aria-pressed={action === item} className={action === item ? 'active' : ''} onClick={() => { setAction(item); setError(''); }}>{tr(item)}</button>)}</div>
+          <label className="term-field">{tr(action === 'Deposit' ? 'USDG amount' : 'Share amount')}
+            <div><input type="number" min="0" step="any" aria-label={tr(action === 'Deposit' ? 'Deposit amount in USDG' : 'Withdraw amount in shares')} value={amount} onChange={(e) => setAmount(e.target.value)} required /><span>{tr(action === 'Deposit' ? 'USDG' : 'SHARES')}</span></div>
           </label>
-          <div className="term-quick-values"><button type="button" disabled={!connected} onClick={() => setAmount(action === 'Deposit' ? String(Math.floor(account.wallet * 100) / 100) : formatUnits(account.shares, SHARE_DECIMALS, SHARE_DECIMALS))}>Max</button></div>
+          <div className="term-quick-values"><button type="button" disabled={!connected} onClick={() => setAmount(action === 'Deposit' ? String(Math.floor(account.wallet * 100) / 100) : formatUnits(account.shares, SHARE_DECIMALS, SHARE_DECIMALS))}>{tr('Max')}</button></div>
           <p className="term-fineprint">
-            {connected ? `Wallet: ${money(account.wallet)} USDG · Your shares: ${formatUnits(account.shares, SHARE_DECIMALS, 4)} (about ${money(account.sharesValue)} USDG).` : 'Connect a wallet to see your balance.'}{' '}
-            {action === 'Deposit'
+            {tr(connected ? `Wallet: ${money(account.wallet)} USDG · Your shares: ${formatUnits(account.shares, SHARE_DECIMALS, 4)} (about ${money(account.sharesValue)} USDG).` : 'Connect a wallet to see your balance.')}{' '}
+            {tr(action === 'Deposit'
               ? 'USDG is escrowed when you submit. Shares are minted on settlement, usually after the next mark, at the less favorable of the request and settlement prices. If the Counter has no open positions, it can settle sooner.'
-              : 'Shares are queued when you submit. Withdrawals settle after the next mark, or sooner if the Counter has no open positions. Cash shortages are filled pro rata.'}
+              : 'Shares are queued when you submit. Withdrawals settle after the next mark, or sooner if the Counter has no open positions. Cash shortages are filled pro rata.')}
           </p>
-          {error && <p role="alert" className="term-form-error">{error}</p>}
+          {error && <p role="alert" className="term-form-error">{tr(error)}</p>}
           <TxProgress step={t.trader.step} hash={t.trader.hash} />
-          <button className="term-primary" type="submit" disabled={t.trader.busy}>{connected ? `Request ${action.toLowerCase()}` : 'Connect wallet'} <Arrow /></button>
-          <p className="term-fineprint">After 72 hours, an unfilled withdrawal triggers deleveraging; it is not a guaranteed payout time. Your capital backs every trader's winnings.</p>
+          <button className="term-primary" type="submit" disabled={t.trader.busy}>{tr(connected ? `Request ${action.toLowerCase()}` : 'Connect wallet')} <Arrow /></button>
+          <p className="term-fineprint">{tr("After 72 hours, an unfilled withdrawal triggers deleveraging; it is not a guaranteed payout time. Your capital backs every trader's winnings.")}</p>
         </form>
       </div>
       <div className="term-large-panel">
-        <h2>Your requests <span>{requests.length} THIS SESSION</span></h2>
+        <h2>{tr('Your requests')} <span>{tr('{n} THIS SESSION', { n: requests.length })}</span></h2>
         {requests.length ? (
-          <div className="term-table-wrap"><table><thead><tr><th>Request</th><th>Amount</th><th>Status</th><th>When</th></tr></thead><tbody>
-            {requests.map((r) => <tr key={r.id}><td>{r.action}</td><td>{r.text}</td><td>{r.hash ? <a className="term-table-tag" href={explorerTx(r.hash)} target="_blank" rel="noreferrer">Submitted · pending next mark ↗</a> : 'Submitted'}</td><td>{relativeTime(r.at)}</td></tr>)}
+          <div className="term-table-wrap"><table><thead><tr><th>{tr('Request')}</th><th>{tr('Amount')}</th><th>{tr('Status')}</th><th>{tr('When')}</th></tr></thead><tbody>
+            {requests.map((r) => <tr key={r.id}><td>{tr(r.action)}</td><td>{tr(r.text)}</td><td>{r.hash ? <a className="term-table-tag" href={explorerTx(r.hash)} target="_blank" rel="noreferrer">{tr('Submitted · pending next mark')} ↗</a> : tr('Submitted')}</td><td>{tr(relativeTime(r.at))}</td></tr>)}
           </tbody></table></div>
-        ) : <div className="term-empty">Requests you make appear here.<small>Two-step settlement keeps the request separate from the mark; your share balance updates when it settles.</small></div>}
+        ) : <div className="term-empty">{tr('Requests you make appear here.')}<small>{tr('Two-step settlement keeps the request separate from the mark; your share balance updates when it settles.')}</small></div>}
       </div>
     </section>
   );
@@ -98,6 +101,7 @@ export function CounterView({ account }) {
 
 export function TapeView({ markets, alerts, removeAlert, favorites, toggleFavorite }) {
   const t = useTerminal();
+  const { t: tr } = useI18n();
   const [filter, setFilter] = useState('All');
   const events = markets.flatMap((m) => {
     const list = [];
@@ -117,34 +121,34 @@ export function TapeView({ markets, alerts, removeAlert, favorites, toggleFavori
   return (
     <section className="term-secondary-view">
       <div className="term-view-title">
-        <div><p className="term-overline">MARKET CONDITIONS</p><h1>Keep an eye on the Tape.</h1><p>The state of every market right now, and price alerts that run in this browser.</p></div>
-        <button className="term-primary term-auto" onClick={() => t.setDialog({ type: 'alert' })}>Create price alert <Arrow /></button>
+        <div><p className="term-overline">{tr('MARKET CONDITIONS')}</p><h1>{tr('Keep an eye on the Tape.')}</h1><p>{tr('The state of every market right now, and price alerts that run in this browser.')}</p></div>
+        <button className="term-primary term-auto" onClick={() => t.setDialog({ type: 'alert' })}>{tr('Create price alert')} <Arrow /></button>
       </div>
       <div className="term-tape-grid">
         <div className="term-large-panel">
-          <div className="term-inline-tabs">{['All', 'Halt', 'Session', 'Limit', 'Feed'].map((item) => <button key={item} className={filter === item ? 'active' : ''} aria-pressed={filter === item} onClick={() => setFilter(item)}>{item}</button>)}</div>
+          <div className="term-inline-tabs">{['All', 'Halt', 'Session', 'Limit', 'Feed'].map((item) => <button key={item} className={filter === item ? 'active' : ''} aria-pressed={filter === item} onClick={() => setFilter(item)}>{tr(item, null, 'tape')}</button>)}</div>
           {shown.map((event, i) => (
             <article className="term-tape-event" key={`${event.symbol}-${i}`}>
               <div>
                 <span className="term-symbol-square">{event.symbol.slice(0, 1)}</span>
-                <div><strong>{event.symbol}</strong><small>{event.type} · LIVE</small></div>
-                <button className="term-icon-btn" aria-label={`${favorites.includes(event.symbol) ? 'Remove' : 'Add'} ${event.symbol} ${favorites.includes(event.symbol) ? 'from' : 'to'} watchlist`} aria-pressed={favorites.includes(event.symbol)} onClick={() => toggleFavorite(event.symbol)}>{favorites.includes(event.symbol) ? '★' : '☆'}</button>
+                <div><strong>{event.symbol}</strong><small>{tr(event.type, null, 'tape')} · {tr('LIVE')}</small></div>
+                <button className="term-icon-btn" aria-label={tr(`${favorites.includes(event.symbol) ? 'Remove' : 'Add'} ${event.symbol} ${favorites.includes(event.symbol) ? 'from' : 'to'} watchlist`)} aria-pressed={favorites.includes(event.symbol)} onClick={() => toggleFavorite(event.symbol)}>{favorites.includes(event.symbol) ? '★' : '☆'}</button>
               </div>
-              <h3>{event.title}</h3>
-              <p>{event.body}</p>
-              <a href={`https://www.sec.gov/edgar/search/#/q=${encodeURIComponent(event.symbol)}`} target="_blank" rel="noreferrer">Search SEC EDGAR for {event.name} <Arrow /></a>
+              <h3>{tr(event.title)}</h3>
+              <p>{tr(event.body)}</p>
+              <a href={`https://www.sec.gov/edgar/search/#/q=${encodeURIComponent(event.symbol)}`} target="_blank" rel="noreferrer">{tr('Search SEC EDGAR for {name}', { name: event.name })} <Arrow /></a>
             </article>
           ))}
-          {!shown.length && <div className="term-empty">Nothing in this category right now.</div>}
+          {!shown.length && <div className="term-empty">{tr('Nothing in this category right now.')}</div>}
         </div>
         <aside className="term-large-panel">
-          <h2>Your price alerts <span>{alerts.length}</span></h2>
-          <p>Stored in this browser. They fire while this page is open; they do not send email, Telegram or webhook messages.</p>
+          <h2>{tr('Your price alerts')} <span>{alerts.length}</span></h2>
+          <p>{tr('Stored in this browser. They fire while this page is open; they do not send email, Telegram or webhook messages.')}</p>
           {alerts.length ? alerts.map((a) => (
-            <div className="term-saved-alert" key={a.id}><strong>{a.symbol}</strong><span>Price {a.direction.toLowerCase()} ${money(a.price)}</span><button className="term-mini-btn" onClick={() => removeAlert(a.id)}>Remove</button></div>
-          )) : <div className="term-empty">No alert rules yet.<small>Create a price rule to be told when a market crosses it.</small></div>}
-          <button className="term-secondary" onClick={() => t.setDialog({ type: 'alert' })}>Add a rule +</button>
-          <div className="term-watchlist"><h3>Watchlist</h3>{favorites.map((symbol) => <span key={symbol}>{symbol}</span>)}{!favorites.length && <small>Star a market to keep it here.</small>}</div>
+            <div className="term-saved-alert" key={a.id}><strong>{a.symbol}</strong><span>{tr('Price {dir} ${price}', { dir: tr(a.direction.toLowerCase()), price: money(a.price) })}</span><button className="term-mini-btn" onClick={() => removeAlert(a.id)}>{tr('Remove')}</button></div>
+          )) : <div className="term-empty">{tr('No alert rules yet.')}<small>{tr('Create a price rule to be told when a market crosses it.')}</small></div>}
+          <button className="term-secondary" onClick={() => t.setDialog({ type: 'alert' })}>{tr('Add a rule')} +</button>
+          <div className="term-watchlist"><h3>{tr('Watchlist')}</h3>{favorites.map((symbol) => <span key={symbol}>{symbol}</span>)}{!favorites.length && <small>{tr('Star a market to keep it here.')}</small>}</div>
         </aside>
       </div>
     </section>
@@ -154,6 +158,7 @@ export function TapeView({ markets, alerts, removeAlert, favorites, toggleFavori
 // ---------------------------------------------------------------- the Ledger
 
 export function LedgerView({ health }) {
+  const { t: tr } = useI18n();
   const ledger = useLedger();
   const l = ledger.data;
   const rows = l?.markets ?? [];
@@ -169,37 +174,37 @@ export function LedgerView({ health }) {
   return (
     <section className="term-secondary-view">
       <div className="term-view-title">
-        <div><p className="term-overline">COUNTER HEALTH</p><h1>Live solvency.</h1><p>Pool value, open interest, backstop, and reserves from Robinhood Chain contract reads. Refreshes every 15 seconds.</p></div>
-        <span className={`term-small-badge ${l ? '' : 'is-off'}`}>{l ? 'LIVE · 15S' : ledger.isError ? 'UNAVAILABLE' : 'LOADING'}</span>
+        <div><p className="term-overline">{tr('COUNTER HEALTH')}</p><h1>{tr('Live solvency.')}</h1><p>{tr('Pool value, open interest, backstop, and reserves from Robinhood Chain contract reads. Refreshes every 15 seconds.')}</p></div>
+        <span className={`term-small-badge ${l ? '' : 'is-off'}`}>{tr(l ? 'LIVE · 15S' : ledger.isError ? 'UNAVAILABLE' : 'LOADING')}</span>
       </div>
       {ledger.isError && !l && <Unavailable what="The ledger" error={ledger.error} />}
-      <div className="term-stat-grid">{stats.map(([label, value, note]) => <div key={label}><span>{label}</span><strong>{value}</strong><small>{note}</small></div>)}</div>
+      <div className="term-stat-grid">{stats.map(([label, value, note]) => <div key={label}><span>{tr(label)}</span><strong>{value}</strong><small>{tr(note)}</small></div>)}</div>
       <div className="term-counter-grid">
         <div className="term-large-panel">
-          <h2>Backstop and reserves</h2>
+          <h2>{tr('Backstop and reserves')}</h2>
           {l ? <>
-            <div className="term-detail"><span>Backstop balance / target</span><b>{usd0(l.counter.backstopUsdg)} / {usd0(l.counter.backstopTargetUsdg)}</b></div>
-            {backstopCoverage !== null && <div className="term-detail"><span>Backstop target filled</span><b>{Math.min(backstopCoverage, 100).toFixed(1)}%</b></div>}
-            <div className="term-detail"><span>Counter reserve</span><b>{usd0(l.counter.reserveUsdg)}</b></div>
-            <div className="term-detail"><span>First-loss balance</span><b>{usd0(l.counter.firstLossUsdg)}</b></div>
-            <div className="term-detail"><span>Deferred withdrawal claims</span><b>{usd0(l.counter.deferredOutstandingUsdg)}</b></div>
-            <div className="term-detail"><span>Bad debt outstanding</span><b className={big(l.counter.totalBadDebtUsdg) > 0n ? 'term-negative' : ''}>{usd0(l.counter.totalBadDebtUsdg)}</b></div>
-          </> : <div className="term-empty">Waiting for the contracts.</div>}
-          <h2 style={{ marginTop: 22 }}>25% gap scenario</h2>
-          <p>Illustrative loss if markets move 25% against net exposure at once. This is a scenario estimate, not a guarantee.</p>
+            <div className="term-detail"><span>{tr('Backstop balance / target')}</span><b>{usd0(l.counter.backstopUsdg)} / {usd0(l.counter.backstopTargetUsdg)}</b></div>
+            {backstopCoverage !== null && <div className="term-detail"><span>{tr('Backstop target filled')}</span><b>{Math.min(backstopCoverage, 100).toFixed(1)}%</b></div>}
+            <div className="term-detail"><span>{tr('Counter reserve')}</span><b>{usd0(l.counter.reserveUsdg)}</b></div>
+            <div className="term-detail"><span>{tr('First-loss balance')}</span><b>{usd0(l.counter.firstLossUsdg)}</b></div>
+            <div className="term-detail"><span>{tr('Deferred withdrawal claims')}</span><b>{usd0(l.counter.deferredOutstandingUsdg)}</b></div>
+            <div className="term-detail"><span>{tr('Bad debt outstanding')}</span><b className={big(l.counter.totalBadDebtUsdg) > 0n ? 'term-negative' : ''}>{usd0(l.counter.totalBadDebtUsdg)}</b></div>
+          </> : <div className="term-empty">{tr('Waiting for the contracts.')}</div>}
+          <h2 style={{ marginTop: 22 }}>{tr('25% gap scenario')}</h2>
+          <p>{tr('Illustrative loss if markets move 25% against net exposure at once. This is a scenario estimate, not a guarantee.')}</p>
           {l && <>
-            <div className="term-detail"><span>Estimated loss</span><b className={stressLoss > 0n ? 'term-negative' : ''}>{usd0(stressLoss)}</b></div>
-            <div className="term-detail"><span>Estimated NAV after loss</span><b>{usd0(stress)}</b></div>
+            <div className="term-detail"><span>{tr('Estimated loss')}</span><b className={stressLoss > 0n ? 'term-negative' : ''}>{usd0(stressLoss)}</b></div>
+            <div className="term-detail"><span>{tr('Estimated NAV after loss')}</span><b>{usd0(stress)}</b></div>
           </>}
         </div>
         <div className="term-large-panel">
-          <h2>Open positions by market</h2>
-          {rows.length ? <div className="term-table-wrap"><table><thead><tr><th>Market</th><th>Long / short OI</th><th>Room long / short</th><th>Bad debt</th></tr></thead><tbody>
+          <h2>{tr('Open positions by market')}</h2>
+          {rows.length ? <div className="term-table-wrap"><table><thead><tr><th>{tr('Market')}</th><th>{tr('Long / short OI')}</th><th>{tr('Room long / short')}</th><th>{tr('Bad debt')}</th></tr></thead><tbody>
             {rows.map((r) => <tr key={r.symbol}><td><strong>{r.symbol}</strong></td><td>{usd0(r.longOiUsdg)}<small>{usd0(r.shortOiUsdg)}</small></td><td>{usd0(r.longRoomUsdg)}<small>{usd0(r.shortRoomUsdg)}</small></td><td>{usd0(r.badDebtUsdg)}</td></tr>)}
-          </tbody></table></div> : <div className="term-empty">No market data yet.</div>}
-          <h2 style={{ marginTop: 22 }}>Service health</h2>
-          {health.map(([label, ok, note]) => <div className="term-detail" key={label}><span>{label}</span><b className={ok ? 'term-positive' : 'term-negative'}>{ok ? 'Connected' : note ?? 'Not connected'}</b></div>)}
-          <a href="/docs?topic=security" className="term-text-link">Read the security model ↗</a>
+          </tbody></table></div> : <div className="term-empty">{tr('No market data yet.')}</div>}
+          <h2 style={{ marginTop: 22 }}>{tr('Service health')}</h2>
+          {health.map(([label, ok, note]) => <div className="term-detail" key={label}><span>{tr(label)}</span><b className={ok ? 'term-positive' : 'term-negative'}>{tr(ok ? 'Connected' : note ?? 'Not connected')}</b></div>)}
+          <a href="/docs?topic=security" className="term-text-link">{tr('Read the security model')} ↗</a>
         </div>
       </div>
     </section>
@@ -209,6 +214,8 @@ export function LedgerView({ health }) {
 // ---------------------------------------------------------------- the public weekly leaderboard
 
 export function LeaderboardView({ active = true }) {
+  const { t: tr, lang } = useI18n();
+  const locale = lang === 'zh-CN' ? 'zh-CN' : 'en';
   const query = useLeaderboard(active);
   const data = query.data;
   const rows = data?.rows ?? [];
@@ -216,21 +223,21 @@ export function LeaderboardView({ active = true }) {
     const amount = big(value);
     return `${amount < 0n ? '−' : '+'}$${formatUnits(amount < 0n ? -amount : amount, 6, 2)}`;
   };
-  const date = (value) => new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(value));
+  const date = (value) => new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(value));
   return (
     <section className="term-secondary-view">
       <div className="term-view-title">
-        <div><p className="term-overline">PUBLIC ACTIVITY</p><h1>Weekly leaderboard.</h1><p>Wallets ranked by realized P&amp;L after recorded trade fees during the current UTC week.</p></div>
-        <span className={`term-small-badge ${data ? '' : 'is-off'}`}>{data ? 'LIVE · 30S' : query.isError ? 'UNAVAILABLE' : 'LOADING'}</span>
+        <div><p className="term-overline">{tr('PUBLIC ACTIVITY')}</p><h1>{tr('Weekly leaderboard.')}</h1><p>{tr('Wallets ranked by realized P&L after recorded trade fees during the current UTC week.')}</p></div>
+        <span className={`term-small-badge ${data ? '' : 'is-off'}`}>{tr(data ? 'LIVE · 30S' : query.isError ? 'UNAVAILABLE' : 'LOADING')}</span>
       </div>
       {query.isError && !data && <Unavailable what="The leaderboard" error={query.error} />}
-      {data && <div className="term-leaderboard-period"><strong>UTC WEEK</strong><span>{date(data.startsAt)} – {date(new Date(new Date(data.endsAt).getTime() - 1))}</span><small>Updated {new Date(data.generatedAt).toLocaleTimeString('en', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}</small></div>}
+      {data && <div className="term-leaderboard-period"><strong>{tr('UTC WEEK')}</strong><span>{date(data.startsAt)} – {date(new Date(new Date(data.endsAt).getTime() - 1))}</span><small>{tr('Updated {time}', { time: new Date(data.generatedAt).toLocaleTimeString(locale, { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' }) })}</small></div>}
       <div className="term-large-panel term-leaderboard-panel">
-        <h2>Top traders <span>{rows.length}</span></h2>
-        <p>Net realized P&amp;L is realized P&amp;L minus recorded trade fees. Open-position P&amp;L and borrow are excluded. This board has no prizes.</p>
-        {rows.length ? <div className="term-table-wrap"><table><thead><tr><th>Rank</th><th>Wallet</th><th>Net realized</th><th>Realized P&amp;L</th><th>Fees</th><th>Fills</th></tr></thead><tbody>
+        <h2>{tr('Top traders')} <span>{rows.length}</span></h2>
+        <p>{tr('Net realized P&L is realized P&L minus recorded trade fees. Open-position P&L and borrow are excluded. This board has no prizes.')}</p>
+        {rows.length ? <div className="term-table-wrap"><table><thead><tr><th>{tr('Rank')}</th><th>{tr('Wallet')}</th><th>{tr('Net realized')}</th><th>{tr('Realized P&L')}</th><th>{tr('Fees')}</th><th>{tr('Fills')}</th></tr></thead><tbody>
           {rows.map((row) => <tr key={row.trader}><td><strong>#{row.rank}</strong></td><td><a className="term-leaderboard-wallet" href={explorerAddress(row.trader)} target="_blank" rel="noreferrer">{shortAddress(row.trader)} ↗</a></td><td className={big(row.netPnlUsdg) > 0n ? 'term-positive' : big(row.netPnlUsdg) < 0n ? 'term-negative' : ''}><strong>{formatPnl(row.netPnlUsdg)}</strong></td><td>{formatPnl(row.realizedPnlUsdg)}</td><td>${formatUnits(big(row.feesUsdg), 6, 2)}</td><td>{row.fills}</td></tr>)}
-        </tbody></table></div> : <div className="term-empty">No indexed fills this UTC week yet.<small>Rankings refresh automatically as the indexer records trades.</small></div>}
+        </tbody></table></div> : <div className="term-empty">{tr('No indexed fills this UTC week yet.')}<small>{tr('Rankings refresh automatically as the indexer records trades.')}</small></div>}
       </div>
     </section>
   );
@@ -239,22 +246,23 @@ export function LeaderboardView({ active = true }) {
 // ---------------------------------------------------------------- Rewards (planned, not live)
 
 export function RewardsView() {
+  const { t: tr } = useI18n();
   const [tab, setTab] = useState('Pennies');
   return (
     <section className="term-secondary-view">
-      <div className="term-view-title"><div><p className="term-overline">PLKT IS LIVE. PENNIES ARE NOT.</p><h1>Participation with published rules.</h1><p>Pennies and the Penny Cup are planned features. They are not live: no points are issued and no competition is open.</p></div><span className="term-small-badge">PLANNED</span></div>
-      <div className="term-inline-tabs">{['Pennies', 'Penny Cup'].map((item) => <button key={item} aria-pressed={tab === item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item}</button>)}</div>
+      <div className="term-view-title"><div><p className="term-overline">{tr('PLKT IS LIVE. PENNIES ARE NOT.')}</p><h1>{tr('Participation with published rules.')}</h1><p>{tr('Pennies and the Penny Cup are planned features. They are not live: no points are issued and no competition is open.')}</p></div><span className="term-small-badge">{tr('PLANNED')}</span></div>
+      <div className="term-inline-tabs">{['Pennies', 'Penny Cup'].map((item) => <button key={item} aria-pressed={tab === item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{tr(item)}</button>)}</div>
       <div className="term-counter-grid term-rewards-grid">
         <div className="term-large-panel">
-          <h2>{tab === 'Pennies' ? 'Points follow participation.' : 'A weekly trading competition.'}</h2>
-          <p>{tab === 'Pennies' ? 'The plan weights fees paid, Cup results and referrals that actually trade. Raw volume alone counts for zero.' : 'The planned leaderboard ranks PnL as a percentage of the maximum margin used. At least $25 in fees during the week is required to qualify.'}</p>
-          {(tab === 'Pennies' ? [['Transferability', 'Non-transferable'], ['Round trips under 60 seconds', 'Excluded'], ['Linked funding sources', 'Clustered'], ['Weekly totals', 'Merkle root with challenge window'], ['Token entitlement', 'None']] : [['Rank basis', 'PnL% / maximum margin used'], ['Minimum weekly fees', '$25'], ['Average holding time', 'At least 1 hour'], ['Linked opposite-side trades', 'Excluded'], ['Prizes', 'USDG; amount published before a round']]).map(([label, value]) => <div className="term-detail" key={label}><span>{label}</span><b>{value}</b></div>)}
+          <h2>{tr(tab === 'Pennies' ? 'Points follow participation.' : 'A weekly trading competition.')}</h2>
+          <p>{tr(tab === 'Pennies' ? 'The plan weights fees paid, Cup results and referrals that actually trade. Raw volume alone counts for zero.' : 'The planned leaderboard ranks PnL as a percentage of the maximum margin used. At least $25 in fees during the week is required to qualify.')}</p>
+          {(tab === 'Pennies' ? [['Transferability', 'Non-transferable'], ['Round trips under 60 seconds', 'Excluded'], ['Linked funding sources', 'Clustered'], ['Weekly totals', 'Merkle root with challenge window'], ['Token entitlement', 'None']] : [['Rank basis', 'PnL% / maximum margin used'], ['Minimum weekly fees', '$25'], ['Average holding time', 'At least 1 hour'], ['Linked opposite-side trades', 'Excluded'], ['Prizes', 'USDG; amount published before a round']]).map(([label, value]) => <div className="term-detail" key={label}><span>{tr(label)}</span><b>{tr(value)}</b></div>)}
         </div>
         <div className="term-large-panel">
-          <h2>{tab === 'Pennies' ? 'No points balance.' : 'No live round is open.'}</h2>
-          <div className="term-empty"><strong className="term-reward-number">—</strong><small>{tab === 'Pennies' ? 'A verified account and points indexer are required.' : 'The leaderboard requires indexed, verified trades.'}</small></div>
-          <p>$PLKT is live. Pennies are a separate planned points feature and are not currently active.</p>
-          <a className="term-text-link" href="/#roadmap">Read the dated roadmap ↗</a>
+          <h2>{tr(tab === 'Pennies' ? 'No points balance.' : 'No live round is open.')}</h2>
+          <div className="term-empty"><strong className="term-reward-number">—</strong><small>{tr(tab === 'Pennies' ? 'A verified account and points indexer are required.' : 'The leaderboard requires indexed, verified trades.')}</small></div>
+          <p>{tr('$PLKT is live. Pennies are a separate planned points feature and are not currently active.')}</p>
+          <a className="term-text-link" href="/#roadmap">{tr('Read the dated roadmap')} ↗</a>
         </div>
       </div>
     </section>

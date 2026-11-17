@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { STEP_TEXT } from '../live/useTrader.js';
 import { explorerTx } from '../live/wagmi.js';
+import { useI18n } from '../i18n';
 
 /** Everything the terminal's panels share: live data, the wallet, and the action runner. Set up in Dashboard.jsx. */
 export const Terminal = createContext(null);
@@ -11,6 +12,7 @@ export function Arrow({ down = false }) {
 }
 
 export function Modal({ title, children, onClose, busy = false }) {
+  const { t: tr } = useI18n();
   const dialog = useRef(null);
   useEffect(() => {
     const previous = document.activeElement;
@@ -37,7 +39,7 @@ export function Modal({ title, children, onClose, busy = false }) {
     >
       <div className="term-modal-heading">
         <h2>{title}</h2>
-        <button className="term-icon-btn" aria-label="Close dialog" disabled={busy} onClick={onClose}>×</button>
+        <button className="term-icon-btn" aria-label={tr('Close dialog')} disabled={busy} onClick={onClose}>×</button>
       </div>
       {children}
     </dialog>
@@ -46,12 +48,13 @@ export function Modal({ title, children, onClose, busy = false }) {
 
 /** Progress of a wallet action: what the wallet or network is being waited on, with a link once there is a transaction. */
 export function TxProgress({ step, hash }) {
+  const { t: tr } = useI18n();
   if (!step) return null;
   return (
     <p className="term-tx-progress" role="status" aria-live="polite">
       <i aria-hidden="true" />
-      {STEP_TEXT[step] ?? (step.startsWith('ladder:') ? `Sign ladder order ${step.slice(7).replace('/', ' of ')} in your wallet (no gas)…` : 'Working…')}
-      {hash ? <> <a href={explorerTx(hash)} target="_blank" rel="noreferrer">View transaction <Arrow /></a></> : null}
+      {tr(STEP_TEXT[step] ?? (step.startsWith('ladder:') ? `Sign ladder order ${step.slice(7).replace('/', ' of ')} in your wallet (no gas)…` : 'Working…'))}
+      {hash ? <> <a href={explorerTx(hash)} target="_blank" rel="noreferrer">{tr('View transaction')} <Arrow /></a></> : null}
     </p>
   );
 }

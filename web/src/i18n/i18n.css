@@ -1,0 +1,38 @@
+/* Language switch (inside the light navigation pill) */
+.lang-switch{display:inline-flex;border:1px solid #20222233;border-radius:50px;overflow:hidden;flex:0 0 auto}
+.lang-switch button{background:transparent;border:0;color:#202222;font:inherit;font-size:12px;line-height:1;padding:8px 11px;cursor:pointer;white-space:nowrap}
+.lang-switch button[aria-pressed="true"]{background:#202222;color:#f6f6f4}
+.lang-switch button:not([aria-pressed="true"]):hover{background:#2022220f}
+.mobile-nav .lang-switch{align-self:flex-start;margin:12px 0 4px}
+@media(max-width:760px){.nav-shell>.lang-switch{display:none}}
+@media(min-width:761px){.mobile-nav .lang-switch{display:none}}
+
+/* One-time offer for browsers set to Chinese */
+.lang-offer{position:fixed;left:16px;bottom:16px;z-index:60;display:flex;align-items:center;gap:10px;padding:10px 12px 10px 16px;border-radius:50px;background:#e8eae5ee;color:#202222;font-size:13px;box-shadow:0 8px 30px #0005}
+.lang-offer button{border:0;border-radius:50px;background:#202222;color:#f6f6f4;font:inherit;font-size:12px;padding:7px 13px;cursor:pointer}
+.lang-offer .lang-offer-close{background:transparent;color:#202222;font-size:18px;padding:2px 8px}
+
+/* Chinese: Geist has no Chinese glyphs, so name good system Chinese fonts, and avoid the thin headline weights and tight
+   letter-spacing that suit Latin type but make Chinese hard to read. */
+html:lang(zh-CN){--font-sans:Geist,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC","Source Han Sans SC",Arial,sans-serif}
+html:lang(zh-CN) .marketing :is(h1,h2,h3,h4,.hero-copy h1,.story-step h2,.arrival h2,.statement,.studio-opening h2,.studio-summary h3,.roadmap-intro h2,.case-study h2,.reach h2,.faq h2,.closing h2,.doc-article h1){font-weight:400;letter-spacing:0}
+html:lang(zh-CN) .marketing .identity-line{font-weight:300}
+html:lang(zh-CN) .marketing :is(p,li,button,a,span,small,label){letter-spacing:0}
+html:lang(zh-CN) .marketing :is(p,li){line-break:strict;word-break:normal;overflow-wrap:anywhere}
+html:lang(zh-CN) .marketing :is(.eyebrow,.tiny-label,.feature-info-tag,.roadmap-status,.hero-status,.art-note){letter-spacing:.04em}
+
+/* Language switch inside the dark terminal navigation */
+.lang-switch--terminal{border-color:#ffffff30}
+.lang-switch--terminal button{color:#c9d3cd;padding:6px 9px;font-size:11px}
+.lang-switch--terminal button[aria-pressed="true"]{background:#e4eae6;color:#101112}
+.lang-switch--terminal button:not([aria-pressed="true"]):hover{background:#ffffff14}
+.term-workspace-controls .lang-switch--terminal{margin-right:6px}
+/* On a phone the controls row is full, so the switch moves into the navigation row instead */
+.lang-switch--nav{display:none}
+@media(max-width:760px){.term-workspace-controls .lang-switch--terminal{display:none}.term-nav nav .lang-switch--nav{display:inline-flex;margin-left:14px;align-self:center;flex:0 0 auto}}
+
+/* Documentation pages in Chinese */
+html:lang(zh-CN) .plankton-docs :is(h1,h2,h3,.doc-article h1){letter-spacing:0;font-weight:400}
+html:lang(zh-CN) .plankton-docs .doc-article h1{line-height:1.25}
+html:lang(zh-CN) .plankton-docs :is(p,li,dd,dt){letter-spacing:0;line-break:strict;overflow-wrap:anywhere}
+.doc-translation-note{margin:-30px 0 26px;padding:10px 14px;border:1px solid #ffffff1c;border-radius:8px;background:#ffffff05;color:#a7afb6;font-size:12px;line-height:1.6}

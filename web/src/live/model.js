@@ -153,6 +153,8 @@ export function orderView(o) {
     margin: usdgNum(body.marginUsdg ?? 0),
     quantity: protective ? null : Math.abs(e18Num(sizeDelta)),
     expiresAt: new Date(o.expiry).getTime(),
+    // When a scheduled order (a TWAP slice) becomes valid; null when the API row carries no start time.
+    startsAt: o.validAfter ? new Date(o.validAfter).getTime() : null,
     status: o.status,
   };
 }
