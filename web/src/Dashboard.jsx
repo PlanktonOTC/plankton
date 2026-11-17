@@ -8,6 +8,7 @@ import { compact, money, priceDigits, shortAddress, signed } from './live/units.
 import { PRIVY_APP_ID } from './live/env.js';
 import { Arrow, Terminal, useStored } from './terminal/shared.jsx';
 import Chart from './terminal/Chart.jsx';
+import MarketIntel from './terminal/MarketIntel.jsx';
 import Positions from './terminal/Positions.jsx';
 import Ticket from './terminal/Ticket.jsx';
 import { CounterView, HeatmapView, LeaderboardView, LedgerView, RewardsView, TapeView } from './terminal/Views.jsx';
@@ -18,6 +19,7 @@ import { LangSwitch, useI18n } from './i18n';
 import './dashboard.css';
 import './supporting-metal.css';
 import './terminal/live.css';
+import './terminal/market-intel.css';
 
 const VIEWS = { counter: 'Counter', tape: 'Tape', ledger: 'Solvency', solvency: 'Solvency', leaderboard: 'Leaderboard', rewards: 'Rewards', referrals: 'Referrals', heatmap: 'Heatmap' };
 const params = () => new URLSearchParams(window.location.search);
@@ -214,6 +216,7 @@ function TerminalApp() {
                       <span className={`term-state-badge state-${market.status}`}><i />{tr(market.statusLabel)}</span>
                     </div>
                     <Chart market={market} position={selectedPosition} orders={orders} />
+                    <MarketIntel symbol={market.symbol} active={view === 'Trade'} />
                     <div className="term-source-bar">
                       <span><i className={market.status === 'open' || market.status === 'extended' ? 'good' : 'muted'} />{market.status === 'open' || market.status === 'extended' ? tr(market.sources.length > 1 ? 'Two-source mark' : 'Robinhood-quote mark') : tr('{state} mark', { state: tr(market.statusLabel) })}{market.dispersionBps !== null && market.sources.length > 1 ? ` · ${tr('{bps} bps apart', { bps: market.dispersionBps })}` : ''}</span>
                       <span>{tr('Spread')} <b>{market.limits ? `${market.limits.openSpreadBps} bps` : '—'}</b></span>
