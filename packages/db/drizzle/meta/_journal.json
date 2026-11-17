@@ -15,6 +15,13 @@
       "when": 1794869156077,
       "tag": "0001_shiny_nomad",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794907137233,
+      "tag": "0002_counter_analytics",
+      "breakpoints": true
     }
   ]
 }

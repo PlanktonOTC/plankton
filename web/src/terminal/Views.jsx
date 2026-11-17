@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { parseEventLogs, zeroAddress } from 'viem';
 import { usePublicClient, useReadContract } from 'wagmi';
 import { Arrow, TxProgress, useStored, useTerminal } from './shared.jsx';
-import { useCounter, useLedger, useLeaderboard } from '../live/queries.js';
+import { useCounter, useCounterHistory, useLedger, useLeaderboard } from '../live/queries.js';
 import { relativeTime } from '../live/model.js';
 import { counterDeposit, counterWithdraw } from '../live/trade.js';
 import { vaultAbi } from '../live/abis.js';
@@ -13,6 +13,39 @@ import { useI18n } from '../i18n';
 const SHARE_DECIMALS = 9;
 const usd0 = (v) => `$${money(usdgNum(v), 0)}`;
 const usd2 = (v) => `$${money(usdgNum(v))}`;
+
+function CounterNavChart({ snapshots, currentAt, currentNavPerShareE18, tr }) {
+  const rows = [...(snapshots ?? [])].map((row) => ({ at: new Date(row.at).getTime(), price: Number(row.navPerShareE18) / 1e15 }));
+  if (currentAt && currentNavPerShareE18) rows.push({ at: new Date(currentAt).getTime(), price: Number(currentNavPerShareE18) / 1e15 });
+  if (rows.length < 2) return <div className="term-empty">{tr('Hourly share-price snapshots will build this chart over time.')}</div>;
+  const min = rows.reduce((v, row) => Math.min(v, row.price), Infinity);
+  const max = rows.reduce((v, row) => Math.max(v, row.price), -Infinity);
+  const span = max - min || Math.abs(max) * 0.001 || 0.001;
+  const firstAt = rows[0].at;
+  const elapsed = rows.at(-1).at - firstAt || 1;
+  const points = rows.map((row, i) => `${18 + ((row.at - firstAt) / elapsed) * 644},${142 - ((row.price - min) / span) * 124}`).join(' ');
+  return (
+    <div className="term-counter-chart-wrap">
+      <svg viewBox="0 0 680 160" role="img" aria-label={tr('Counter share price history')}>
+        <title>{tr('Counter share price history')}</title>
+        <path d="M18 18H662 M18 80H662 M18 142H662" className="term-counter-chart-grid" />
+        <polyline points={points} className="term-counter-chart-line" />
+      </svg>
+      <div><span>{new Date(firstAt).toLocaleDateString()}</span><span>{new Date(rows.at(-1).at).toLocaleDateString()}</span></div>
+    </div>
+  );
+}
+
+function aprLabel(bps, tr, days) {
+  return bps === null || bps === undefined
+    ? tr('Building {days}-day history', { days })
+    : `${bps > 0 ? '+' : ''}${(bps / 100).toFixed(2)}%`;
+}
+
+function signedUsdg(value) {
+  const amount = usdgNum(value);
+  return amount === 0 ? '$0.00' : `${amount > 0 ? '+' : '−'}$${money(Math.abs(amount))}`;
+}
 
 function CounterRequestWatcher({ request, vault, onSettled, onPartial }) {
   const query = useReadContract({
@@ -43,6 +76,8 @@ export function CounterView({ account, contracts }) {
   const t = useTerminal();
   const { t: tr } = useI18n();
   const counter = useCounter();
+  const history = useCounterHistory();
+  const ledger = useLedger();
   const publicClient = usePublicClient();
   const c = counter.data;
   const [action, setAction] = useState('Deposit');
@@ -104,6 +139,9 @@ export function CounterView({ account, contracts }) {
     ? [['Counter NAV', usd2(c.navUsdg), 'Pool value after trader PnL'], ['Free cash', usd2(c.freeCashUsdg), 'Not backing positions or payouts'], ['Backstop Fund', usd2(c.backstopUsdg), `Target ${usd0(c.backstopTargetUsdg)}`], ['First-Loss tranche', usd2(c.firstLossUsdg), 'Junior capital ahead of LPs']]
     : [['Counter NAV', '—', ''], ['Free cash', '—', ''], ['Backstop Fund', '—', ''], ['First-Loss tranche', '—', '']];
   const oldest = c ? Number(big(c.oldestPendingWithdrawAgeSec)) : 0;
+  const activity = history.data?.activityReady ? history.data.contributors30d : null;
+  const exposureRows = ledger.data?.markets ?? [];
+  const maxGrossOi = exposureRows.reduce((max, row) => Math.max(max, usdgNum(big(row.longOiUsdg) + big(row.shortOiUsdg))), 0);
 
   return (
     <section className="term-secondary-view">
@@ -113,6 +151,46 @@ export function CounterView({ account, contracts }) {
       </div>
       {counter.isError && !c && <Unavailable what="The Counter" error={counter.error} />}
       <div className="term-stat-grid">{stats.map(([label, value, note]) => <div key={label}><span>{tr(label)}</span><strong>{value}</strong><small>{tr(note)}</small></div>)}</div>
+      <div className="term-counter-analytics">
+        <section className="term-large-panel term-counter-performance">
+          <div className="term-counter-section-heading"><div><span className="term-overline">{tr('FLOW-ADJUSTED SHARE RETURN')}</span><h2>{tr('Counter APR history')}</h2></div><span className={`term-small-badge ${history.data ? '' : 'is-off'}`}>{tr(history.data ? 'HOURLY · ON-CHAIN' : history.isError ? 'UNAVAILABLE' : 'COLLECTING')}</span></div>
+          <p>{tr('Annualized change in NAV per Counter share. Deposits and withdrawals do not count as return.')}</p>
+          <div className="term-counter-apr-grid">
+            {[7, 30, 90].map((days) => <div key={days}><span>{tr('{days}-DAY APR', { days })}</span><strong>{history.data ? aprLabel(history.data.aprBps?.[`days${days}`], tr, days) : '—'}</strong></div>)}
+          </div>
+          {history.data && <div className="term-counter-current-price"><span>{tr('Current NAV per pkCTR share')}</span><strong>${money(Number(history.data.currentNavPerShareE18) / 1e15, 4)} USDG</strong></div>}
+          {history.isError && <p className="term-negative">{tr('APR history is unavailable until the Counter history database is ready.')}</p>}
+          {history.data && !history.data.snapshots.length && <p>{tr('The first on-chain snapshot is being collected. APR appears after a full measurement window.')}</p>}
+          <CounterNavChart snapshots={history.data?.snapshots} currentAt={history.data?.currentAt} currentNavPerShareE18={history.data?.currentNavPerShareE18} tr={tr} />
+          {history.data?.historyStartsAt && <small className="term-counter-footnote">{tr('History starts {date}; earlier NAV snapshots are not available.', { date: new Date(history.data.historyStartsAt).toLocaleString() })}</small>}
+        </section>
+        <section className="term-large-panel term-counter-drivers">
+          <div className="term-counter-section-heading"><div><span className="term-overline">{tr('LAST 30 DAYS')}</span><h2>{tr('What moved the pool')}</h2></div></div>
+          <div className="term-detail"><span>{tr('Trading fees allocated to Counter')}</span><b className="term-positive">{activity ? usd2(activity.counterFeeIncomeUsdg) : '—'}</b></div>
+          <div className="term-detail"><span>{tr('Opposite of traders’ realized P&L')}</span><b className={activity && BigInt(activity.counterSideTraderPnlUsdg) < 0n ? 'term-negative' : 'term-positive'}>{activity ? signedUsdg(activity.counterSideTraderPnlUsdg) : '—'}</b></div>
+          <div className="term-detail"><span>{tr('Bad debt created')}</span><b className="term-negative">{activity ? usd2(activity.badDebtCreatedUsdg) : '—'}</b></div>
+          <div className="term-detail"><span>{tr('Bad debt covered')}</span><b>{activity ? usd2(activity.badDebtCoveredUsdg) : '—'}</b></div>
+          <p className="term-counter-footnote">{tr('Event totals are not a full cash-flow reconciliation. Trader P&L is shown as its exact opposite, not cash collected; losses beyond margin may become bad debt. Borrow and unrealized P&L affect NAV per share but are not itemized here.')}</p>
+          {history.data && !history.data.activityReady && <p>{tr('Activity totals are catching up with the chain.')}</p>}
+          {!activity && history.isError && <p>{tr('Activity totals are unavailable until the indexer database is ready.')}</p>}
+        </section>
+      </div>
+      <section className="term-large-panel term-counter-exposure">
+        <div className="term-counter-section-heading"><div><span className="term-overline">{tr('LIVE · REFRESHES EVERY 15 SECONDS')}</span><h2>{tr('Exposure by stock')}</h2></div></div>
+        <p>{tr('Open long and short notional by market. Net exposure is long minus short.')}</p>
+        {ledger.isError && !ledger.data ? <div className="term-empty">{tr('Live exposure is unavailable right now.')}</div> : exposureRows.length ? <div className="term-counter-exposure-list">{exposureRows.map((row) => {
+          const longOi = big(row.longOiUsdg);
+          const shortOi = big(row.shortOiUsdg);
+          const gross = longOi + shortOi;
+          const width = maxGrossOi > 0 ? Math.max(1, usdgNum(gross) / maxGrossOi * 100) : 0;
+          return <div className="term-counter-exposure-row" key={row.symbol}>
+            <strong>{row.symbol}</strong>
+            <div className="term-counter-exposure-bar"><i style={{ width: `${width}%` }} /></div>
+            <span>{tr('Long')} {usd0(row.longOiUsdg)} / {tr('Short')} {usd0(row.shortOiUsdg)}</span>
+            <b>{tr('Net')} {longOi >= shortOi ? '+' : '−'}{usd0(longOi >= shortOi ? longOi - shortOi : shortOi - longOi)}</b>
+          </div>;
+        })}</div> : <div className="term-empty">{tr('No market exposure data yet.')}</div>}
+      </section>
       <div className="term-counter-grid">
         <div className="term-large-panel">
           <h2>{tr('The loss waterfall')} <span>01 → 05</span></h2>

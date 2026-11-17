@@ -31,7 +31,7 @@ import {
   type TraderSnapshot,
   type TradeQuoteMsg,
 } from '@plankton/chain';
-import { and, asc, createDb, desc, eq, gte, lt, or, orders, positions, sql, trades, type Db } from '@plankton/db';
+import { and, asc, counterActivity, counterNavSnapshots, createDb, desc, eq, gte, indexerCursor, lt, or, orders, positions, sql, trades, type Db } from '@plankton/db';
 import { closeSizeDeltaE18, stressNavUsdg } from '@plankton/core';
 import { marketLimits, quoteFromChain, type MarketLimits } from './quote.ts';
 import { collateralShortfall, liquidationPriceE18, positionAfterOpen, positionValue, solveOpenSize, targetNotional } from './views.ts';
@@ -872,6 +872,53 @@ app.get('/v1/feed/:symbol', async (c) => feedJson(c.req.header('if-none-match'),
 app.get('/v1/counter', async () => {
   const { client, dep } = chain();
   return json(await readCounter(client, dep));
+});
+
+// Historical Counter return is calculated from on-chain NAV per share so LP deposits and withdrawals do not count as yield.
+app.get('/v1/counter/history', async () => {
+  const now = new Date();
+  const historyFrom = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1_000 - 2 * 60 * 60 * 1_000);
+  const activityFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1_000);
+  const { client, dep } = chain();
+  const [snapshots, activity, realized, cursor, head, current] = await Promise.all([
+    db().select().from(counterNavSnapshots).where(gte(counterNavSnapshots.at, historyFrom)).orderBy(asc(counterNavSnapshots.at)),
+    db().select({ kind: counterActivity.kind, amountUsdg: sql<string>`coalesce(sum(${counterActivity.amountUsdg}), 0)` })
+      .from(counterActivity).where(gte(counterActivity.at, activityFrom)).groupBy(counterActivity.kind),
+    db().select({ traderPnlUsdg: sql<string>`coalesce(sum(${trades.realizedPnlUsdg}), 0)` }).from(trades).where(gte(trades.at, activityFrom)),
+    db().select().from(indexerCursor).where(eq(indexerCursor.name, 'counter-activity')),
+    client.getBlockNumber(),
+    readCounter(client, dep),
+  ]);
+  const activityReady = Boolean(cursor[0] && cursor[0].block >= head - 20n);
+  const nowMs = now.getTime();
+  const annualizedBps = (days: number): number | null => {
+    const cutoff = nowMs - days * 24 * 60 * 60 * 1_000;
+    const anchor = [...snapshots].reverse().find((row) => row.at.getTime() <= cutoff);
+    if (!anchor || anchor.navPerShareE18 === '0') return null;
+    const elapsedYears = (nowMs - anchor.at.getTime()) / (365.25 * 24 * 60 * 60 * 1_000);
+    const ratio = Number(current.navPerShareE18) / Number(anchor.navPerShareE18);
+    const bps = (Math.pow(ratio, 1 / elapsedYears) - 1) * 10_000;
+    return Number.isFinite(bps) ? Math.round(bps) : null;
+  };
+  const byKind = new Map(activity.map((row) => [row.kind, row.amountUsdg]));
+  const traderPnlUsdg = BigInt(realized[0]?.traderPnlUsdg ?? '0');
+  return json({
+    sampledHourly: true,
+    historyStartsAt: snapshots[0]?.at ?? null,
+    currentAt: now,
+    currentNavUsdg: current.navUsdg,
+    currentNavPerShareE18: current.navPerShareE18,
+    activityReady,
+    aprBps: { days7: annualizedBps(7), days30: annualizedBps(30), days90: annualizedBps(90) },
+    snapshots: snapshots.map((row) => ({ at: row.at, navUsdg: row.navUsdg, navPerShareE18: row.navPerShareE18 })),
+    contributors30d: {
+      counterFeeIncomeUsdg: byKind.get('fee_income') ?? '0',
+      traderRealizedPnlUsdg: traderPnlUsdg.toString(),
+      counterSideTraderPnlUsdg: (-traderPnlUsdg).toString(),
+      badDebtCreatedUsdg: byKind.get('bad_debt') ?? '0',
+      badDebtCoveredUsdg: byKind.get('bad_debt_covered') ?? '0',
+    },
+  });
 });
 
 // Proof of solvency and a 25% stress test, straight from chain reads: nothing here is stored or estimated by us.

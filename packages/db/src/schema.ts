@@ -1,7 +1,8 @@
 import { bigint, boolean, index, integer, jsonb, numeric, pgTable, primaryKey, smallint, text, timestamp } from 'drizzle-orm/pg-core';
 
-// Only what the product cannot get from the chain or from config files:
+// Indexed or cached data that is expensive to query repeatedly but can be rebuilt from the chain/config:
 // - positions and trades: fast account pages (the chain is the source of truth; both can be rebuilt by replay)
+// - Counter events and hourly NAV/share snapshots: analytics history (the chain remains the source of truth)
 // - orders: signed stop/limit/TP-SL orders waiting for a keeper
 // - leases and cursor: failover and resume points for the services
 // Prices, charts, calendar, halts and markets are NOT stored (live feeds, TradingView, JSON config).
@@ -38,6 +39,32 @@ export const trades = pgTable(
     path: smallint('path').notNull(), // 0 quote | 1 order | 2 closeAtMark | 3 liquidation
   },
   (t) => [primaryKey({ columns: [t.txHash, t.logIndex] }), index('trades_trader_time').on(t.trader, t.at), index('trades_at').on(t.at)],
+);
+
+/** Hourly, flow-neutral Counter share-price history. Starts collecting when this indexer version is deployed. */
+export const counterNavSnapshots = pgTable('counter_nav_snapshots', {
+  hour: bigint('hour', { mode: 'bigint' }).primaryKey(),
+  block: bigint('block', { mode: 'bigint' }).notNull(),
+  at: ts('at').notNull(),
+  navUsdg: u256('nav_usdg').notNull(),
+  navPerShareE18: u256('nav_per_share_e18').notNull(),
+  totalShares: u256('total_shares').notNull(),
+});
+
+/** Contract-emitted Counter-specific cash drivers that are not represented by TradeExecuted rows. */
+export const counterActivity = pgTable(
+  'counter_activity',
+  {
+    txHash: text('tx_hash').notNull(),
+    logIndex: integer('log_index').notNull(),
+    block: bigint('block', { mode: 'bigint' }).notNull(),
+    at: ts('at').notNull(),
+    kind: text('kind').notNull(), // fee_income | bad_debt | bad_debt_covered
+    marketId: text('market_id'),
+    amountUsdg: u256('amount_usdg').notNull(),
+    details: jsonb('details').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.txHash, t.logIndex] }), index('counter_activity_kind_time').on(t.kind, t.at)],
 );
 
 export const orders = pgTable(
