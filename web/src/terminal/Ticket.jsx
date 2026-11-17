@@ -249,7 +249,6 @@ export default function Ticket({ market, account, orders }) {
         }
         return null;
       }
-      }
       // Limit and stop: a signed instruction a keeper carries out later, funded from deposited collateral.
       const trig = parseE18(r.trigger);
       const notionalUsdg = (marginUsdg * BigInt(Math.round(r.leverage * ORDER_LEVERAGE_HEADROOM * 1000))) / 1000n;
