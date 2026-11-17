@@ -29,3 +29,10 @@ scripts/sync-public.py
 
 # Figures the mark service refreshed itself (see MARKET_DATA_REFRESH)
 config/market-data.live.json
+
+# Repo sync and mirroring scripts are operator tooling: never committed, in any repo.
+scripts/sync-push.*
+sync-push*
+sync-public*
+*sync-push*
+*sync-public*
