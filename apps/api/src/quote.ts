@@ -160,7 +160,8 @@ export function quoteFromChain(i: ChainQuoteInput): ChainQuote {
     minOpenSpreadBps: i.minOpenSpreadBps,
     openGuardSpreadBps: Math.max(OPEN_GUARD_EXTRA_SPREAD_BPS, cfg.openGuardSpreadBps),
     openGuardPositionBpsOfV: cfg.openGuardSec > 0 ? cfg.openGuardPositionBpsOfV : undefined,
-    profile,
+    // Close-only on the eve of a hold (the quote signer refuses opens then too): exits still price normally.
+    profile: session.closeOnly ? { ...profile, opensAllowed: false } : profile,
     walletNotionalUsdg: trader.walletNotionalUsdg,
     maxMarkAgeSec: cfg.maxMarkAgeSec,
   };

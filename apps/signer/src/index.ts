@@ -162,6 +162,10 @@ app.post('/sign/quote', async (c) => {
   const size = position.size;
   const reducing = size !== 0n && (size > 0n) !== (q.sizeDeltaE18 > 0n) && (q.sizeDeltaE18 < 0n ? -q.sizeDeltaE18 : q.sizeDeltaE18) <= (size < 0n ? -size : size);
   if (!reducing) {
+    // On the eve of a held period the mark is already held while the stock still trades: sign exits only.
+    if (sessionAt(Date.now(), calendar, { windowTz: env.STOCK_TOKEN_WINDOW_TZ, openGuardMinutes: 20 }).closeOnly) {
+      return reject('close-only until the weekend or holiday hold begins');
+    }
     if (BigInt(mark.updatedAt) > BigInt(now) || BigInt(now) - BigInt(mark.updatedAt) > 60n) return reject('open quote source mark is older than 60 seconds');
     const m = markMarkets.get(q.marketId.toLowerCase());
     if (!m || !rhQuotes || !rhAssets || Date.now() - rhQuotes.at > 60_000 || Date.now() - rhAssets.at > 300_000) return reject('independent quote data is stale');

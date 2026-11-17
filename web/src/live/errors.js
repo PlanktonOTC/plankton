@@ -40,7 +40,7 @@ const API_CODES = {
   no_mark: 'This market has no price yet.',
   stale_mark: 'The market price is too old to open a position right now.',
   low_confidence: 'The two price sources disagree too much to open a position right now.',
-  session_closed: 'New positions cannot be opened in the current market state. Existing positions can still be closed.',
+  session_closed: 'New positions cannot be opened right now (for example Friday evening until the weekend hold starts). Existing positions can still be closed.',
   market_not_active: 'This market is close-only or paused. You can still close a position.',
   breaker_set: 'A price circuit-breaker is active. New positions are stopped.',
   deleveraging: 'The Counter is deleveraging. New positions are stopped until withdrawals clear.',

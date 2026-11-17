@@ -32,7 +32,7 @@ import {
   type TradeQuoteMsg,
 } from '@plankton/chain';
 import { and, asc, counterActivity, counterNavSnapshots, createDb, desc, eq, gte, indexerCursor, lt, or, orders, positions, sql, trades, type Db } from '@plankton/db';
-import { closeSizeDeltaE18, stressNavUsdg } from '@plankton/core';
+import { closeSizeDeltaE18, sessionAt, stressNavUsdg } from '@plankton/core';
 import { marketLimits, quoteFromChain, type MarketLimits } from './quote.ts';
 import { collateralShortfall, liquidationPriceE18, positionAfterOpen, positionValue, solveOpenSize, targetNotional } from './views.ts';
 import { clientIp, corsOrigins, createRateLimiter, isInternal } from './limits.ts';
@@ -247,8 +247,12 @@ async function tradingFor(symbol: string): Promise<Trading | null> {
     const m = market(symbol);
     const { client, dep } = chain();
     const snap = withLiveMark(await readMarket(client, dep, m.marketId), (await liveMarks())?.get(symbol), BigInt(Math.floor(Date.now() / 1000)));
+    const limits = marketLimits(snap, m.cfg.class, rung);
+    // Close-only on the eve of a weekend or holiday hold: the board shows opens as closed, as the quote path enforces.
+    const closeOnly = sessionAt(Date.now(), calendar, { windowTz: env.STOCK_TOKEN_WINDOW_TZ, openGuardMinutes: 20 }).closeOnly === true;
     value = {
-      ...marketLimits(snap, m.cfg.class, rung),
+      ...limits,
+      ...(closeOnly ? { opensAllowed: false } : {}),
       markE18: snap.mark.priceE18,
       markStatus: snap.mark.status,
       markUpdatedAt: BigInt(snap.mark.updatedAt),

@@ -23,6 +23,11 @@ export interface SessionInfo {
   /** True for the first minutes after the US open and after the Monday reopen. */
   openGuard: boolean;
   reason: string;
+  /**
+   * True on the eve of a held period (after a Friday or pre-holiday close, and the Sunday evening before a Monday
+   * holiday): the mark is already held but the stock can still trade, so no new positions are signed, only exits.
+   */
+  closeOnly?: boolean;
 }
 
 const fmtCache = new Map<string, Intl.DateTimeFormat>();
@@ -97,6 +102,10 @@ export function sessionAt(ts: number, cal: Calendar, cfg: SessionCfg = DEFAULT_S
   const et = zoned(ts, 'America/New_York');
   const day = cal.get(et.day);
   if (!day) {
+    if (et.dow === 0 && cal.get(nextDay(et.day))?.holiday === true) {
+      // Sunday evening before a Monday holiday: the overnight market can trade while the hold carries Friday's close.
+      return { status: Status.Weekend, openGuard: false, reason: 'before a Monday holiday', closeOnly: true };
+    }
     if (et.dow === 0 || et.dow === 6) {
       return { status: Status.Extended, openGuard: reopenGuard, reason: 'overnight, no calendar row needed' };
     }
@@ -114,16 +123,18 @@ export function sessionAt(ts: number, cal: Calendar, cfg: SessionCfg = DEFAULT_S
     };
   }
   if (et.minutes >= close && heldAfter(et.day, et.dow, cal)) {
-    return { status: Status.Weekend, openGuard: false, reason: 'after the close before a weekend or holiday' };
+    // Held at the close, but the stock still trades after hours: exits only, so nobody opens at a price they can see is stale.
+    return { status: Status.Weekend, openGuard: false, reason: 'after the close before a weekend or holiday', closeOnly: true };
   }
   return { status: Status.Extended, openGuard: reopenGuard, reason: 'outside regular hours' };
 }
 
+const nextDay = (day: string) => new Date(Date.parse(`${day}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+
 /** Whether the ET day after `day` is held (a Saturday, or an exchange holiday), so this day's close is the held mark. */
 function heldAfter(day: string, dow: number, cal: Calendar): boolean {
   if (dow === 5) return true;
-  const next = new Date(Date.parse(`${day}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
-  return cal.get(next)?.holiday === true;
+  return cal.get(nextDay(day))?.holiday === true;
 }
 
 /** Days of calendar coverage ahead of `now`. Fail a check when this drops under 400. */

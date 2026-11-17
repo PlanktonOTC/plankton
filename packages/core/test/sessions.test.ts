@@ -76,6 +76,28 @@ describe('sessions', () => {
     expect(sessionAt(at('2026-10-30T12:00:00Z'), c).status).toBe(Status.Extended);
   });
 
+  test('the eve of a hold is close-only: the stock still trades after hours, so no position may open at the held close', () => {
+    const c = buildCalendar([day('2026-10-29'), day('2026-10-30'), day('2026-11-25'), day('2026-11-26', { holiday: true })]);
+    expect(sessionAt(at('2026-10-30T20:00:00Z'), c).closeOnly).toBe(true); // Friday 16:00 EDT
+    expect(sessionAt(at('2026-11-25T21:00:00Z'), c).closeOnly).toBe(true); // Thanksgiving eve 16:00 EST
+    // The weekend window itself and the holiday are ordinary holds: the underlying is not trading.
+    expect(sessionAt(at('2026-10-31T12:00:00Z'), c).closeOnly).toBeFalsy();
+    expect(sessionAt(at('2026-11-26T15:00:00Z'), c).closeOnly).toBeFalsy();
+    // Regular hours and an ordinary weeknight are not.
+    expect(sessionAt(at('2026-10-30T15:00:00Z'), c).closeOnly).toBeFalsy();
+    expect(sessionAt(at('2026-10-29T21:00:00Z'), c).closeOnly).toBeFalsy();
+  });
+
+  test('the Sunday evening before a Monday holiday stays held and close-only instead of trading live for a few hours', () => {
+    // 18 Jan 2027 (MLK Day) is a holiday. The weekend window ends Sunday 20:00 EST (Mon 02:00 Berlin).
+    const c = buildCalendar([day('2027-01-18', { holiday: true }), day('2027-01-19')]);
+    expect(sessionAt(at('2027-01-18T01:30:00Z'), c)).toMatchObject({ status: Status.Weekend, closeOnly: true, reason: 'before a Monday holiday' }); // Sun 20:30 EST
+    expect(sessionAt(at('2027-01-18T15:00:00Z'), c)).toMatchObject({ status: Status.Weekend, reason: 'exchange holiday' }); // Monday
+    // An ordinary Sunday evening reopens live as before.
+    const plain = buildCalendar([day('2026-11-02')]);
+    expect(sessionAt(at('2026-11-02T01:30:00Z'), plain).status).toBe(Status.Extended);
+  });
+
   test('a weekday missing from the calendar is Frozen, never guessed', () => {
     expect(sessionAt(at('2026-11-03T15:00:00Z'), cal)).toMatchObject({ status: Status.Frozen });
   });
