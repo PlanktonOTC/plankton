@@ -58,6 +58,9 @@ const schema = z.object({
   INTERNAL_API_TOKEN: z.string().min(16).optional(),
   /** Shared with the website's server (web/server.mjs), which forwards each visitor's address in x-visitor-ip. */
   WEB_PROXY_TOKEN: z.string().min(32).optional(),
+  /** Telegram bot credentials. The API reads prices and linked-wallet activity only; it cannot trade. */
+  TELEGRAM_BOT_TOKEN: z.string().min(20).optional(),
+  TELEGRAM_BOT_USERNAME: z.string().regex(/^@?[A-Za-z0-9_]{5,32}$/).optional(),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
 });
 
@@ -73,9 +76,12 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   if (parsed.data.NODE_ENV === 'production' && parsed.data.ELIGIBILITY_MODE && parsed.data.ELIGIBILITY_MODE !== 'enforce') {
     throw new Error('invalid environment: ELIGIBILITY_MODE must be enforce (or unset) in production');
   }
+  if (Boolean(parsed.data.TELEGRAM_BOT_TOKEN) !== Boolean(parsed.data.TELEGRAM_BOT_USERNAME)) {
+    throw new Error('invalid environment: TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_USERNAME must be set together');
+  }
   const rpcUrls = parsed.data.RPC_URLS.split(',').map((s) => s.trim()).filter(Boolean);
   if (rpcUrls.length === 0) throw new Error('invalid environment: RPC_URLS is empty');
-  return { ...parsed.data, RPC_URLS: rpcUrls };
+  return { ...parsed.data, TELEGRAM_BOT_USERNAME: parsed.data.TELEGRAM_BOT_USERNAME?.replace(/^@/, ''), RPC_URLS: rpcUrls };
 }
 
 export const eligibilityMode = (env: Env): 'enforce' | 'warn' | 'off' => env.ELIGIBILITY_MODE ?? (env.NODE_ENV === 'production' ? 'enforce' : 'warn');

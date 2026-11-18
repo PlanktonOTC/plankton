@@ -32,7 +32,7 @@ import {
   type TraderSnapshot,
   type TradeQuoteMsg,
 } from '@plankton/chain';
-import { and, asc, counterActivity, counterNavSnapshots, createDb, desc, eq, gte, indexerCursor, lt, or, orders, positions, sql, trades, type Db } from '@plankton/db';
+import { and, asc, counterActivity, counterNavSnapshots, createDb, desc, eq, gt, gte, indexerCursor, isNull, lt, or, orders, positions, sql, telegramChallenges, telegramLinkCodes, trades, type Db } from '@plankton/db';
 import { closeSizeDeltaE18, sessionAt, stressNavUsdg } from '@plankton/core';
 import { marketLimits, quoteFromChain, type MarketLimits } from './quote.ts';
 import { earningsModeFor } from './earnings-mode.ts';
@@ -42,6 +42,7 @@ import { FRESH_WITHIN_SEC, feedRow, type FeedRow, type RawMark } from './feed.ts
 import { createTape, latestFilings } from './tape.ts';
 import { handleMcp, RPC } from './mcp.ts';
 import { MCP_INSTRUCTIONS, planktonTools } from './mcp-tools.ts';
+import { createTelegramLinkMessage, startTelegramBot, verifyTelegramLinkSignature } from './telegram.ts';
 
 const env = loadEnv();
 const log = pino({ level: env.LOG_LEVEL });
@@ -346,6 +347,47 @@ app.get('/v1/markets/:symbol/sources', async (c) => {
 
 // Which markets pass the listing rule (market cap under $2B, price at least $1, volume at least $2M), and why not.
 app.get('/v1/eligibility', async () => json(await fromMark('/eligibility')));
+
+// ---------------------------------------------------------------- Telegram read-only bot and wallet linking
+
+app.get('/v1/telegram/config', () => json({ configured: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_BOT_USERNAME), username: env.TELEGRAM_BOT_USERNAME ?? null }));
+
+app.post('/v1/telegram/link-challenge', async (c) => {
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_BOT_USERNAME) throw new HttpError(503, 'Telegram bot is not configured');
+  const body = z.object({ wallet: z.string().regex(ADDRESS) }).parse(await c.req.json().catch(() => null));
+  const wallet = body.wallet.toLowerCase();
+  const nonce = randomBytes(24).toString('hex');
+  const expires = Math.floor(Date.now() / 1000) + 300;
+  await db().insert(telegramChallenges).values({ nonce, wallet, expiresAt: new Date(expires * 1000) });
+  return json({ nonce, expires, message: createTelegramLinkMessage(wallet, nonce, expires) });
+});
+
+app.post('/v1/telegram/link', async (c) => {
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_BOT_USERNAME) throw new HttpError(503, 'Telegram bot is not configured');
+  const body = z.object({ wallet: z.string().regex(ADDRESS), nonce: z.string().regex(/^[a-f0-9]{48}$/), expires: z.number().int(), signature: z.string().regex(/^0x[0-9a-fA-F]{130}$/) }).parse(await c.req.json().catch(() => null));
+  const wallet = body.wallet.toLowerCase();
+  if (body.expires < Math.floor(Date.now() / 1000) || body.expires > Math.floor(Date.now() / 1000) + 300) throw new HttpError(422, 'link challenge expired');
+  if (!await verifyTelegramLinkSignature(wallet, body.nonce, body.expires, body.signature)) throw new HttpError(422, 'signature does not match the wallet');
+  const token = randomBytes(32).toString('base64url');
+  const linked = await db().transaction(async (tx) => {
+    const consumed = await tx.update(telegramChallenges).set({ consumedAt: new Date() })
+      .where(and(eq(telegramChallenges.nonce, body.nonce), eq(telegramChallenges.wallet, wallet), gt(telegramChallenges.expiresAt, new Date()), isNull(telegramChallenges.consumedAt)))
+      .returning({ nonce: telegramChallenges.nonce });
+    if (!consumed.length) return false;
+    await tx.insert(telegramLinkCodes).values({ tokenHash: createHash('sha256').update(token).digest('hex'), wallet, expiresAt: new Date(Date.now() + 10 * 60_000) });
+    return true;
+  });
+  if (!linked) throw new HttpError(422, 'link challenge expired or already used');
+  await db().delete(telegramChallenges).where(lt(telegramChallenges.expiresAt, new Date()));
+  return json({ token, linkUrl: `https://t.me/${env.TELEGRAM_BOT_USERNAME}?start=${token}` });
+});
+
+app.post('/v1/telegram/link-status', async (c) => {
+  const body = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{40,50}$/) }).parse(await c.req.json().catch(() => null));
+  const rows = await db().select({ linkedAt: telegramLinkCodes.linkedAt, expiresAt: telegramLinkCodes.expiresAt })
+    .from(telegramLinkCodes).where(eq(telegramLinkCodes.tokenHash, createHash('sha256').update(body.token).digest('hex'))).limit(1);
+  return json({ linked: Boolean(rows[0]?.linkedAt), expired: !rows[0] || rows[0].expiresAt.getTime() < Date.now() });
+});
 
 app.get('/v1/status', async () => {
   const [marks, health] = await Promise.all([fromMark<unknown[]>('/marks'), fromMark<unknown>('/health')]);
@@ -1106,3 +1148,11 @@ const server = Bun.serve({
   fetch: (req, srv) => app.fetch(req, { ip: srv.requestIP(req)?.address }),
 });
 log.info({ port: server.port, markets: markets.map((m) => m.symbol), rung }, 'api started');
+startTelegramBot({
+  env,
+  db,
+  symbols: markets.map((m) => m.symbol),
+  symbolOf: (marketId) => byId.get(marketId.toLowerCase())?.symbol ?? marketId.slice(0, 10),
+  getPrices: async () => new Map((await fromMark<LiveMark[]>('/marks')).map((m) => [m.symbol, m])),
+  log,
+});

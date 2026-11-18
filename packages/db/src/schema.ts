@@ -99,3 +99,32 @@ export const indexerCursor = pgTable('indexer_cursor', {
   name: text('name').primaryKey(),
   block: bigint('block', { mode: 'bigint' }).notNull(),
 });
+
+/** Telegram account binding. Only a wallet-signed, short-lived link code can create one. */
+export const telegramLinks = pgTable('telegram_links', {
+  wallet: text('wallet').primaryKey(),
+  chatId: text('chat_id').notNull().unique(),
+  username: text('username'),
+  linkedAt: ts('linked_at').notNull().defaultNow(),
+});
+
+export const telegramChallenges = pgTable('telegram_challenges', {
+  nonce: text('nonce').primaryKey(),
+  wallet: text('wallet').notNull(),
+  expiresAt: ts('expires_at').notNull(),
+  consumedAt: ts('consumed_at'),
+});
+
+/** One-time deep-link codes; the raw token is never stored. */
+export const telegramLinkCodes = pgTable('telegram_link_codes', {
+  tokenHash: text('token_hash').primaryKey(),
+  wallet: text('wallet').notNull(),
+  expiresAt: ts('expires_at').notNull(),
+  linkedAt: ts('linked_at'),
+});
+
+/** Telegram long-poll cursor shared by API replicas. */
+export const telegramBotState = pgTable('telegram_bot_state', {
+  singleton: boolean('singleton').primaryKey().default(true),
+  nextUpdateId: bigint('next_update_id', { mode: 'bigint' }).notNull(),
+});

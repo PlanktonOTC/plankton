@@ -11,7 +11,7 @@
 // restarted with backoff. MIGRATE_ON_START=true runs the database migrations first.
 
 type Role = { name: string; entry: string; env: (ctx: Ctx) => Record<string, string> };
-type Ctx = { urlOf: (role: string) => string | undefined; signerUrls: (kind: 'mark' | 'quote') => string[]; need: (key: string) => string };
+type Ctx = { urlOf: (role: string) => string | undefined; signerUrls: (kind: 'mark' | 'quote') => string[]; need: (key: string) => string; get: (key: string) => string | undefined };
 
 const signerRole = (kind: 'mark' | 'quote', n: number): Role => ({
   name: `signer-${kind}-${n}`,
@@ -25,6 +25,8 @@ const ROLES: Record<string, Role> = {
     entry: 'apps/api/src/index.ts',
     env: (ctx) => ({
       QUOTE_SIGNER_URLS: ctx.signerUrls('quote').join(','),
+      ...(ctx.get('TELEGRAM_BOT_TOKEN') ? { TELEGRAM_BOT_TOKEN: ctx.get('TELEGRAM_BOT_TOKEN')! } : {}),
+      ...(ctx.get('TELEGRAM_BOT_USERNAME') ? { TELEGRAM_BOT_USERNAME: ctx.get('TELEGRAM_BOT_USERNAME')! } : {}),
       ...(ctx.urlOf('mark') ? { MARK_SERVICE_URL: ctx.urlOf('mark')! } : {}),
     }),
   },
@@ -72,9 +74,9 @@ export function plan(env: Record<string, string | undefined>) {
     if (!v) throw new Error(`${key} is required for the roles in ROLES`);
     return v;
   };
-  const ctx: Ctx = { urlOf, signerUrls, need };
+  const ctx: Ctx = { urlOf, signerUrls, need, get: (key) => env[key] };
 
-  const base = Object.fromEntries(Object.entries(env).filter(([k, v]) => v !== undefined && !k.endsWith('_PRIVATE_KEY'))) as Record<string, string>;
+  const base = Object.fromEntries(Object.entries(env).filter(([k, v]) => v !== undefined && !k.endsWith('_PRIVATE_KEY') && !['TELEGRAM_BOT_TOKEN', 'TELEGRAM_BOT_USERNAME'].includes(k))) as Record<string, string>;
   return names.map((n) => {
     const role = ROLES[n]!;
     const childEnv: Record<string, string> = { ...base, ...role.env(ctx), PORT: String(ports.get(n)) };

@@ -1,0 +1,1 @@
+ALTER TABLE "telegram_bot_state" ALTER COLUMN "next_update_id" DROP DEFAULT;

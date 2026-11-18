@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Arrow, Modal, TxProgress, useTerminal } from './shared.jsx';
 import { PresetControls, usePresets } from './Presets.jsx';
 import { presetLevels } from '../live/presets.js';
@@ -9,6 +9,7 @@ import { useClaims, usePreview, useSources } from '../live/queries.js';
 import { addMarginTx, cancelOrderOnChain, cancelOrderRequest, claimPayout, closeAtMarkTx, depositCollateral, gaslessOrder, placeOrder, withdrawCollateral } from '../live/trade.js';
 import { big, e18Num, money, parseE18, parseUsdg, priceDigits, shortAddress, usdgNum } from '../live/units.js';
 import { useI18n } from '../i18n';
+import { apiGet, apiPost } from '../live/api.js';
 
 const DAY = 86_400n;
 
@@ -119,6 +120,9 @@ export function AccountDialog({ account }) {
   const { t: tr } = useI18n();
   const [amount, setAmount] = useState('');
   const [mode, setMode] = useState('Deposit');
+  const [telegram, setTelegram] = useState(null);
+  const [telegramLink, setTelegramLink] = useState(null);
+  const [telegramLinked, setTelegramLinked] = useState(false);
   const claims = useClaims(t.wallet.address);
   const { error, setError, submit } = useDialogAction();
   const value = parseUsdg(amount);
@@ -131,6 +135,31 @@ export function AccountDialog({ account }) {
   };
   const rows = [['Wallet USDG', account.wallet], ['Deposited (free collateral)', account.collateral], ['Margin in positions', account.margin], ['Unrealised PnL', account.pnl], ['Reserved for orders', account.reserved], ['Account equity', account.equity]];
   const pending = (claims.data?.claims ?? []).filter((c) => !c.claimed);
+  useEffect(() => { apiGet('/v1/telegram/config').then(setTelegram).catch(() => setTelegram({ configured: false })); }, []);
+  useEffect(() => {
+    if (!telegramLink?.token || telegramLinked) return undefined;
+    let active = true;
+    const check = async () => {
+      try {
+        const state = await apiPost('/v1/telegram/link-status', { token: telegramLink.token });
+        if (active && state.linked) setTelegramLinked(true);
+        else if (active && state.expired) setError('Telegram link expired. Create a new link.');
+      } catch { /* keep polling through brief API/network interruptions */ }
+    };
+    const timer = setInterval(check, 3000);
+    void check();
+    return () => { active = false; clearInterval(timer); };
+  }, [telegramLink, telegramLinked, setError]);
+  const linkTelegram = async () => {
+    setError('');
+    const result = await t.trader.run(async (ctx) => {
+      const challenge = await ctx.api.post('/v1/telegram/link-challenge', { wallet: ctx.address });
+      const signature = await ctx.signMessage(challenge.message);
+      return ctx.api.post('/v1/telegram/link', { wallet: ctx.address, nonce: challenge.nonce, expires: challenge.expires, signature });
+    });
+    if (result.ok) { setTelegramLink(result.result); setTelegramLinked(false); }
+    else setError(result.message);
+  };
   return (
     <Modal title={tr('Your account')} onClose={() => t.setDialog(null)} busy={t.trader.busy}>
       <div className="term-detail"><span>{tr('Wallet')}</span><b title={t.wallet.address}>{shortAddress(t.wallet.address)} · {t.wallet.connectorName}</b></div>
@@ -159,6 +188,18 @@ export function AccountDialog({ account }) {
             </div>
           ))}
         </div>
+      )}
+      {telegram?.configured && (
+        <section className="term-claims" aria-label="Telegram bot">
+          <h3>Telegram bot</h3>
+          <p className="term-fineprint">Check Plankton prices and view this wallet’s positions and recent fills in Telegram. Read-only: it cannot place trades.</p>
+          {!telegramLinked && !telegramLink && <button className="term-secondary" type="button" disabled={t.trader.busy} onClick={linkTelegram}>Link Telegram</button>}
+          {telegramLink && !telegramLinked && <>
+            <p className="term-fineprint">Open the bot and tap Start. This link expires in 10 minutes.</p>
+            <a className="term-secondary" href={telegramLink.linkUrl} target="_blank" rel="noreferrer">Open @{telegram.username}</a>
+          </>}
+          {telegramLinked && <p className="term-detail"><span>Telegram</span><b>Linked</b></p>}
+        </section>
       )}
       <div className="term-modal-actions"><button className="term-secondary" type="button" onClick={async () => { await t.wallet.disconnect(); t.setDialog(null); }}>{tr('Disconnect wallet')}</button></div>
     </Modal>
