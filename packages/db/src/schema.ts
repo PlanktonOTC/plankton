@@ -128,3 +128,28 @@ export const telegramBotState = pgTable('telegram_bot_state', {
   singleton: boolean('singleton').primaryKey().default(true),
   nextUpdateId: bigint('next_update_id', { mode: 'bigint' }).notNull(),
 });
+
+/** Browser Web Push subscriptions for liquidation warnings. */
+export const pushSubscriptions = pgTable('push_subscriptions', {
+  endpoint: text('endpoint').notNull(),
+  wallet: text('wallet').notNull(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.wallet, t.endpoint] }), index('push_subscriptions_wallet').on(t.wallet)]);
+
+/** One-time wallet-signed subscription registration challenges. */
+export const liquidationChallenges = pgTable('liquidation_challenges', {
+  nonce: text('nonce').primaryKey(),
+  wallet: text('wallet').notNull(),
+  expiresAt: ts('expires_at').notNull(),
+  consumedAt: ts('consumed_at'),
+});
+
+/** Highest warning band already sent for a position; reset after it moves safely away. */
+export const liquidationWarningStates = pgTable('liquidation_warning_states', {
+  wallet: text('wallet').notNull(),
+  marketId: text('market_id').notNull(),
+  level: smallint('level').notNull(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.wallet, t.marketId] })]);

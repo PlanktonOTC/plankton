@@ -10,6 +10,32 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key.startsWith('plankton-shell-') && key !== CACHE).map((key) => caches.delete(key)))).then(() => self.clients.claim()));
 });
 
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try { payload = event.data?.json() ?? {}; } catch { payload = { body: event.data?.text() ?? 'A Plankton position is approaching its estimated liquidation level.' }; }
+  const title = typeof payload.title === 'string' ? payload.title : 'Plankton liquidation warning';
+  const body = typeof payload.body === 'string' ? payload.body : 'A position may be close to its estimated liquidation level.';
+  const tag = typeof payload.tag === 'string' ? payload.tag : 'plankton-liquidation';
+  event.waitUntil(self.registration.showNotification(title, {
+    body,
+    tag,
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    data: { url: typeof payload.url === 'string' && payload.url.startsWith('/') && !payload.url.startsWith('//') ? payload.url : '/trade' },
+  }));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const candidate = new URL(event.notification.data?.url ?? '/trade', self.location.origin);
+  const target = (candidate.origin === self.location.origin ? candidate : new URL('/trade', self.location.origin)).href;
+  event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+    const existing = windows.find((client) => new URL(client.url).origin === self.location.origin);
+    if (existing) return existing.navigate(target).then(() => existing.focus());
+    return clients.openWindow(target);
+  }));
+});
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);

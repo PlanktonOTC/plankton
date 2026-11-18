@@ -35,6 +35,14 @@ async function reply(env: Env, chatId: number, text: string): Promise<void> {
   await telegram(env, 'sendMessage', { chat_id: chatId, text: text.slice(0, 3900), link_preview_options: { is_disabled: true } });
 }
 
+export async function notifyTelegramWallet(env: Env, db: Db, wallet: string, text: string): Promise<boolean> {
+  if (!env.TELEGRAM_BOT_TOKEN) return false;
+  const rows = await db.select({ chatId: telegramLinks.chatId }).from(telegramLinks).where(eq(telegramLinks.wallet, wallet.toLowerCase())).limit(1);
+  if (!rows[0]) return false;
+  await reply(env, Number(rows[0].chatId), text);
+  return true;
+}
+
 async function handleUpdate(update: TelegramUpdate, env: Env, db: Db, symbols: string[], symbolOf: (marketId: string) => string, getPrices: () => Promise<Map<string, { priceE18: string | null; status: string | null }>>) {
   const message = update.message;
   if (!message?.text) return;

@@ -29,6 +29,12 @@ function useDialogAction(onDone) {
   return { error, setError, submit };
 }
 
+function vapidKeyBytes(value) {
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64 + '='.repeat((4 - base64.length % 4) % 4);
+  return Uint8Array.from(window.atob(padded), (c) => c.charCodeAt(0));
+}
+
 // ---------------------------------------------------------------- wallet
 
 const ICONS = {
@@ -123,6 +129,8 @@ export function AccountDialog({ account }) {
   const [telegram, setTelegram] = useState(null);
   const [telegramLink, setTelegramLink] = useState(null);
   const [telegramLinked, setTelegramLinked] = useState(false);
+  const [liquidationConfig, setLiquidationConfig] = useState(null);
+  const [pushEnabled, setPushEnabled] = useState(false);
   const claims = useClaims(t.wallet.address);
   const { error, setError, submit } = useDialogAction();
   const value = parseUsdg(amount);
@@ -136,6 +144,19 @@ export function AccountDialog({ account }) {
   const rows = [['Wallet USDG', account.wallet], ['Deposited (free collateral)', account.collateral], ['Margin in positions', account.margin], ['Unrealised PnL', account.pnl], ['Reserved for orders', account.reserved], ['Account equity', account.equity]];
   const pending = (claims.data?.claims ?? []).filter((c) => !c.claimed);
   useEffect(() => { apiGet('/v1/telegram/config').then(setTelegram).catch(() => setTelegram({ configured: false })); }, []);
+  useEffect(() => {
+    let active = true;
+    apiGet('/v1/liquidation-alerts/config').then((config) => {
+      if (active) setLiquidationConfig(config);
+      if (!t.wallet.address || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+      return navigator.serviceWorker.ready.then((registration) => registration.pushManager.getSubscription()).then(async (subscription) => {
+        if (!active || !subscription) { if (active) setPushEnabled(false); return; }
+        const status = await apiGet(`/v1/liquidation-alerts/status?wallet=${encodeURIComponent(t.wallet.address)}&endpoint=${encodeURIComponent(subscription.endpoint)}`);
+        if (active) setPushEnabled(status.enabled);
+      });
+    }).catch(() => { if (active) setLiquidationConfig({ pushConfigured: false }); });
+    return () => { active = false; };
+  }, [t.wallet.address]);
   useEffect(() => {
     if (!telegramLink?.token || telegramLinked) return undefined;
     let active = true;
@@ -159,6 +180,42 @@ export function AccountDialog({ account }) {
     });
     if (result.ok) { setTelegramLink(result.result); setTelegramLinked(false); }
     else setError(result.message);
+  };
+  const enableLiquidationPush = async () => {
+    setError('');
+    if (!liquidationConfig?.publicKey || !('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      setError('Push notifications are not available in this browser or are not configured yet.');
+      return;
+    }
+    try {
+      const permission = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
+      if (permission !== 'granted') throw new Error('Allow notifications in your browser to enable liquidation warnings.');
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription() ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKeyBytes(liquidationConfig.publicKey) });
+      const result = await t.trader.run(async (ctx) => {
+        const challenge = await ctx.api.post('/v1/liquidation-alerts/challenge', { wallet: ctx.address });
+        const signature = await ctx.signMessage(challenge.message);
+        await ctx.api.post('/v1/liquidation-alerts/subscribe', { wallet: ctx.address, nonce: challenge.nonce, expires: challenge.expires, signature, subscription: subscription.toJSON() });
+      });
+      if (result.ok) setPushEnabled(true);
+      else setError(result.message);
+    } catch (err) { setError(err?.message || 'Could not enable push notifications.'); }
+  };
+  const disableLiquidationPush = async () => {
+    setError('');
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (!subscription) { setPushEnabled(false); return; }
+      const result = await t.trader.run(async (ctx) => {
+        const challenge = await ctx.api.post('/v1/liquidation-alerts/challenge', { wallet: ctx.address });
+        const signature = await ctx.signMessage(challenge.message);
+        await ctx.api.post('/v1/liquidation-alerts/unsubscribe', { wallet: ctx.address, nonce: challenge.nonce, expires: challenge.expires, signature, endpoint: subscription.endpoint });
+        await subscription.unsubscribe();
+      });
+      if (result.ok) setPushEnabled(false);
+      else setError(result.message);
+    } catch (err) { setError(err?.message || 'Could not disable push notifications.'); }
   };
   return (
     <Modal title={tr('Your account')} onClose={() => t.setDialog(null)} busy={t.trader.busy}>
@@ -192,7 +249,7 @@ export function AccountDialog({ account }) {
       {telegram?.configured && (
         <section className="term-claims" aria-label="Telegram bot">
           <h3>Telegram bot</h3>
-          <p className="term-fineprint">Check Plankton prices and view this wallet’s positions and recent fills in Telegram. Read-only: it cannot place trades.</p>
+          <p className="term-fineprint">Check Plankton prices and view this wallet’s positions and recent fills in Telegram. Liquidation warnings are also sent to this private chat when a linked position approaches its estimated risk level. The bot is read-only and cannot place trades.</p>
           {!telegramLinked && !telegramLink && <button className="term-secondary" type="button" disabled={t.trader.busy} onClick={linkTelegram}>Link Telegram</button>}
           {telegramLink && !telegramLinked && <>
             <p className="term-fineprint">Open the bot and tap Start. This link expires in 10 minutes.</p>
@@ -201,6 +258,13 @@ export function AccountDialog({ account }) {
           {telegramLinked && <p className="term-detail"><span>Telegram</span><b>Linked</b></p>}
         </section>
       )}
+      <section className="term-claims" aria-label="Liquidation warnings">
+        <h3>Liquidation warnings</h3>
+        <p className="term-fineprint">Get warnings at 10% and 5% from the estimated liquidation level. During weekend sessions, warnings use the estimated equity buffer because liquidation is margin-based at the held mark. A conservative borrow estimate is included. Push works while Plankton is closed; Telegram warnings go to your linked private chat. These are estimates, not guarantees or a substitute for monitoring positions.</p>
+        {liquidationConfig?.pushConfigured && ('PushManager' in window)
+          ? <button className="term-secondary" type="button" disabled={t.trader.busy} onClick={pushEnabled ? disableLiquidationPush : enableLiquidationPush}>{pushEnabled ? 'Disable push warnings' : 'Enable push warnings'}</button>
+          : <p className="term-fineprint">{liquidationConfig?.pushConfigured === false ? `Browser push needs VAPID keys configured on the API. ${telegram?.configured ? 'Telegram warnings are sent automatically when your wallet is linked.' : 'Telegram notifications are not configured.'}` : 'Push notifications are not available in this browser.'}</p>}
+      </section>
       <div className="term-modal-actions"><button className="term-secondary" type="button" onClick={async () => { await t.wallet.disconnect(); t.setDialog(null); }}>{tr('Disconnect wallet')}</button></div>
     </Modal>
   );

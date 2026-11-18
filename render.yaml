@@ -44,6 +44,12 @@ services:
       - fromGroup: plankton-secrets
       - key: PORT
         value: "10000"
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: https://planktonotc.com
       - key: QUOTE_SIGNER_URLS
         value: http://plankton-signer-quote:10000
       - key: MARK_SERVICE_URL

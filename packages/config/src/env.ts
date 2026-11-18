@@ -61,6 +61,10 @@ const schema = z.object({
   /** Telegram bot credentials. The API reads prices and linked-wallet activity only; it cannot trade. */
   TELEGRAM_BOT_TOKEN: z.string().min(20).optional(),
   TELEGRAM_BOT_USERNAME: z.string().regex(/^@?[A-Za-z0-9_]{5,32}$/).optional(),
+  /** Web Push VAPID credentials; set public/private together. */
+  VAPID_PUBLIC_KEY: z.string().regex(/^[A-Za-z0-9_-]{80,100}$/).optional(),
+  VAPID_PRIVATE_KEY: z.string().regex(/^[A-Za-z0-9_-]{40,50}$/).optional(),
+  VAPID_SUBJECT: z.string().default('https://planktonotc.com'),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
 });
 
@@ -78,6 +82,9 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   }
   if (Boolean(parsed.data.TELEGRAM_BOT_TOKEN) !== Boolean(parsed.data.TELEGRAM_BOT_USERNAME)) {
     throw new Error('invalid environment: TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_USERNAME must be set together');
+  }
+  if (Boolean(parsed.data.VAPID_PUBLIC_KEY) !== Boolean(parsed.data.VAPID_PRIVATE_KEY)) {
+    throw new Error('invalid environment: VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must be set together');
   }
   const rpcUrls = parsed.data.RPC_URLS.split(',').map((s) => s.trim()).filter(Boolean);
   if (rpcUrls.length === 0) throw new Error('invalid environment: RPC_URLS is empty');

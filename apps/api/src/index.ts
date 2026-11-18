@@ -32,7 +32,7 @@ import {
   type TraderSnapshot,
   type TradeQuoteMsg,
 } from '@plankton/chain';
-import { and, asc, counterActivity, counterNavSnapshots, createDb, desc, eq, gt, gte, indexerCursor, isNull, lt, or, orders, positions, sql, telegramChallenges, telegramLinkCodes, trades, type Db } from '@plankton/db';
+import { and, asc, counterActivity, counterNavSnapshots, createDb, desc, eq, gt, gte, indexerCursor, isNull, lt, or, orders, positions, pushSubscriptions, sql, telegramChallenges, telegramLinkCodes, trades, type Db } from '@plankton/db';
 import { closeSizeDeltaE18, sessionAt, stressNavUsdg } from '@plankton/core';
 import { marketLimits, quoteFromChain, type MarketLimits } from './quote.ts';
 import { earningsModeFor } from './earnings-mode.ts';
@@ -43,6 +43,7 @@ import { createTape, latestFilings } from './tape.ts';
 import { handleMcp, RPC } from './mcp.ts';
 import { MCP_INSTRUCTIONS, planktonTools } from './mcp-tools.ts';
 import { createTelegramLinkMessage, startTelegramBot, verifyTelegramLinkSignature } from './telegram.ts';
+import { consumePushChallenge, createLiquidationChallenge, createPushChallenge, startLiquidationMonitor } from './liquidation-alerts.ts';
 
 const env = loadEnv();
 const log = pino({ level: env.LOG_LEVEL });
@@ -387,6 +388,56 @@ app.post('/v1/telegram/link-status', async (c) => {
   const rows = await db().select({ linkedAt: telegramLinkCodes.linkedAt, expiresAt: telegramLinkCodes.expiresAt })
     .from(telegramLinkCodes).where(eq(telegramLinkCodes.tokenHash, createHash('sha256').update(body.token).digest('hex'))).limit(1);
   return json({ linked: Boolean(rows[0]?.linkedAt), expired: !rows[0] || rows[0].expiresAt.getTime() < Date.now() });
+});
+
+app.get('/v1/liquidation-alerts/config', () => json({
+  pushConfigured: Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY),
+  publicKey: env.VAPID_PUBLIC_KEY ?? null,
+  telegramConfigured: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_BOT_USERNAME),
+}));
+
+app.get('/v1/liquidation-alerts/status', async (c) => {
+  const wallet = c.req.query('wallet') ?? '';
+  const endpoint = c.req.query('endpoint') ?? '';
+  if (!ADDRESS.test(wallet) || !endpoint || endpoint.length > 2048) throw new HttpError(400, 'invalid subscription lookup');
+  const rows = await db().select({ endpoint: pushSubscriptions.endpoint }).from(pushSubscriptions)
+    .where(and(eq(pushSubscriptions.wallet, wallet.toLowerCase()), eq(pushSubscriptions.endpoint, endpoint))).limit(1);
+  return json({ enabled: rows.length > 0 });
+});
+
+app.post('/v1/liquidation-alerts/challenge', async (c) => {
+  const body = z.object({ wallet: z.string().regex(ADDRESS) }).parse(await c.req.json().catch(() => null));
+  return json(await createPushChallenge(db(), body.wallet));
+});
+
+const pushSubscriptionBody = z.object({
+  wallet: z.string().regex(ADDRESS),
+  nonce: z.string().regex(/^[a-f0-9]{48}$/),
+  expires: z.number().int(),
+  signature: z.string().regex(/^0x[0-9a-fA-F]{130}$/),
+  subscription: z.object({ endpoint: z.string().url().max(2048), keys: z.object({ p256dh: z.string().min(40).max(100), auth: z.string().min(16).max(100) }) }),
+});
+const pushUnsubscribeBody = pushSubscriptionBody.omit({ subscription: true }).extend({ endpoint: z.string().url().max(2048) });
+
+app.post('/v1/liquidation-alerts/subscribe', async (c) => {
+  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) throw new HttpError(503, 'push notifications are not configured');
+  const body = pushSubscriptionBody.parse(await c.req.json().catch(() => null));
+  const wallet = body.wallet.toLowerCase();
+  if (new URL(body.subscription.endpoint).protocol !== 'https:') throw new HttpError(400, 'invalid push endpoint');
+  if (!await verifyMessage({ address: wallet as Address, message: createLiquidationChallenge(wallet, body.nonce, body.expires), signature: body.signature as Hex })) throw new HttpError(422, 'signature does not match the wallet');
+  if (!await consumePushChallenge(db(), wallet, body.nonce, body.expires)) throw new HttpError(422, 'link challenge expired or already used');
+  await db().insert(pushSubscriptions).values({ endpoint: body.subscription.endpoint, wallet, p256dh: body.subscription.keys.p256dh, auth: body.subscription.keys.auth })
+    .onConflictDoUpdate({ target: [pushSubscriptions.wallet, pushSubscriptions.endpoint], set: { p256dh: body.subscription.keys.p256dh, auth: body.subscription.keys.auth, createdAt: new Date() } });
+  return json({ enabled: true });
+});
+
+app.post('/v1/liquidation-alerts/unsubscribe', async (c) => {
+  const body = pushUnsubscribeBody.parse(await c.req.json().catch(() => null));
+  const wallet = body.wallet.toLowerCase();
+  if (!await verifyMessage({ address: wallet as Address, message: createLiquidationChallenge(wallet, body.nonce, body.expires), signature: body.signature as Hex })) throw new HttpError(422, 'signature does not match the wallet');
+  if (!await consumePushChallenge(db(), wallet, body.nonce, body.expires)) throw new HttpError(422, 'link challenge expired or already used');
+  await db().delete(pushSubscriptions).where(and(eq(pushSubscriptions.wallet, wallet), eq(pushSubscriptions.endpoint, body.endpoint)));
+  return json({ enabled: false });
 });
 
 app.get('/v1/status', async () => {
@@ -1154,5 +1205,15 @@ startTelegramBot({
   symbols: markets.map((m) => m.symbol),
   symbolOf: (marketId) => byId.get(marketId.toLowerCase())?.symbol ?? marketId.slice(0, 10),
   getPrices: async () => new Map((await fromMark<LiveMark[]>('/marks')).map((m) => [m.symbol, m])),
+  log,
+});
+startLiquidationMonitor({
+  env,
+  db,
+  symbolOf: (marketId) => byId.get(marketId.toLowerCase())?.symbol ?? null,
+  riskFor: async (symbol) => {
+    const risk = await tradingFor(symbol);
+    return risk ? { markE18: risk.markE18, maintenanceMarginBps: risk.maintenanceMarginBps, status: risk.markStatus, confidenceBps: risk.markConfidenceBps, borrowBaseBpsPerHour: risk.borrowBaseBpsPerHour } : null;
+  },
   log,
 });

@@ -27,6 +27,9 @@ const ROLES: Record<string, Role> = {
       QUOTE_SIGNER_URLS: ctx.signerUrls('quote').join(','),
       ...(ctx.get('TELEGRAM_BOT_TOKEN') ? { TELEGRAM_BOT_TOKEN: ctx.get('TELEGRAM_BOT_TOKEN')! } : {}),
       ...(ctx.get('TELEGRAM_BOT_USERNAME') ? { TELEGRAM_BOT_USERNAME: ctx.get('TELEGRAM_BOT_USERNAME')! } : {}),
+      ...(ctx.get('VAPID_PUBLIC_KEY') ? { VAPID_PUBLIC_KEY: ctx.get('VAPID_PUBLIC_KEY')! } : {}),
+      ...(ctx.get('VAPID_PRIVATE_KEY') ? { VAPID_PRIVATE_KEY: ctx.get('VAPID_PRIVATE_KEY')! } : {}),
+      ...(ctx.get('VAPID_SUBJECT') ? { VAPID_SUBJECT: ctx.get('VAPID_SUBJECT')! } : {}),
       ...(ctx.urlOf('mark') ? { MARK_SERVICE_URL: ctx.urlOf('mark')! } : {}),
     }),
   },
@@ -76,7 +79,8 @@ export function plan(env: Record<string, string | undefined>) {
   };
   const ctx: Ctx = { urlOf, signerUrls, need, get: (key) => env[key] };
 
-  const base = Object.fromEntries(Object.entries(env).filter(([k, v]) => v !== undefined && !k.endsWith('_PRIVATE_KEY') && !['TELEGRAM_BOT_TOKEN', 'TELEGRAM_BOT_USERNAME'].includes(k))) as Record<string, string>;
+  const apiOnly = ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_BOT_USERNAME', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT'];
+  const base = Object.fromEntries(Object.entries(env).filter(([k, v]) => v !== undefined && !k.endsWith('_PRIVATE_KEY') && !apiOnly.includes(k))) as Record<string, string>;
   return names.map((n) => {
     const role = ROLES[n]!;
     const childEnv: Record<string, string> = { ...base, ...role.env(ctx), PORT: String(ports.get(n)) };

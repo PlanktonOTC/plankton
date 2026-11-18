@@ -43,6 +43,20 @@
       "when": 1794984061891,
       "tag": "0005_breezy_nightcrawler",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794985406568,
+      "tag": "0006_spotty_violations",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794985873254,
+      "tag": "0007_left_sphinx",
+      "breakpoints": true
     }
   ]
 }
