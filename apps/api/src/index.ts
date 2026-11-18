@@ -43,6 +43,7 @@ import { createTape, latestFilings } from './tape.ts';
 import { handleMcp, RPC } from './mcp.ts';
 import { MCP_INSTRUCTIONS, planktonTools } from './mcp-tools.ts';
 import { createTelegramLinkMessage, startTelegramBot, verifyTelegramLinkSignature } from './telegram.ts';
+import { marketEvents } from './market-events.ts';
 import { consumePushChallenge, createLiquidationChallenge, createPushChallenge, startLiquidationMonitor } from './liquidation-alerts.ts';
 
 const env = loadEnv();
@@ -1205,6 +1206,21 @@ startTelegramBot({
   symbols: markets.map((m) => m.symbol),
   symbolOf: (marketId) => byId.get(marketId.toLowerCase())?.symbol ?? marketId.slice(0, 10),
   getPrices: async () => new Map((await fromMark<LiveMark[]>('/marks')).map((m) => [m.symbol, m])),
+  // Halts come from the mark service; earnings and splits from the Tape's catalyst calendar. Either may be unavailable.
+  getMarketEvents: async () => {
+    const [haltBody, catalysts] = await Promise.all([
+      fromMark<{ halts: Parameters<typeof marketEvents>[0]['halts'] }>('/halts').catch(() => null),
+      tape.catalysts().catch(() => null),
+    ]);
+    return marketEvents({
+      nowMs: Date.now(),
+      halts: haltBody?.halts ?? [],
+      earnings: catalysts?.earnings ?? [],
+      corporateActions: catalysts?.corporateActions ?? [],
+      calendar,
+      windowTz: env.STOCK_TOKEN_WINDOW_TZ,
+    });
+  },
   log,
 });
 startLiquidationMonitor({

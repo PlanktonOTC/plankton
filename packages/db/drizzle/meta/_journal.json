@@ -64,6 +64,13 @@
       "when": 1794986614667,
       "tag": "0008_heavy_surge",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794997850395,
+      "tag": "0009_hot_meteorite",
+      "breakpoints": true
     }
   ]
 }

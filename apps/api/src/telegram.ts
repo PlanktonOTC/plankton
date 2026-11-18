@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { formatUnits, verifyMessage, type Address, type Hex } from 'viem';
 import { and, asc, desc, eq, gt, isNull, sql, telegramBotState, telegramChallenges, telegramLinkCodes, telegramLinks, trades, positions, type Db } from '@plankton/db';
-import { acquireLease, releaseLease, telegramPriceAlerts } from '@plankton/db';
+import { acquireLease, releaseLease, telegramEventSubscriptions, telegramEventsAnnounced, telegramPriceAlerts } from '@plankton/db';
+import { wantsEvent, type MarketEvent } from './market-events.ts';
 import { MAX_ALERTS_PER_CHAT, alertHit, describeAlert, parseAlert, usd } from './price-alerts.ts';
 import type { Env } from '@plankton/config';
 
@@ -28,7 +29,7 @@ function decimal(raw: string, decimals: number, places: number): string {
   return n.toLocaleString('en-US', { maximumFractionDigits: places });
 }
 
-const HELP = 'Plankton read-only bot\n/price SYMBOL — current Plankton price\n/prices — latest listed prices\n/positions — your open positions\n/trades — your latest fills\n/alert SYMBOL > PRICE — ping me when the price crosses (or <)\n/alerts — your price alerts\n/unalert ID — remove one (or /unalert all)\n/unlink — remove this Telegram link\n/help — commands\n\nLink your wallet in Plankton under Account & deposits → Telegram. Once linked, you get a message here whenever a keeper fills one of your orders (take-profit, stop-loss, limit, ladder or gasless market). This bot cannot place trades.';
+const HELP = 'Plankton read-only bot\n/price SYMBOL — current Plankton price\n/prices — latest listed prices\n/positions — your open positions\n/trades — your latest fills\n/alert SYMBOL > PRICE — ping me when the price crosses (or <)\n/alerts — your price alerts\n/unalert ID — remove one (or /unalert all)\n/events on — halts, splits, earnings and close-only notices (or /events WYFI RCAT for some markets, /events off)\n/unlink — remove this Telegram link\n/help — commands\n\nLink your wallet in Plankton under Account & deposits → Telegram. Once linked, you get a message here whenever a keeper fills one of your orders (take-profit, stop-loss, limit, ladder or gasless market). This bot cannot place trades.';
 const lastWalletLookup = new Map<string, number>();
 
 async function reply(env: Env, chatId: number, text: string): Promise<void> {
@@ -109,6 +110,25 @@ async function handleUpdate(update: TelegramUpdate, env: Env, db: Db, symbols: s
     const [row] = await db.insert(telegramPriceAlerts).values({ chatId, symbol: req.symbol, above: req.above, priceE18: req.priceE18.toString() }).returning({ id: telegramPriceAlerts.id });
     return void await reply(env, Number(chatId), `🔔 Alert #${row!.id} set: ${describeAlert(req)}${now ? ` (now ${usd(now)})` : ''}. It fires once. /alerts to list.`);
   }
+  if (command === '/events') {
+    const arg = args.map((a) => a.toUpperCase());
+    if (arg.length === 0) {
+      const [sub] = await db.select().from(telegramEventSubscriptions).where(eq(telegramEventSubscriptions.chatId, chatId)).limit(1);
+      return void await reply(env, Number(chatId), sub
+        ? `Market event notices are on for ${sub.symbols?.length ? sub.symbols.join(', ') : 'every market'}.\n/events off to stop.`
+        : 'Market event notices are off.\n/events on for every market, or /events WYFI RCAT for some.');
+    }
+    if (arg[0] === 'OFF') {
+      await db.delete(telegramEventSubscriptions).where(eq(telegramEventSubscriptions.chatId, chatId));
+      return void await reply(env, Number(chatId), 'Market event notices are off.');
+    }
+    const picked = arg[0] === 'ON' ? null : arg;
+    const unknown = (picked ?? []).filter((x) => !symbols.includes(x));
+    if (unknown.length) return void await reply(env, Number(chatId), `Unknown market symbol: ${unknown.join(', ')}. Use /prices to see listings.`);
+    await db.insert(telegramEventSubscriptions).values({ chatId, symbols: picked })
+      .onConflictDoUpdate({ target: telegramEventSubscriptions.chatId, set: { symbols: picked } });
+    return void await reply(env, Number(chatId), `📣 Market event notices are on for ${picked ? picked.join(', ') : 'every market'}: trading halts and resumptions, pending splits, earnings due, and the close-only evening before a weekend or holiday.\n/events off to stop.`);
+  }
   if (command === '/alerts') {
     const rows = await db.select().from(telegramPriceAlerts).where(eq(telegramPriceAlerts.chatId, chatId)).orderBy(asc(telegramPriceAlerts.id));
     if (!rows.length) return void await reply(env, Number(chatId), 'No price alerts. Set one with /alert WYFI > 9.50');
@@ -144,8 +164,9 @@ async function handleUpdate(update: TelegramUpdate, env: Env, db: Db, symbols: s
   await reply(env, Number(chatId), 'Unknown command. Use /help.');
 }
 
-export function startTelegramBot({ env, db, symbols, symbolOf, getPrices, log }: {
-  env: Env; db: () => Db; symbols: string[]; symbolOf: (marketId: string) => string; getPrices: () => Promise<Map<string, { priceE18: string | null; status: string | null }>>; log: { warn: (data: object, message: string) => void };
+export function startTelegramBot({ env, db, symbols, symbolOf, getPrices, getMarketEvents, log }: {
+  env: Env; db: () => Db; symbols: string[]; symbolOf: (marketId: string) => string; getPrices: () => Promise<Map<string, { priceE18: string | null; status: string | null }>>;
+  getMarketEvents: () => Promise<MarketEvent[]>; log: { warn: (data: object, message: string) => void };
 }) {
   if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_BOT_USERNAME || !env.DATABASE_URL) return;
   const holder = randomBytes(12).toString('hex');
@@ -214,6 +235,38 @@ export function startTelegramBot({ env, db, symbols, symbolOf, getPrices, log }:
   };
   const alertTimer = setInterval(() => void checkAlerts(), 15_000);
   alertTimer.unref();
+
+  // Market events: every minute, one replica records each new event as announced, then messages the chats that want it.
+  // Recording first means a restart or a second replica can never send the same event twice.
+  let announcing = false;
+  const announceEvents = async () => {
+    if (announcing) return;
+    announcing = true;
+    const database = db();
+    let locked = false;
+    try {
+      locked = await acquireLease(database, 'telegram-market-events', holder, 60);
+      if (!locked) return;
+      const events = await getMarketEvents();
+      if (!events.length) return;
+      const subs = await database.select().from(telegramEventSubscriptions);
+      for (const event of events) {
+        const fresh = await database.insert(telegramEventsAnnounced).values({ eventId: event.id }).onConflictDoNothing().returning({ eventId: telegramEventsAnnounced.eventId });
+        if (!fresh.length) continue;
+        for (const sub of subs) {
+          if (!wantsEvent(sub.symbols, event)) continue;
+          await reply(env, Number(sub.chatId), event.text).catch(() => log.warn({ event: 'telegram_market_event_send_failed', id: event.id }, 'market event not sent'));
+        }
+      }
+    } catch {
+      log.warn({ event: 'telegram_market_events_failed' }, 'market event check failed');
+    } finally {
+      if (locked) await releaseLease(database, 'telegram-market-events', holder).catch(() => {});
+      announcing = false;
+    }
+  };
+  const eventTimer = setInterval(() => void announceEvents(), 60_000);
+  eventTimer.unref();
 }
 
 export function createTelegramLinkMessage(wallet: string, nonce: string, expires: number): string {

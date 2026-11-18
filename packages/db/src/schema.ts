@@ -137,6 +137,19 @@ export const telegramPriceAlerts = pgTable(
   (t) => [index('telegram_price_alerts_chat').on(t.chatId)],
 );
 
+/** Chats that asked for market event messages (halts, splits, earnings, close-only). `symbols` null means every market. */
+export const telegramEventSubscriptions = pgTable('telegram_event_subscriptions', {
+  chatId: text('chat_id').primaryKey(),
+  symbols: text('symbols').array(),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+
+/** Market events already announced, so a restart or a second replica never sends one twice. */
+export const telegramEventsAnnounced = pgTable('telegram_events_announced', {
+  eventId: text('event_id').primaryKey(),
+  announcedAt: ts('announced_at').notNull().defaultNow(),
+});
+
 /** Telegram long-poll cursor shared by API replicas. */
 export const telegramBotState = pgTable('telegram_bot_state', {
   singleton: boolean('singleton').primaryKey().default(true),
