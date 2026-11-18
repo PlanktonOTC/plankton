@@ -123,6 +123,20 @@ export const telegramLinkCodes = pgTable('telegram_link_codes', {
   linkedAt: ts('linked_at'),
 });
 
+/** Telegram price alerts. One-shot: a row is deleted when its alert fires or the chat removes it. */
+export const telegramPriceAlerts = pgTable(
+  'telegram_price_alerts',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    chatId: text('chat_id').notNull(),
+    symbol: text('symbol').notNull(),
+    above: boolean('above').notNull(),
+    priceE18: u256('price_e18').notNull(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('telegram_price_alerts_chat').on(t.chatId)],
+);
+
 /** Telegram long-poll cursor shared by API replicas. */
 export const telegramBotState = pgTable('telegram_bot_state', {
   singleton: boolean('singleton').primaryKey().default(true),

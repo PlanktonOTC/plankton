@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { formatUnits, verifyMessage, type Address, type Hex } from 'viem';
 import { and, asc, desc, eq, gt, isNull, sql, telegramBotState, telegramChallenges, telegramLinkCodes, telegramLinks, trades, positions, type Db } from '@plankton/db';
-import { acquireLease, releaseLease } from '@plankton/db';
+import { acquireLease, releaseLease, telegramPriceAlerts } from '@plankton/db';
+import { MAX_ALERTS_PER_CHAT, alertHit, describeAlert, parseAlert, usd } from './price-alerts.ts';
 import type { Env } from '@plankton/config';
 
 type TelegramUpdate = { update_id: number; message?: { text?: string; chat: { id: number; type: string }; from?: { username?: string } } };
@@ -27,7 +28,7 @@ function decimal(raw: string, decimals: number, places: number): string {
   return n.toLocaleString('en-US', { maximumFractionDigits: places });
 }
 
-const HELP = 'Plankton read-only bot\n/price SYMBOL — current Plankton price\n/prices — latest listed prices\n/positions — your open positions\n/trades — your latest fills\n/unlink — remove this Telegram link\n/help — commands\n\nLink your wallet in Plankton under Account & deposits → Telegram. Once linked, you get a message here whenever a keeper fills one of your orders (take-profit, stop-loss, limit, ladder or gasless market). This bot cannot place trades.';
+const HELP = 'Plankton read-only bot\n/price SYMBOL — current Plankton price\n/prices — latest listed prices\n/positions — your open positions\n/trades — your latest fills\n/alert SYMBOL > PRICE — ping me when the price crosses (or <)\n/alerts — your price alerts\n/unalert ID — remove one (or /unalert all)\n/unlink — remove this Telegram link\n/help — commands\n\nLink your wallet in Plankton under Account & deposits → Telegram. Once linked, you get a message here whenever a keeper fills one of your orders (take-profit, stop-loss, limit, ladder or gasless market). This bot cannot place trades.';
 const lastWalletLookup = new Map<string, number>();
 
 async function reply(env: Env, chatId: number, text: string): Promise<void> {
@@ -96,6 +97,33 @@ async function handleUpdate(update: TelegramUpdate, env: Env, db: Db, symbols: s
     });
     return void await reply(env, Number(chatId), `Plankton prices\n${lines.join('\n')}`);
   }
+  if (command === '/alert') {
+    const req = parseAlert(args, symbols);
+    if (typeof req === 'string') return void await reply(env, Number(chatId), req);
+    const existing = await db.select({ id: telegramPriceAlerts.id }).from(telegramPriceAlerts).where(eq(telegramPriceAlerts.chatId, chatId));
+    if (existing.length >= MAX_ALERTS_PER_CHAT) return void await reply(env, Number(chatId), `You have ${MAX_ALERTS_PER_CHAT} alerts already. Remove one with /unalert ID.`);
+    const now = (await getPrices()).get(req.symbol)?.priceE18;
+    if (now && alertHit(req.above, req.priceE18, BigInt(now))) {
+      return void await reply(env, Number(chatId), `${req.symbol} is already ${req.above ? 'at or above' : 'at or below'} ${usd(req.priceE18)} (now ${usd(now)}). Pick a level it has not reached yet.`);
+    }
+    const [row] = await db.insert(telegramPriceAlerts).values({ chatId, symbol: req.symbol, above: req.above, priceE18: req.priceE18.toString() }).returning({ id: telegramPriceAlerts.id });
+    return void await reply(env, Number(chatId), `🔔 Alert #${row!.id} set: ${describeAlert(req)}${now ? ` (now ${usd(now)})` : ''}. It fires once. /alerts to list.`);
+  }
+  if (command === '/alerts') {
+    const rows = await db.select().from(telegramPriceAlerts).where(eq(telegramPriceAlerts.chatId, chatId)).orderBy(asc(telegramPriceAlerts.id));
+    if (!rows.length) return void await reply(env, Number(chatId), 'No price alerts. Set one with /alert WYFI > 9.50');
+    return void await reply(env, Number(chatId), `Your price alerts\n${rows.map((r) => `#${r.id} · ${describeAlert(r)}`).join('\n')}\n\nRemove one with /unalert ID.`);
+  }
+  if (command === '/unalert') {
+    const target = (args[0] ?? '').toLowerCase();
+    if (target === 'all') {
+      const gone = await db.delete(telegramPriceAlerts).where(eq(telegramPriceAlerts.chatId, chatId)).returning({ id: telegramPriceAlerts.id });
+      return void await reply(env, Number(chatId), `Removed ${gone.length} alert${gone.length === 1 ? '' : 's'}.`);
+    }
+    if (!/^\d{1,9}$/.test(target)) return void await reply(env, Number(chatId), 'Usage: /unalert ID  (see /alerts), or /unalert all');
+    const gone = await db.delete(telegramPriceAlerts).where(and(eq(telegramPriceAlerts.chatId, chatId), eq(telegramPriceAlerts.id, Number(target)))).returning({ id: telegramPriceAlerts.id });
+    return void await reply(env, Number(chatId), gone.length ? `Removed alert #${target}.` : `No alert #${target} in this chat.`);
+  }
   if (command === '/positions' || command === '/trades') {
     const previousLookup = lastWalletLookup.get(chatId) ?? 0;
     if (Date.now() - previousLookup < 30_000) return void await reply(env, Number(chatId), 'Please wait 30 seconds between wallet lookups.');
@@ -153,6 +181,39 @@ export function startTelegramBot({ env, db, symbols, symbolOf, getPrices, log }:
   void poll();
   const timer = setInterval(() => void poll(), 5_000);
   timer.unref();
+
+  // Price alerts: every 15 s, one replica checks every alert against the live Plankton price. An alert is deleted before
+  // its message is sent, so it can never fire twice.
+  let checking = false;
+  const checkAlerts = async () => {
+    if (checking) return;
+    checking = true;
+    const database = db();
+    let locked = false;
+    try {
+      locked = await acquireLease(database, 'telegram-price-alerts', holder, 30);
+      if (!locked) return;
+      const alerts = await database.select().from(telegramPriceAlerts).limit(5_000);
+      if (!alerts.length) return;
+      const prices = await getPrices();
+      for (const a of alerts) {
+        const now = prices.get(a.symbol)?.priceE18;
+        if (!now || !alertHit(a.above, BigInt(a.priceE18), BigInt(now))) continue;
+        const gone = await database.delete(telegramPriceAlerts).where(eq(telegramPriceAlerts.id, a.id)).returning({ id: telegramPriceAlerts.id });
+        if (!gone.length) continue;
+        await reply(env, Number(a.chatId), `🔔 ${a.symbol} is ${a.above ? 'above' : 'below'} ${usd(a.priceE18)}: now ${usd(now)}.\nAlert #${a.id} is done. Set another with /alert.`).catch(() => {
+          log.warn({ event: 'telegram_price_alert_send_failed', id: a.id }, 'price alert not sent');
+        });
+      }
+    } catch {
+      log.warn({ event: 'telegram_price_alerts_failed' }, 'price alert check failed');
+    } finally {
+      if (locked) await releaseLease(database, 'telegram-price-alerts', holder).catch(() => {});
+      checking = false;
+    }
+  };
+  const alertTimer = setInterval(() => void checkAlerts(), 15_000);
+  alertTimer.unref();
 }
 
 export function createTelegramLinkMessage(wallet: string, nonce: string, expires: number): string {
