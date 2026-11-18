@@ -215,8 +215,9 @@ app.get('/health', (c) => c.json({ ok: true, rung }));
 interface LiveMark { symbol: string; status: string | null; priceE18: string | null; confidenceBps: number | null; minOpenSpreadBps?: number }
 const STATUS_INDEX: Record<string, number> = { open: 1, extended: 2, weekend: 3, frozen: 4, halted: 5 };
 let liveCache: { at: number; bySymbol: Map<string, LiveMark> | null } | null = null;
+const LIVE_MARK_CACHE_MS = 3_000;
 async function liveMarks(): Promise<Map<string, LiveMark> | null> {
-  if (liveCache && Date.now() - liveCache.at < 1_500) return liveCache.bySymbol;
+  if (liveCache && Date.now() - liveCache.at < LIVE_MARK_CACHE_MS) return liveCache.bySymbol;
   let bySymbol: Map<string, LiveMark> | null = null;
   try {
     bySymbol = new Map((await fromMark<LiveMark[]>('/marks')).map((m) => [m.symbol, m]));
@@ -275,10 +276,10 @@ async function tradingFor(symbol: string): Promise<Trading | null> {
 // on its own: a market with no mark yet has mark null, and a dead mark service shows as markFeedUp false.
 app.get('/v1/markets', async () => {
   const [marks, trading] = await Promise.all([
-    fromMark<Array<{ symbol: string }>>('/marks').catch(() => null),
+    liveMarks(),
     Promise.all(markets.map((m) => tradingFor(m.symbol))),
   ]);
-  const bySym = new Map((marks ?? []).map((m) => [m.symbol, m]));
+  const bySym = marks;
   return json(
     markets.map((m, i) => ({
       symbol: m.symbol,
@@ -286,8 +287,8 @@ app.get('/v1/markets', async () => {
       stockToken: m.stockToken,
       chainlinkFeed: m.chainlinkFeed,
       marketId: marketIdFor(m.symbol, m.stockToken as Address),
-      markFeedUp: marks !== null,
-      mark: bySym.get(m.symbol) ?? null,
+      markFeedUp: bySym !== null,
+      mark: bySym?.get(m.symbol) ?? null,
       trading: trading[i] ?? null,
     })),
   );

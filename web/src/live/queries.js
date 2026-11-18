@@ -9,7 +9,7 @@ const noRetryOn = (codes) => (count, err) => !(err instanceof ApiError && codes.
 
 export const useConfig = () => useQuery({ queryKey: ['config'], queryFn: () => apiGet('/v1/config'), staleTime: 30_000, retry: noRetryOn([503]) });
 export const useBellStatus = () => useQuery({ queryKey: ['bell-status'], queryFn: () => apiGet('/v1/bell/status'), refetchInterval: 15_000, retry: noRetryOn([503]) });
-export const useMarkets = () => useQuery({ queryKey: ['markets'], queryFn: () => apiGet('/v1/markets'), refetchInterval: 4_000 });
+export const useMarkets = () => useQuery({ queryKey: ['markets'], queryFn: () => apiGet('/v1/markets'), refetchInterval: 6_000 });
 export const useCounter = () => useQuery({ queryKey: ['counter'], queryFn: () => apiGet('/v1/counter'), refetchInterval: 8_000, retry: noRetryOn([503]) });
 export const useCounterHistory = () => useQuery({ queryKey: ['counter-history'], queryFn: () => apiGet('/v1/counter/history'), refetchInterval: 60_000, retry: noRetryOn([503]) });
 export const useLedger = () => useQuery({ queryKey: ['ledger'], queryFn: () => apiGet('/v1/ledger'), refetchInterval: 15_000, retry: noRetryOn([503]) });
