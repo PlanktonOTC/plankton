@@ -75,6 +75,38 @@ export async function readMarket(client: ChainClient, dep: Deployment, marketId:
   };
 }
 
+/** Read many market snapshots with a fixed number of multicalls instead of one RPC round trip per market. */
+export async function readMarkets(client: ChainClient, dep: Deployment, marketIds: readonly Hex[]): Promise<MarketSnapshot[]> {
+  if (marketIds.length === 0) return [];
+  const [marks, configs, infos, [navUsdg, deleveraging, totalAbsNet], references] = await Promise.all([
+    client.multicall({ allowFailure: false, contracts: marketIds.map((id) => ({ address: dep.oracle, abi: oracleAbi, functionName: 'markOf' as const, args: [id] as const })) }),
+    client.multicall({ allowFailure: false, contracts: marketIds.map((id) => ({ address: dep.exchange, abi: exchangeAbi, functionName: 'configOf' as const, args: [id] as const })) }),
+    client.multicall({ allowFailure: false, contracts: marketIds.map((id) => ({ address: dep.exchange, abi: exchangeAbi, functionName: 'marketInfo' as const, args: [id] as const })) }),
+    client.multicall({ allowFailure: false, contracts: [
+      { address: dep.vault, abi: vaultAbi, functionName: 'navUsdg' },
+      { address: dep.vault, abi: vaultAbi, functionName: 'deleveraging' },
+      { address: dep.exchange, abi: exchangeAbi, functionName: 'totalAbsNet' },
+    ] }),
+    client.multicall({ allowFailure: false, contracts: marketIds.map((id) => ({ address: dep.oracle, abi: oracleAbi, functionName: 'referencesOf' as const, args: [id] as const })) }),
+  ]);
+  return marketIds.map((_, i) => {
+    const [longOI, shortOI, longSize, shortSize, badDebt] = infos[i]!;
+    return {
+      mark: marks[i]!,
+      cfg: configs[i]!,
+      longOI: BigInt(longOI),
+      shortOI: BigInt(shortOI),
+      longSize: BigInt(longSize),
+      shortSize: BigInt(shortSize),
+      badDebt: BigInt(badDebt),
+      navUsdg,
+      deleveraging,
+      totalAbsNet,
+      openSince: BigInt(references[i]![2]),
+    };
+  });
+}
+
 export interface TraderSnapshot {
   position: ExchangePosition;
   collateralUsdg: bigint;

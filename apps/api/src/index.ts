@@ -21,6 +21,7 @@ import {
   quoteWire,
   readCounter,
   readMarket,
+  readMarkets,
   readTrader,
   signature as signatureSchema,
   toJson,
@@ -245,6 +246,24 @@ function withLiveMark(snap: MarketSnapshot, live: LiveMark | undefined, nowSec: 
 type Trading = MarketLimits & { markE18: bigint; markStatus: number; markUpdatedAt: bigint; markConfidenceBps: number; markSequence: bigint };
 const TRADING_TTL_MS = 2_000;
 const tradingCache = new Map<string, { at: number; value: Trading | null }>();
+let tradingBatchInFlight: Promise<void> | null = null;
+function tradingFromSnapshot(symbol: string, snapshot: MarketSnapshot, live: LiveMark | undefined, now: number): Trading {
+  const m = market(symbol);
+  const nowSec = BigInt(Math.floor(now / 1000));
+  const snap = withLiveMark(snapshot, live, nowSec);
+  const limits = marketLimits(snap, m.cfg.class, rung);
+  const closeOnly = sessionAt(now, calendar, { windowTz: env.STOCK_TOKEN_WINDOW_TZ, openGuardMinutes: 20 }).closeOnly === true;
+  return {
+    ...limits,
+    ...(closeOnly ? { opensAllowed: false } : {}),
+    markE18: snap.mark.priceE18,
+    markStatus: snap.mark.status,
+    markUpdatedAt: BigInt(snap.mark.updatedAt),
+    markConfidenceBps: snap.mark.confidenceBps,
+    markSequence: snap.mark.sequence,
+  };
+}
+
 async function tradingFor(symbol: string): Promise<Trading | null> {
   const hit = tradingCache.get(symbol);
   if (hit && Date.now() - hit.at < TRADING_TTL_MS) return hit.value;
@@ -252,19 +271,8 @@ async function tradingFor(symbol: string): Promise<Trading | null> {
   try {
     const m = market(symbol);
     const { client, dep } = chain();
-    const snap = withLiveMark(await readMarket(client, dep, m.marketId), (await liveMarks())?.get(symbol), BigInt(Math.floor(Date.now() / 1000)));
-    const limits = marketLimits(snap, m.cfg.class, rung);
-    // Close-only on the eve of a weekend or holiday hold: the board shows opens as closed, as the quote path enforces.
-    const closeOnly = sessionAt(Date.now(), calendar, { windowTz: env.STOCK_TOKEN_WINDOW_TZ, openGuardMinutes: 20 }).closeOnly === true;
-    value = {
-      ...limits,
-      ...(closeOnly ? { opensAllowed: false } : {}),
-      markE18: snap.mark.priceE18,
-      markStatus: snap.mark.status,
-      markUpdatedAt: BigInt(snap.mark.updatedAt),
-      markConfidenceBps: snap.mark.confidenceBps,
-      markSequence: snap.mark.sequence,
-    };
+    const [snap, live] = await Promise.all([readMarket(client, dep, m.marketId), liveMarks()]);
+    value = tradingFromSnapshot(symbol, snap, live?.get(symbol), Date.now());
   } catch (err) {
     log.debug({ symbol, err: (err as Error).message }, 'market limits unavailable');
   }
@@ -272,12 +280,50 @@ async function tradingFor(symbol: string): Promise<Trading | null> {
   return value;
 }
 
+/** Fill stale market-limit cache entries with batched multicalls; fall back to isolated reads on batch errors. */
+async function tradingForMany(selected = markets): Promise<Array<Trading | null>> {
+  const getStale = () => selected.filter((m) => {
+    const hit = tradingCache.get(m.symbol);
+    return !hit || Date.now() - hit.at >= TRADING_TTL_MS;
+  });
+  let stale = getStale();
+  if (stale.length > 0 && tradingBatchInFlight) {
+    await tradingBatchInFlight;
+    stale = getStale();
+  }
+  if (stale.length > 0) {
+    const refresh = (async () => {
+      try {
+        const { client, dep } = chain();
+        const ids = stale.map((m) => marketIdFor(m.symbol, m.stockToken as Address));
+        const [snapshots, live] = await Promise.all([readMarkets(client, dep, ids), liveMarks()]);
+        const at = Date.now();
+        for (let i = 0; i < stale.length; i++) {
+          const cfg = stale[i]!;
+          const value = tradingFromSnapshot(cfg.symbol, snapshots[i]!, live?.get(cfg.symbol), at);
+          tradingCache.set(cfg.symbol, { at, value });
+        }
+      } catch (err) {
+        log.debug({ err: (err as Error).message }, 'batched market limits unavailable; retrying markets individually');
+        await Promise.all(stale.map((m) => tradingFor(m.symbol)));
+      }
+    })();
+    tradingBatchInFlight = refresh;
+    try {
+      await refresh;
+    } finally {
+      if (tradingBatchInFlight === refresh) tradingBatchInFlight = null;
+    }
+  }
+  return selected.map((m) => tradingCache.get(m.symbol)?.value ?? null);
+}
+
 // Board: configured markets joined with the live mark (mark service) and the rules in force (chain). Each half degrades
 // on its own: a market with no mark yet has mark null, and a dead mark service shows as markFeedUp false.
 app.get('/v1/markets', async () => {
   const [marks, trading] = await Promise.all([
     liveMarks(),
-    Promise.all(markets.map((m) => tradingFor(m.symbol))),
+    tradingForMany(),
   ]);
   const bySym = marks;
   return json(
@@ -921,7 +967,7 @@ app.get('/v1/accounts/:addr/state', async (c) => {
       allowFailure: false,
       contracts: ids.map((id) => ({ address: dep.exchange, abi: exchangeAbi, functionName: 'positionOf' as const, args: [who, id] as const })),
     }),
-    Promise.all(markets.map((m) => tradingFor(m.symbol))),
+    tradingForMany(),
   ]);
   const [collateral, walletNotional, usdgBalance, usdgNonce, allowExchange, allowVault, shares, navPerShare] = head;
   const open = held.flatMap((p, i) => {
@@ -1090,26 +1136,28 @@ app.get('/v1/counter/history', async () => {
 // Proof of solvency and a 25% stress test, straight from chain reads: nothing here is stored or estimated by us.
 app.get('/v1/ledger', async () => {
   const { client, dep } = chain();
-  const counter = await readCounter(client, dep);
-  const perMarket = await Promise.all(
-    [...bySymbol.entries()].map(async ([symbol, m]) => {
-      const [snap, cap] = await Promise.all([
-        readMarket(client, dep, m.marketId),
-        client.readContract({ address: dep.exchange, abi: exchangeAbi, functionName: 'capacity', args: [m.marketId] }),
-      ]);
-      const V = counter.navUsdg;
-      return {
-        symbol,
-        longOiUsdg: snap.longOI,
-        shortOiUsdg: snap.shortOI,
-        netSkewCapUsdg: (V * BigInt(snap.cfg.netSkewBpsOfV)) / 10_000n,
-        grossCapUsdg: (V * BigInt(snap.cfg.grossOiBpsOfV)) / 10_000n,
-        longRoomUsdg: cap[0],
-        shortRoomUsdg: cap[1],
-        badDebtUsdg: snap.badDebt,
-      };
-    }),
-  );
+  const entries = [...bySymbol.entries()];
+  const ids = entries.map(([, market]) => market.marketId);
+  const [counter, snapshots, capacities] = await Promise.all([
+    readCounter(client, dep),
+    readMarkets(client, dep, ids),
+    client.multicall({ allowFailure: false, contracts: ids.map((id) => ({ address: dep.exchange, abi: exchangeAbi, functionName: 'capacity' as const, args: [id] as const })) }),
+  ]);
+  const perMarket = entries.map(([symbol], i) => {
+    const snap = snapshots[i]!;
+    const cap = capacities[i]!;
+    const V = counter.navUsdg;
+    return {
+      symbol,
+      longOiUsdg: snap.longOI,
+      shortOiUsdg: snap.shortOI,
+      netSkewCapUsdg: (V * BigInt(snap.cfg.netSkewBpsOfV)) / 10_000n,
+      grossCapUsdg: (V * BigInt(snap.cfg.grossOiBpsOfV)) / 10_000n,
+      longRoomUsdg: cap[0],
+      shortRoomUsdg: cap[1],
+      badDebtUsdg: snap.badDebt,
+    };
+  });
   const nets = perMarket.map((r) => r.longOiUsdg - r.shortOiUsdg);
   const stress = stressNavUsdg(counter.navUsdg, nets, 2_500);
   return json({ counter, stress25: stress, markets: perMarket });
