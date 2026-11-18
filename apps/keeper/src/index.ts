@@ -20,6 +20,7 @@ import {
 } from '@plankton/chain';
 import { closeSizeDeltaE18, isLiquidatable } from '@plankton/core';
 import { acquireLease, and, createDb, eq, lt, orders, positions } from '@plankton/db';
+import { notifyFill } from './notify.ts';
 
 const env = loadEnv();
 const log = pino({ level: env.LOG_LEVEL });
@@ -186,6 +187,14 @@ async function triggerOrders(): Promise<void> {
       await db.update(orders).set({ status: 'filled', fillTx: hash }).where(and(eq(orders.trader, row.trader), eq(orders.nonce, row.nonce)));
       health.sent++;
       log.info({ trader: row.trader, nonce: row.nonce.toString(), market: m.symbol, hash }, 'order executed');
+      // Tell the trader on Telegram once the fill confirms. In the background, so a slow chat never delays other orders.
+      void notifyFill({
+        token: env.TELEGRAM_BOT_TOKEN,
+        db,
+        trader: row.trader,
+        notice: { kind: row.kind, symbol: m.symbol, reducing: order.reduceOnly || order.sizeBps > 0, sizeDeltaE18: quote.sizeDeltaE18, execPriceE18: quote.execPriceE18, txHash: hash },
+        confirmed: async () => (await client.waitForTransactionReceipt({ hash, timeout: 90_000 })).status === 'success',
+      }).catch(() => log.warn({ event: 'telegram_fill_notice_failed', nonce: row.nonce.toString() }, 'fill notice not sent'));
     } catch (err) {
       const name = revertName(err);
       // Terminal: the order can never execute. Anything else (trigger, slippage, stale mark) just waits.

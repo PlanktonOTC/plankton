@@ -27,7 +27,7 @@ function decimal(raw: string, decimals: number, places: number): string {
   return n.toLocaleString('en-US', { maximumFractionDigits: places });
 }
 
-const HELP = 'Plankton read-only bot\n/price SYMBOL — current Plankton price\n/prices — latest listed prices\n/positions — your open positions\n/trades — your latest fills\n/unlink — remove this Telegram link\n/help — commands\n\nLink your wallet in Plankton under Account & deposits → Telegram. This bot cannot place trades.';
+const HELP = 'Plankton read-only bot\n/price SYMBOL — current Plankton price\n/prices — latest listed prices\n/positions — your open positions\n/trades — your latest fills\n/unlink — remove this Telegram link\n/help — commands\n\nLink your wallet in Plankton under Account & deposits → Telegram. Once linked, you get a message here whenever a keeper fills one of your orders (take-profit, stop-loss, limit, ladder or gasless market). This bot cannot place trades.';
 const lastWalletLookup = new Map<string, number>();
 
 async function reply(env: Env, chatId: number, text: string): Promise<void> {
