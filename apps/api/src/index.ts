@@ -774,8 +774,30 @@ app.get('/v1/accounts/:addr', async (c) => {
   const d = db();
   const [pos, open, recent] = await Promise.all([
     d.select().from(positions).where(eq(positions.trader, trader)),
-    d.select().from(orders).where(and(eq(orders.trader, trader), eq(orders.status, 'open'))),
-    d.select().from(trades).where(eq(trades.trader, trader)).orderBy(desc(trades.at)).limit(50),
+    d.select({
+      nonce: orders.nonce,
+      trader: orders.trader,
+      marketId: orders.marketId,
+      kind: orders.kind,
+      triggerE18: orders.triggerE18,
+      triggerAbove: orders.triggerAbove,
+      validAfter: orders.validAfter,
+      expiry: orders.expiry,
+      body: orders.body,
+      status: orders.status,
+    }).from(orders).where(and(eq(orders.trader, trader), eq(orders.status, 'open'))),
+    d.select({
+      txHash: trades.txHash,
+      logIndex: trades.logIndex,
+      at: trades.at,
+      trader: trades.trader,
+      marketId: trades.marketId,
+      sizeDeltaE18: trades.sizeDeltaE18,
+      priceE18: trades.priceE18,
+      feeUsdg: trades.feeUsdg,
+      realizedPnlUsdg: trades.realizedPnlUsdg,
+      path: trades.path,
+    }).from(trades).where(eq(trades.trader, trader)).orderBy(desc(trades.at), desc(trades.txHash), desc(trades.logIndex)).limit(50),
   ]);
   const symbolOf = (marketId: string) => byId.get(marketId.toLowerCase())?.symbol ?? null;
   return json({

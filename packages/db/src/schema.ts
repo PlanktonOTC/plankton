@@ -1,4 +1,5 @@
 import { bigint, boolean, index, integer, jsonb, numeric, pgTable, primaryKey, smallint, text, timestamp } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 // Indexed or cached data that is expensive to query repeatedly but can be rebuilt from the chain/config:
 // - positions and trades: fast account pages (the chain is the source of truth; both can be rebuilt by replay)
@@ -38,7 +39,7 @@ export const trades = pgTable(
     realizedPnlUsdg: u256('realized_pnl_usdg').notNull(),
     path: smallint('path').notNull(), // 0 quote | 1 order | 2 closeAtMark | 3 liquidation
   },
-  (t) => [primaryKey({ columns: [t.txHash, t.logIndex] }), index('trades_trader_time').on(t.trader, t.at), index('trades_at').on(t.at)],
+  (t) => [primaryKey({ columns: [t.txHash, t.logIndex] }), index('trades_trader_time').on(t.trader, t.at, t.txHash, t.logIndex), index('trades_at').on(t.at)],
 );
 
 /** Hourly, flow-neutral Counter share-price history. Starts collecting when this indexer version is deployed. */
@@ -85,7 +86,11 @@ export const orders = pgTable(
     failReason: text('fail_reason'),
     createdAt: ts('created_at').notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.trader, t.nonce] }), index('orders_open').on(t.status, t.marketId)],
+  (t) => [
+    primaryKey({ columns: [t.trader, t.nonce] }),
+    index('orders_open').on(t.status, t.marketId),
+    index('orders_open_trader').on(t.trader).where(sql`${t.status} = 'open'`),
+  ],
 );
 
 /** Postgres leases for publisher/keeper failover. */
