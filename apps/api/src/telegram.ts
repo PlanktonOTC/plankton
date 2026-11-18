@@ -1,13 +1,16 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { formatUnits, verifyMessage, type Address, type Hex } from 'viem';
 import { and, asc, desc, eq, gt, isNull, sql, telegramBotState, telegramChallenges, telegramLinkCodes, telegramLinks, trades, positions, type Db } from '@plankton/db';
-import { acquireLease, releaseLease, telegramEventSubscriptions, telegramEventsAnnounced, telegramPriceAlerts } from '@plankton/db';
+import { acquireLease, releaseLease, telegramEventSubscriptions, telegramEventsAnnounced, telegramLpDaily, telegramPriceAlerts } from '@plankton/db';
+import { dailyDue, dailyText, lpText, poolText, type PoolView } from './lp-updates.ts';
 import { wantsEvent, type MarketEvent } from './market-events.ts';
 import { MAX_ALERTS_PER_CHAT, alertHit, describeAlert, parseAlert, usd } from './price-alerts.ts';
 import type { Env } from '@plankton/config';
 
 type TelegramUpdate = { update_id: number; message?: { text?: string; chat: { id: number; type: string }; from?: { username?: string } } };
 type TelegramResult<T> = { ok: boolean; result: T };
+/** Live Counter figures for /pool, /lp and the daily summary. */
+export type LpSources = { getPool: () => Promise<PoolView>; getShares: (wallet: string) => Promise<bigint> };
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 const code = () => randomBytes(32).toString('base64url');
@@ -29,7 +32,7 @@ function decimal(raw: string, decimals: number, places: number): string {
   return n.toLocaleString('en-US', { maximumFractionDigits: places });
 }
 
-const HELP = 'Plankton read-only bot\n/price SYMBOL — current Plankton price\n/prices — latest listed prices\n/positions — your open positions\n/trades — your latest fills\n/alert SYMBOL > PRICE — ping me when the price crosses (or <)\n/alerts — your price alerts\n/unalert ID — remove one (or /unalert all)\n/events on — halts, splits, earnings and close-only notices (or /events WYFI RCAT for some markets, /events off)\n/unlink — remove this Telegram link\n/help — commands\n\nLink your wallet in Plankton under Account & deposits → Telegram. Once linked, you get a message here whenever a keeper fills one of your orders (take-profit, stop-loss, limit, ladder or gasless market). This bot cannot place trades.';
+const HELP = 'Plankton read-only bot\n/price SYMBOL — current Plankton price\n/prices — latest listed prices\n/positions — your open positions\n/trades — your latest fills\n/alert SYMBOL > PRICE — ping me when the price crosses (or <)\n/alerts — your price alerts\n/unalert ID — remove one (or /unalert all)\n/events on — halts, splits, earnings and close-only notices (or /events WYFI RCAT for some markets, /events off)\n/pool — the LP pool: value, share price, 24h and 7d change\n/lp — your LP position (linked wallet)\n/daily on — a daily LP summary after the US close (/daily off)\n/unlink — remove this Telegram link\n/help — commands\n\nLink your wallet in Plankton under Account & deposits → Telegram. Once linked, you get a message here whenever a keeper fills one of your orders (take-profit, stop-loss, limit, ladder or gasless market). This bot cannot place trades.';
 const lastWalletLookup = new Map<string, number>();
 
 async function reply(env: Env, chatId: number, text: string): Promise<void> {
@@ -45,7 +48,7 @@ export async function notifyTelegramWallet(env: Env, db: Db, wallet: string, tex
   return true;
 }
 
-async function handleUpdate(update: TelegramUpdate, env: Env, db: Db, symbols: string[], symbolOf: (marketId: string) => string, getPrices: () => Promise<Map<string, { priceE18: string | null; status: string | null }>>) {
+async function handleUpdate(update: TelegramUpdate, env: Env, db: Db, symbols: string[], symbolOf: (marketId: string) => string, getPrices: () => Promise<Map<string, { priceE18: string | null; status: string | null }>>, lp: LpSources) {
   const message = update.message;
   if (!message?.text) return;
   const chatId = String(message.chat.id);
@@ -110,6 +113,26 @@ async function handleUpdate(update: TelegramUpdate, env: Env, db: Db, symbols: s
     const [row] = await db.insert(telegramPriceAlerts).values({ chatId, symbol: req.symbol, above: req.above, priceE18: req.priceE18.toString() }).returning({ id: telegramPriceAlerts.id });
     return void await reply(env, Number(chatId), `🔔 Alert #${row!.id} set: ${describeAlert(req)}${now ? ` (now ${usd(now)})` : ''}. It fires once. /alerts to list.`);
   }
+  if (command === '/pool') return void await reply(env, Number(chatId), poolText(await lp.getPool()));
+  if (command === '/lp' || command === '/daily') {
+    const linked = await db.select({ wallet: telegramLinks.wallet }).from(telegramLinks).where(eq(telegramLinks.chatId, chatId)).limit(1);
+    if (!linked[0]) return void await reply(env, Number(chatId), 'Link your wallet in Plankton under Account & deposits → Telegram first.');
+    if (command === '/lp') {
+      const [pool, shares] = await Promise.all([lp.getPool(), lp.getShares(linked[0].wallet)]);
+      return void await reply(env, Number(chatId), lpText(pool, shares));
+    }
+    const arg = (args[0] ?? '').toLowerCase();
+    if (arg === 'off') {
+      await db.delete(telegramLpDaily).where(eq(telegramLpDaily.chatId, chatId));
+      return void await reply(env, Number(chatId), 'Daily LP summary is off.');
+    }
+    if (arg === 'on') {
+      await db.insert(telegramLpDaily).values({ chatId }).onConflictDoNothing();
+      return void await reply(env, Number(chatId), '📅 Daily LP summary is on: your position, its 24h change and the pool, every weekday after the US close (17:00 New York). /daily off to stop.');
+    }
+    const [sub] = await db.select().from(telegramLpDaily).where(eq(telegramLpDaily.chatId, chatId)).limit(1);
+    return void await reply(env, Number(chatId), sub ? 'Daily LP summary is on. /daily off to stop.' : 'Daily LP summary is off. /daily on to start.');
+  }
   if (command === '/events') {
     const arg = args.map((a) => a.toUpperCase());
     if (arg.length === 0) {
@@ -164,9 +187,9 @@ async function handleUpdate(update: TelegramUpdate, env: Env, db: Db, symbols: s
   await reply(env, Number(chatId), 'Unknown command. Use /help.');
 }
 
-export function startTelegramBot({ env, db, symbols, symbolOf, getPrices, getMarketEvents, log }: {
+export function startTelegramBot({ env, db, symbols, symbolOf, getPrices, getMarketEvents, lp, log }: {
   env: Env; db: () => Db; symbols: string[]; symbolOf: (marketId: string) => string; getPrices: () => Promise<Map<string, { priceE18: string | null; status: string | null }>>;
-  getMarketEvents: () => Promise<MarketEvent[]>; log: { warn: (data: object, message: string) => void };
+  getMarketEvents: () => Promise<MarketEvent[]>; lp: LpSources; log: { warn: (data: object, message: string) => void };
 }) {
   if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_BOT_USERNAME || !env.DATABASE_URL) return;
   const holder = randomBytes(12).toString('hex');
@@ -187,7 +210,7 @@ export function startTelegramBot({ env, db, symbols, symbolOf, getPrices, getMar
       }
       const updates = await telegram<TelegramUpdate[]>(env, 'getUpdates', { offset: Number(nextUpdateId), timeout: 0, allowed_updates: ['message'] });
       for (const update of updates) {
-        try { await handleUpdate(update, env, database, symbols, symbolOf, getPrices); }
+        try { await handleUpdate(update, env, database, symbols, symbolOf, getPrices, lp); }
         catch { log.warn({ event: 'telegram_update_failed', updateId: update.update_id }, 'Telegram update failed'); }
         await database.update(telegramBotState).set({ nextUpdateId: BigInt(update.update_id + 1) }).where(eq(telegramBotState.singleton, true));
       }
@@ -267,6 +290,40 @@ export function startTelegramBot({ env, db, symbols, symbolOf, getPrices, getMar
   };
   const eventTimer = setInterval(() => void announceEvents(), 60_000);
   eventTimer.unref();
+
+  // Daily LP summary: every 10 minutes, one replica sends each due chat its summary once per New York weekday. The date is
+  // recorded before sending, so a restart cannot send a second one the same day. Chats with no shares are skipped quietly.
+  let summarising = false;
+  const sendDaily = async () => {
+    if (summarising) return;
+    summarising = true;
+    const database = db();
+    let locked = false;
+    try {
+      locked = await acquireLease(database, 'telegram-lp-daily', holder, 120);
+      if (!locked) return;
+      const subs = await database.select().from(telegramLpDaily);
+      const due = subs.filter((s) => dailyDue(Date.now(), s.lastSentYmd).due);
+      if (!due.length) return;
+      const pool = await lp.getPool();
+      for (const sub of due) {
+        const { ymd } = dailyDue(Date.now(), sub.lastSentYmd);
+        await database.update(telegramLpDaily).set({ lastSentYmd: ymd }).where(eq(telegramLpDaily.chatId, sub.chatId));
+        const [link] = await database.select({ wallet: telegramLinks.wallet }).from(telegramLinks).where(eq(telegramLinks.chatId, sub.chatId)).limit(1);
+        if (!link) continue;
+        const shares = await lp.getShares(link.wallet);
+        if (shares === 0n) continue;
+        await reply(env, Number(sub.chatId), dailyText(pool, shares)).catch(() => log.warn({ event: 'telegram_lp_daily_send_failed' }, 'daily LP summary not sent'));
+      }
+    } catch {
+      log.warn({ event: 'telegram_lp_daily_failed' }, 'daily LP summary failed');
+    } finally {
+      if (locked) await releaseLease(database, 'telegram-lp-daily', holder).catch(() => {});
+      summarising = false;
+    }
+  };
+  const dailyTimer = setInterval(() => void sendDaily(), 10 * 60_000);
+  dailyTimer.unref();
 }
 
 export function createTelegramLinkMessage(wallet: string, nonce: string, expires: number): string {

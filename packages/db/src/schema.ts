@@ -155,6 +155,13 @@ export const telegramEventsAnnounced = pgTable('telegram_events_announced', {
   announcedAt: ts('announced_at').notNull().defaultNow(),
 });
 
+/** Chats that asked for the daily LP summary. `lastSentYmd` is the New York date of the last one sent. */
+export const telegramLpDaily = pgTable('telegram_lp_daily', {
+  chatId: text('chat_id').primaryKey(),
+  lastSentYmd: text('last_sent_ymd'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+
 /** Telegram long-poll cursor shared by API replicas. */
 export const telegramBotState = pgTable('telegram_bot_state', {
   singleton: boolean('singleton').primaryKey().default(true),

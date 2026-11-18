@@ -1292,6 +1292,23 @@ startTelegramBot({
       windowTz: env.STOCK_TOKEN_WINDOW_TZ,
     });
   },
+  // The Counter now, and its share price from the hourly snapshots at or before 24 hours and 7 days ago.
+  lp: {
+    getPool: async () => {
+      const { client, dep } = chain();
+      const ppsAt = async (agoMs: number) => {
+        const [row] = await db().select({ pps: counterNavSnapshots.navPerShareE18 }).from(counterNavSnapshots)
+          .where(lt(counterNavSnapshots.at, new Date(Date.now() - agoMs))).orderBy(desc(counterNavSnapshots.at)).limit(1);
+        return row ? BigInt(row.pps) : null;
+      };
+      const [c, pps24hAgo, pps7dAgo] = await Promise.all([readCounter(client, dep), ppsAt(24 * 3_600_000), ppsAt(7 * 24 * 3_600_000)]);
+      return { navUsdg: BigInt(c.navUsdg), navPerShareE18: BigInt(c.navPerShareE18), totalShares: BigInt(c.totalShares), pps24hAgo, pps7dAgo };
+    },
+    getShares: async (wallet: string) => {
+      const { client, dep } = chain();
+      return client.readContract({ address: dep.vault, abi: vaultAbi, functionName: 'balanceOf', args: [wallet as Address] });
+    },
+  },
   log,
 });
 startLiquidationMonitor({

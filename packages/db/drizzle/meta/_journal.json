@@ -78,6 +78,13 @@
       "when": 1795000000000,
       "tag": "0010_wandering_loa",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794998792610,
+      "tag": "0011_free_reavers",
+      "breakpoints": true
     }
   ]
 }
