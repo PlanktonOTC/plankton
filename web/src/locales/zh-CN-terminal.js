@@ -1087,4 +1087,9 @@ export default {
   "Earnings tomorrow": "明天发布财报",
   "Earnings in {days} days": "{days} 天后发布财报",
   "Date not yet confirmed by the company.": "公司尚未确认日期。",
+  "Install Plankton": "安装 Plankton",
+  "On iPhone or iPad, tap Share, then Add to Home Screen.": "在 iPhone 或 iPad 上，点按“分享”，再选择“添加到主屏幕”。",
+  "Add Plankton to your phone home screen for quick access.": "将 Plankton 添加到手机主屏幕，方便快速打开。",
+  "Install": "安装",
+  "Dismiss install suggestion": "关闭安装提示",
 };

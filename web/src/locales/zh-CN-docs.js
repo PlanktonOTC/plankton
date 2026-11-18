@@ -228,4 +228,10 @@ export default {
   "Above the illustrative $1,000 position cap. Reduce margin or leverage.": "超过了示意性的 1,000 美元仓位上限。请减少保证金或杠杆。",
   "No matching topic.": "没有匹配的主题。",
   "Clear search": "清除搜索",
+  "Mainnet, small caps": "主网小盘市场",
+  "Week contracts follow Bell. They open on a clean settlement record, shown on the roadmap.": "周合约将在 Bell 之后推进。只有结算记录良好并达到路线图所列条件后才会开放。",
+  "Markets show their price sources": "市场会显示其价格来源",
+  "Each market shows its available price sources, freshness and agreement. Some markets have one source; two signers reading the same feed do not make two independent sources. Options require two independent sources for each ticker.": "每个市场都会显示可用价格源、数据新鲜度及一致性。部分市场只有一个来源；两个签名者读取同一数据源并不等于两个独立来源。每个期权标的都需要两个独立来源。",
+  "Options candidates need verified market eligibility and two genuinely independent price sources. Source coverage and status are shown per market.": "期权候选标的需要通过市场资格验证并具备两个真正独立的价格来源。各市场的来源覆盖情况和状态会分别显示。",
+  "On-chain pools do not contribute to Plankton marks. A market still needs confirmed feed coverage and data permissions before it can be listed.": "链上资金池不会参与 Plankton 标记价格的计算。市场上市前仍需确认价格源覆盖和数据使用权限。",
 };

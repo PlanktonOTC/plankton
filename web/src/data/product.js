@@ -111,7 +111,7 @@ export const roadmapWeeks = [
 ];
 
 const phase = (n, window, title, summary, deliverables, gate, status = 'Planned') => ({
-  id: `phase-${n}`, label: `Phase ${n}`, dates: window, dateRange: window,
+  id: `phase-${n}`, label: ['Phase 0', 'Phase 1', 'Phase 2', 'Phase 3', 'Phase 4'][n], dates: window, dateRange: window,
   title, summary, description: summary, deliverables, gate,
   source: 'Options-first plan, November 2026', status, planningNote: '',
 });

@@ -1,0 +1,29 @@
+.pwa-install {
+  position: fixed;
+  z-index: 1000;
+  left: max(16px, env(safe-area-inset-left));
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: 540px;
+  margin-inline: auto;
+  padding: 14px 46px 14px 16px;
+  border: 1px solid #ffffff24;
+  border-radius: 14px;
+  background: #151817f5;
+  color: #e7ece8;
+  box-shadow: 0 12px 40px #0009;
+  backdrop-filter: blur(18px);
+}
+
+.pwa-install-copy { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.pwa-install-copy strong { font-size: 13px; font-weight: 550; }
+.pwa-install-copy span { color: #a4ada7; font-size: 11px; line-height: 1.45; }
+.pwa-install > button:not(.pwa-install-dismiss) { flex: 0 0 auto; border: 1px solid #c9ded0; border-radius: 8px; padding: 8px 13px; background: #c9ded0; color: #101512; font: inherit; font-size: 12px; cursor: pointer; }
+.pwa-install > button:disabled { display: none; }
+.pwa-install-dismiss { position: absolute; top: 5px; right: 8px; border: 0; padding: 3px 7px; background: transparent; color: #a4ada7; font-size: 19px; cursor: pointer; }
+
+@media (min-width: 761px) { .pwa-install { bottom: 24px; } }
+@media (prefers-reduced-motion: reduce) { .pwa-install { scroll-behavior: auto; } }
